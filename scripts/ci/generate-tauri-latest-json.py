@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 # Matches Windows NSIS installer assets normalized by the release workflow, e.g.
@@ -75,6 +76,12 @@ def collect_platforms(root: Path, repo: str, tag: str) -> dict[str, dict[str, st
                 "signature": read_signature(sig_path),
                 "url": asset_url(repo, tag, zip_name),
             }
+            continue
+
+        print(
+            f"[generate-tauri-latest-json] Ignoring unsupported signature file: {sig_name}",
+            file=sys.stderr,
+        )
 
     return platforms
 
