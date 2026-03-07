@@ -86,10 +86,6 @@ LINUX_APPIMAGE_UPDATER_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
-class ReleaseArtifactError(RuntimeError):
-    pass
-
-
 def match_any(
     filename: str, patterns: tuple[re.Pattern[str], ...]
 ) -> re.Match[str] | None:

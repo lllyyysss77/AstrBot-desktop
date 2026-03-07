@@ -234,15 +234,17 @@ def main() -> int:
             stripped_stem, canonicalization_extension(ext), warned_unknown_arches
         )
 
-        final_stem = normalized_stem
-        if nightly_suffix and not final_stem.endswith(nightly_suffix):
-            final_stem = f"{final_stem}{nightly_suffix}"
-
         if not matched:
             unmatched_messages.append(
                 f"[normalize-artifacts] unmatched naming pattern: original={original_name}, "
-                f"normalized={final_stem}{ext}"
+                f"normalized={original_name}"
             )
+            if args.strict_unmatched:
+                continue
+
+        final_stem = normalized_stem if matched else original_stem
+        if matched and nightly_suffix and not final_stem.endswith(nightly_suffix):
+            final_stem = f"{final_stem}{nightly_suffix}"
 
         new_path = path.with_name(f"{final_stem}{ext}")
         all_sources.add(path)
@@ -296,9 +298,11 @@ def main() -> int:
         if args.strict_unmatched:
             for message in unmatched_messages:
                 print(message, file=sys.stderr)
-            raise RuntimeError(
-                f"{len(unmatched_messages)} artifact(s) did not match canonical naming patterns"
+            print(
+                f"{len(unmatched_messages)} artifact(s) did not match canonical naming patterns",
+                file=sys.stderr,
             )
+            return 1
         for message in unmatched_messages:
             print(f"::warning::{message}")
 
