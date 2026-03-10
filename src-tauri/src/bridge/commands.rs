@@ -94,6 +94,57 @@ fn short_circuit_update_install(
     }
 }
 
+fn has_managed_backend_child(state: &BackendState) -> bool {
+    match state.child.lock() {
+        Ok(guard) => guard.is_some(),
+        Err(_) => {
+            append_desktop_log(
+                "backend child lock poisoned while checking managed backend state; assuming no managed backend child",
+            );
+            false
+        }
+    }
+}
+
+fn run_native_update_install<InstallUpdate, RestartBackend>(
+    install_update: InstallUpdate,
+    restart_backend_after_failed_install: Option<RestartBackend>,
+    backend_was_stopped: bool,
+) -> DesktopAppUpdateResult
+where
+    InstallUpdate: FnOnce() -> Result<(), String>,
+    RestartBackend: FnOnce() -> Result<(), String>,
+{
+    match install_update() {
+        Ok(()) => map_update_install_ok(),
+        Err(install_err) => {
+            if backend_was_stopped {
+                if let Some(restart_backend) = restart_backend_after_failed_install {
+                    if let Err(restart_err) = restart_backend() {
+                        return map_update_install_error(format!(
+                            "Failed to install update: {install_err}. Failed to restart backend after install failure: {restart_err}"
+                        ));
+                    }
+                }
+            }
+
+            map_update_install_error(format!("Failed to install update: {install_err}"))
+        }
+    }
+}
+
+fn build_restart_backend_after_failed_install(
+    app_handle: AppHandle,
+    restart_plan: crate::LaunchPlan,
+) -> impl FnOnce() -> Result<(), String> {
+    move || {
+        let state = app_handle.state::<BackendState>();
+        append_desktop_log("update install failed before exit, restarting managed backend");
+        state.start_backend_process(&app_handle, &restart_plan)?;
+        state.wait_for_backend(&restart_plan)
+    }
+}
+
 fn parse_openable_url(raw_url: &str) -> Result<Url, String> {
     let trimmed = raw_url.trim();
     if trimmed.is_empty() {
@@ -356,18 +407,59 @@ pub(crate) async fn desktop_bridge_install_app_update(
         Err(error) => return map_update_install_error(format!("Failed to check updates: {error}")),
     };
 
-    match update.download_and_install(|_, _| {}, || {}).await {
-        Ok(()) => {
-            app_handle.request_restart();
-            map_update_install_ok()
+    let bytes = match update.download(|_, _| {}, || {}).await {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return map_update_install_error(format!("Failed to download update: {error}"))
         }
-        Err(error) => map_update_install_error(format!("Failed to install update: {error}")),
+    };
+
+    let state = app_handle.state::<BackendState>();
+    let stop_managed_backend = cfg!(target_os = "windows") && has_managed_backend_child(&state);
+    let restart_backend_after_failed_install = if stop_managed_backend {
+        let restart_plan = match state.resolve_launch_plan(&app_handle) {
+            Ok(plan) => plan,
+            Err(error) => {
+                append_desktop_log(&format!(
+                    "failed to resolve managed backend relaunch plan for update install recovery: {error}"
+                ));
+                return map_update_install_error(error);
+            }
+        };
+        Some(build_restart_backend_after_failed_install(
+            app_handle.clone(),
+            restart_plan,
+        ))
+    } else {
+        None
+    };
+
+    let backend_was_stopped = if stop_managed_backend {
+        if let Err(error) = state.stop_backend() {
+            return map_update_install_error(format!(
+                "Failed to stop backend before Windows update install: {error}"
+            ));
+        }
+        true
+    } else {
+        false
+    };
+
+    let result = run_native_update_install(
+        || update.install(bytes).map_err(|error| error.to_string()),
+        restart_backend_after_failed_install,
+        backend_was_stopped,
+    );
+    if result.ok {
+        app_handle.request_restart();
     }
+    result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{cell::RefCell, panic::AssertUnwindSafe, rc::Rc};
 
     #[test]
     fn update_check_short_circuit_only_applies_to_unsupported_mode() {
@@ -468,5 +560,108 @@ mod tests {
             updater_manifest_log_message(update_channel::UpdateChannel::Nightly, &endpoint),
             "Using updater manifest for nightly channel: https://example.com/nightly.json"
         );
+    }
+
+    #[test]
+    fn run_native_update_install_reports_success_when_install_succeeds() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let install_events = Rc::clone(&events);
+
+        let result = run_native_update_install(
+            || {
+                install_events.borrow_mut().push("install");
+                Ok(())
+            },
+            None::<fn() -> Result<(), String>>,
+            true,
+        );
+
+        assert_eq!(*events.borrow(), vec!["install"]);
+        assert_eq!(result, map_update_install_ok());
+    }
+
+    #[test]
+    fn run_native_update_install_skips_restart_when_backend_was_not_stopped() {
+        let mut restart_called = false;
+
+        let result = run_native_update_install(
+            || Err("installer launch failed".to_string()),
+            Some(|| {
+                restart_called = true;
+                Ok(())
+            }),
+            false,
+        );
+
+        assert!(!restart_called);
+        assert_eq!(
+            result,
+            map_update_install_error("Failed to install update: installer launch failed")
+        );
+    }
+
+    #[test]
+    fn run_native_update_install_maps_install_errors() {
+        let result = run_native_update_install(
+            || Err("installer launch failed".to_string()),
+            None::<fn() -> Result<(), String>>,
+            false,
+        );
+
+        assert_eq!(
+            result,
+            map_update_install_error("Failed to install update: installer launch failed")
+        );
+    }
+
+    #[test]
+    fn run_native_update_install_restarts_backend_after_failed_install() {
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let restart_events = Rc::clone(&events);
+
+        let result = run_native_update_install(
+            || Err("installer launch failed".to_string()),
+            Some(|| {
+                restart_events.borrow_mut().push("restart");
+                Ok(())
+            }),
+            true,
+        );
+
+        assert_eq!(*events.borrow(), vec!["restart"]);
+        assert_eq!(
+            result,
+            map_update_install_error("Failed to install update: installer launch failed")
+        );
+    }
+
+    #[test]
+    fn run_native_update_install_reports_restart_failures_after_install_failure() {
+        let result = run_native_update_install(
+            || Err("installer launch failed".to_string()),
+            Some(|| Err("backend restart timed out".to_string())),
+            true,
+        );
+
+        assert_eq!(
+            result,
+            map_update_install_error(
+                "Failed to install update: installer launch failed. Failed to restart backend after install failure: backend restart timed out"
+            )
+        );
+    }
+
+    #[test]
+    fn has_managed_backend_child_returns_false_when_lock_is_poisoned() {
+        let state = BackendState::default();
+        let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            let _guard = state
+                .child
+                .lock()
+                .expect("lock should succeed before poisoning");
+            panic!("poison backend child lock");
+        }));
+
+        assert!(!has_managed_backend_child(&state));
     }
 }
