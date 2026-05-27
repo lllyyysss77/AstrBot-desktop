@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import atexit
 import ctypes
+import functools
 import json
 import os
 import runpy
+import ssl
 import sys
 import threading
 import time
@@ -122,6 +124,55 @@ def preload_windows_runtime_dlls() -> None:
                     continue
 
 
+_ORIGINAL_CREATE_DEFAULT_CONTEXT = None
+
+# We globally monkey-patch ssl.create_default_context on Windows.
+# This prevents OpenSSL Applink crashes caused by default CA loading
+# by enforcing the use of certifi's CA bundle for SERVER_AUTH.
+def configure_windows_safe_default_ssl_context() -> None:
+    global _ORIGINAL_CREATE_DEFAULT_CONTEXT
+    if sys.platform != "win32":
+        return
+    if _ORIGINAL_CREATE_DEFAULT_CONTEXT is not None:
+        return
+
+    try:
+        import certifi
+    except ImportError:
+        print(
+            "[ssl-context] certifi not available; skipping safe default context patch",
+            file=sys.stderr,
+        )
+        return
+
+    _ORIGINAL_CREATE_DEFAULT_CONTEXT = ssl.create_default_context
+
+    # The launcher owns this process, so patching ssl globally is intentional.
+    @functools.wraps(_ORIGINAL_CREATE_DEFAULT_CONTEXT)
+    def create_default_context(
+        purpose: ssl.Purpose = ssl.Purpose.SERVER_AUTH,
+        *,
+        cafile: str | None = None,
+        capath: str | None = None,
+        cadata: str | bytes | None = None,
+    ) -> ssl.SSLContext:
+        if (
+            purpose == ssl.Purpose.SERVER_AUTH
+            and cafile is None
+            and capath is None
+            and cadata is None
+        ):
+            cafile = certifi.where()
+        return _ORIGINAL_CREATE_DEFAULT_CONTEXT(
+            purpose,
+            cafile=cafile,
+            capath=capath,
+            cadata=cadata,
+        )
+
+    ssl.create_default_context = create_default_context
+
+
 def resolve_startup_heartbeat_path() -> Path | None:
     raw = os.environ.get(STARTUP_HEARTBEAT_ENV, "").strip()
     if not raw:
@@ -231,6 +282,7 @@ def main() -> None:
     configure_stdio_utf8()
     configure_windows_dll_search_path()
     preload_windows_runtime_dlls()
+    configure_windows_safe_default_ssl_context()
     start_startup_heartbeat()
     configure_runtime_core_lock_path()
 

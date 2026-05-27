@@ -1,4 +1,5 @@
 import importlib.util
+import ssl
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,122 @@ SPEC.loader.exec_module(launch_backend)
 
 
 class StartupHeartbeatTests(unittest.TestCase):
+    def setUp(self) -> None:
+        launch_backend._ORIGINAL_CREATE_DEFAULT_CONTEXT = None
+
+    def test_windows_ssl_context_patch_uses_certifi_with_original_context(self) -> None:
+        sentinel_context = mock.Mock(spec=ssl.SSLContext)
+        original_create_default_context = mock.Mock(return_value=sentinel_context)
+        fake_certifi = mock.Mock()
+        fake_certifi.where.return_value = "certifi.pem"
+
+        with mock.patch.object(launch_backend.sys, "platform", "win32"):
+            with mock.patch.object(
+                launch_backend.ssl,
+                "create_default_context",
+                original_create_default_context,
+            ):
+                with mock.patch.dict("sys.modules", {"certifi": fake_certifi}):
+                    launch_backend.configure_windows_safe_default_ssl_context()
+                    patched_context = launch_backend.ssl.create_default_context()
+
+        self.assertIs(patched_context, sentinel_context)
+        original_create_default_context.assert_called_once_with(
+            ssl.Purpose.SERVER_AUTH,
+            cafile="certifi.pem",
+            capath=None,
+            cadata=None,
+        )
+
+    def test_windows_ssl_context_patch_preserves_client_auth_defaults(self) -> None:
+        sentinel_context = mock.Mock(spec=ssl.SSLContext)
+        original_create_default_context = mock.Mock(return_value=sentinel_context)
+
+        with mock.patch.object(launch_backend.sys, "platform", "win32"):
+            with mock.patch.object(
+                launch_backend.ssl,
+                "create_default_context",
+                original_create_default_context,
+            ):
+                launch_backend.configure_windows_safe_default_ssl_context()
+                patched_context = launch_backend.ssl.create_default_context(
+                    ssl.Purpose.CLIENT_AUTH
+                )
+
+        self.assertIs(patched_context, sentinel_context)
+        original_create_default_context.assert_called_once_with(
+            ssl.Purpose.CLIENT_AUTH,
+            cafile=None,
+            capath=None,
+            cadata=None,
+        )
+
+    def test_windows_ssl_context_patch_passes_explicit_ca_parameters(self) -> None:
+        sentinel_context = mock.Mock(spec=ssl.SSLContext)
+        original_create_default_context = mock.Mock(return_value=sentinel_context)
+        fake_certifi = mock.Mock()
+
+        with mock.patch.object(launch_backend.sys, "platform", "win32"):
+            with mock.patch.object(
+                launch_backend.ssl,
+                "create_default_context",
+                original_create_default_context,
+            ):
+                with mock.patch.dict("sys.modules", {"certifi": fake_certifi}):
+                    launch_backend.configure_windows_safe_default_ssl_context()
+                    patched_context = launch_backend.ssl.create_default_context(
+                        cafile="custom.pem",
+                        capath=None,
+                        cadata=b"custom-ca",
+                    )
+
+        self.assertIs(patched_context, sentinel_context)
+        original_create_default_context.assert_called_once_with(
+            ssl.Purpose.SERVER_AUTH,
+            cafile="custom.pem",
+            capath=None,
+            cadata=b"custom-ca",
+        )
+        fake_certifi.where.assert_not_called()
+
+    def test_non_windows_ssl_context_not_patched(self) -> None:
+        original_create_default_context = launch_backend.ssl.create_default_context
+
+        with mock.patch.object(launch_backend.sys, "platform", "linux"):
+            launch_backend.configure_windows_safe_default_ssl_context()
+
+        self.assertIs(
+            launch_backend.ssl.create_default_context, original_create_default_context
+        )
+
+    def test_windows_ssl_context_patch_is_idempotent(self) -> None:
+        sentinel_context = mock.Mock(spec=ssl.SSLContext)
+        original_create_default_context = mock.Mock(return_value=sentinel_context)
+        fake_certifi = mock.Mock()
+        fake_certifi.where.return_value = "certifi.pem"
+
+        with mock.patch.object(launch_backend.sys, "platform", "win32"):
+            with mock.patch.object(
+                launch_backend.ssl,
+                "create_default_context",
+                original_create_default_context,
+            ):
+                with mock.patch.dict("sys.modules", {"certifi": fake_certifi}):
+                    launch_backend.configure_windows_safe_default_ssl_context()
+                    first_patched = launch_backend.ssl.create_default_context
+                    launch_backend.configure_windows_safe_default_ssl_context()
+                    second_patched = launch_backend.ssl.create_default_context
+
+        self.assertIs(first_patched, second_patched)
+        self.assertIsNotNone(launch_backend._ORIGINAL_CREATE_DEFAULT_CONTEXT)
+
+    def test_windows_ssl_context_patch_handles_certifi_import_error(self) -> None:
+        with mock.patch.object(launch_backend.sys, "platform", "win32"):
+            with mock.patch.dict("sys.modules", {"certifi": None}):
+                original = launch_backend.ssl.create_default_context
+                launch_backend.configure_windows_safe_default_ssl_context()
+                self.assertIs(launch_backend.ssl.create_default_context, original)
+
     def test_atomic_write_json_cleans_up_temp_file_when_replace_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             heartbeat_path = Path(temp_dir) / "heartbeat.json"
