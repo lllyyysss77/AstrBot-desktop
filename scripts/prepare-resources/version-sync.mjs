@@ -49,6 +49,38 @@ export const readAstrbotVersionFromPyproject = async ({ sourceDir }) => {
   throw new Error(`Cannot resolve [project].version from ${pyprojectPath}`);
 };
 
+export const resolveAstrbotRuntimeVersionPath = ({ sourceDir }) =>
+  path.join(sourceDir, 'astrbot', 'core', 'config', 'default.py');
+
+export const readAstrbotRuntimeVersion = async ({ sourceDir }) => {
+  const defaultConfigPath = resolveAstrbotRuntimeVersionPath({ sourceDir });
+  if (!existsSync(defaultConfigPath)) {
+    throw new Error(`Cannot find AstrBot runtime version file: ${defaultConfigPath}`);
+  }
+
+  const content = await readFile(defaultConfigPath, 'utf8');
+  const match = /^\s*VERSION\s*=\s*["']([^"']+)["']\s*(?:#.*)?$/m.exec(content);
+  if (!match) {
+    throw new Error(`Cannot resolve AstrBot runtime VERSION from ${defaultConfigPath}`);
+  }
+
+  return match[1].trim();
+};
+
+export const validateAstrbotRuntimeVersion = async ({ sourceDir, expectedVersion }) => {
+  const runtimeVersion = await readAstrbotRuntimeVersion({ sourceDir });
+  if (runtimeVersion === '0.0.0') {
+    throw new Error(
+      `AstrBot runtime VERSION resolved to 0.0.0 in ${sourceDir}. Use an AstrBot source ref that contains the static runtime VERSION fix.`,
+    );
+  }
+  if (expectedVersion && runtimeVersion !== expectedVersion) {
+    throw new Error(
+      `AstrBot version mismatch in ${sourceDir}: pyproject.toml has ${expectedVersion}, but runtime VERSION is ${runtimeVersion}.`,
+    );
+  }
+};
+
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const CARGO_LOCK_PACKAGE_HEADER = /^\s*\[\[package\]\]\s*(?:#.*)?$/;
 const CARGO_LOCK_ANY_HEADER = /^\s*\[\[/;

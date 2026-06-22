@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import {
   readAstrbotVersionFromPyproject,
   syncDesktopVersionFiles,
+  validateAstrbotRuntimeVersion,
 } from './prepare-resources/version-sync.mjs';
 import {
   ensureSourceRepo,
@@ -59,6 +60,11 @@ const main = async () => {
   ensureStartupShellAssets(projectRoot);
   const astrbotVersion =
     desktopVersionOverride || (await readAstrbotVersionFromPyproject({ sourceDir }));
+
+  await validateAstrbotRuntimeVersion({
+    sourceDir,
+    expectedVersion: desktopVersionOverride ? undefined : astrbotVersion,
+  });
 
   if (desktopVersionOverride && needsSourceRepo) {
     const sourceVersion = await readAstrbotVersionFromPyproject({ sourceDir });
