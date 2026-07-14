@@ -7,8 +7,16 @@ import {
   readStoredUsername,
   type AuthSession,
 } from '@/auth/storage';
+import { resolveAuthenticatedRoute } from '@/auth/sessionFlow';
+
+type Navigate = (to: string, options?: { replace?: boolean }) => void;
 
 type AuthState = {
+  completeSession: (
+    session: AuthSession,
+    navigate: Navigate,
+    onboardingCheck?: () => Promise<boolean>,
+  ) => Promise<string>;
   clearSession: () => void;
   finishSession: (session: AuthSession) => void;
   hasToken: boolean;
@@ -24,6 +32,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
   clearSession: () => {
     clearAuthSession();
     set({ hasToken: false, returnUrl: null, username: '' });
+  },
+  completeSession: async (session, navigate, onboardingCheck) => {
+    persistAuthSession(session);
+    set({ hasToken: true, returnUrl: null, username: session.username });
+    const route = await resolveAuthenticatedRoute(session, onboardingCheck);
+    navigate(route, { replace: true });
+    return route;
   },
   finishSession: (session) => {
     persistAuthSession(session);

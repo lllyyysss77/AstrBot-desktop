@@ -5,14 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "generate:api": "node scripts/generate-openapi.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "preview": "vite preview --port 5051"
   },
   "dependencies": {
+    "@hey-api/client-axios": "0.2.12",
     "@hookform/resolvers": "5.4.0",
     "@radix-ui/react-dialog": "1.1.19",
+    "axios": "1.13.5",
     "i18next": "26.3.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",

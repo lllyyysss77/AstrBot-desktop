@@ -60,11 +60,8 @@ export async function apiRequest<T>(
   const payload = await readResponsePayload(response);
 
   if (!response.ok) {
-    if (response.status === 401 && shouldExpireSession(path)) {
-      clearAuthSession(storage);
-      (dependencies.onUnauthorized ?? redirectToLogin)();
-    }
-    throw new ApiError(readErrorMessage(payload, response.statusText), response.status, payload);
+    expireUnauthorizedSession(path, response.status, storage, dependencies.onUnauthorized);
+    throw new ApiError(readApiErrorMessage(payload, response.statusText), response.status, payload);
   }
 
   return payload as ApiEnvelope<T>;
@@ -89,7 +86,7 @@ async function readResponsePayload(response: Response): Promise<unknown> {
   }
 }
 
-function readErrorMessage(payload: unknown, fallback: string) {
+export function readApiErrorMessage(payload: unknown, fallback: string) {
   if (typeof payload === 'string') return payload;
   if (payload && typeof payload === 'object' && 'message' in payload) {
     const message = (payload as { message?: unknown }).message;
@@ -98,14 +95,26 @@ function readErrorMessage(payload: unknown, fallback: string) {
   return fallback || 'Request failed';
 }
 
-function shouldExpireSession(path: string) {
+export function shouldExpireSession(path: string) {
   const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
   const pathname = new URL(path, origin).pathname;
   return pathname.startsWith('/api/') && !AUTH_CHALLENGE_PATHS.has(pathname);
 }
 
-function redirectToLogin() {
+export function redirectToLogin() {
   if (typeof window !== 'undefined' && !window.location.hash.startsWith('#/auth/login')) {
     window.location.hash = '/auth/login';
   }
+}
+
+export function expireUnauthorizedSession(
+  path: string,
+  status: number,
+  storage: Storage | null,
+  onUnauthorized: (() => void) | undefined,
+) {
+  if (status !== 401 || !shouldExpireSession(path)) return false;
+  clearAuthSession(storage);
+  (onUnauthorized ?? redirectToLogin)();
+  return true;
 }
