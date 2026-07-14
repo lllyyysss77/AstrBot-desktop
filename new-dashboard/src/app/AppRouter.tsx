@@ -24,6 +24,11 @@ const SettingsPage = lazy(() => import('@/routes/configuration/SettingsPage'));
 const PersonaPage = lazy(() => import('@/routes/configuration/PersonaPage'));
 const SubagentPage = lazy(() => import('@/routes/configuration/SubagentPage'));
 const CronPage = lazy(() => import('@/routes/configuration/CronPage'));
+const ExtensionPage = lazy(() => import('@/routes/extensions/ExtensionPage'));
+const PluginPage = lazy(() => import('@/routes/extensions/PluginPage'));
+const KnowledgeBaseListPage = lazy(() => import('@/routes/knowledge/KnowledgeBaseListPage'));
+const KnowledgeBaseDetailPage = lazy(() => import('@/routes/knowledge/KnowledgeBaseDetailPage'));
+const DocumentDetailPage = lazy(() => import('@/routes/knowledge/DocumentDetailPage'));
 
 function loading(element: React.ReactNode) {
   return <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>{element}</Suspense>;
@@ -48,6 +53,14 @@ const reactRouteElements: Partial<Record<string, React.ReactNode>> = {
   '/persona': <FullLayout>{loading(<PersonaPage />)}</FullLayout>,
   '/subagent': <FullLayout>{loading(<SubagentPage />)}</FullLayout>,
   '/cron': <FullLayout>{loading(<CronPage />)}</FullLayout>,
+  '/extension': <FullLayout>{loading(<ExtensionPage />)}</FullLayout>,
+  '/extension/:pluginId': <FullLayout>{loading(<ExtensionPage />)}</FullLayout>,
+  '/extension-marketplace': <FullLayout>{loading(<ExtensionPage />)}</FullLayout>,
+  '/plugin-page/:pluginName/:pageName': <FullLayout>{loading(<PluginPage />)}</FullLayout>,
+  '/knowledge-base': <FullLayout>{loading(<KnowledgeBaseListPage />)}</FullLayout>,
+  '/knowledge-base/:kbId': <FullLayout>{loading(<KnowledgeBaseDetailPage />)}</FullLayout>,
+  '/knowledge-base/:kbId/document/:docId': <FullLayout>{loading(<DocumentDetailPage />)}</FullLayout>,
+  '/alkaid/knowledge-base': <FullLayout>{loading(<KnowledgeBaseListPage legacy />)}</FullLayout>,
 };
 
 function resolveReactRoute(path: string) {

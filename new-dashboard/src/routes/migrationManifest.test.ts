@@ -34,6 +34,14 @@ describe('route migration manifest', () => {
       '/persona',
       '/subagent',
       '/cron',
+      '/extension',
+      '/extension/:pluginId',
+      '/extension-marketplace',
+      '/plugin-page/:pluginName/:pageName',
+      '/knowledge-base',
+      '/knowledge-base/:kbId',
+      '/knowledge-base/:kbId/document/:docId',
+      '/alkaid/knowledge-base',
     ]);
   });
 

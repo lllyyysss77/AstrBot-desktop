@@ -646,6 +646,29 @@ textarea {
 .config-tool-list > div { display: grid; gap: 3px; padding: 9px 0; border-bottom: 1px solid var(--astrbot-border); }
 .config-tool-list small { color: color-mix(in srgb, var(--astrbot-text) 65%, transparent); }
 .json-editor--dialog { height: min(62vh, 620px); min-height: 340px; }
+.extension-grid, .knowledge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; }
+.extension-card, .knowledge-card { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding: 16px; }
+.extension-card h2, .knowledge-card h2 { margin: 0; overflow-wrap: anywhere; }
+.extension-card p, .knowledge-card p { margin: 5px 0 0; color: color-mix(in srgb, var(--astrbot-text) 65%, transparent); }
+.extension-card small, .knowledge-card small { color: color-mix(in srgb, var(--astrbot-text) 58%, transparent); }
+.extension-card > button { align-self: flex-start; min-height: 32px; padding: 5px 12px; border: 1px solid var(--astrbot-border); border-radius: 7px; background: var(--astrbot-surface); color: inherit; cursor: pointer; }
+.extension-install { display: flex; gap: 8px; padding: 12px; }
+.extension-install input, .knowledge-retrieval input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--astrbot-border); border-radius: 7px; background: var(--astrbot-surface); color: inherit; }
+.plugin-overview, .markdown-panel, .knowledge-retrieval { padding: 18px; }
+.plugin-overview dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; }
+.plugin-overview dd { margin: 0; overflow-wrap: anywhere; }
+.plugin-page-state { display: grid; min-height: 100%; place-items: center; padding: 24px; }
+.plugin-page-frame { width: 100%; height: 100%; min-height: 0; border: 0; background: var(--astrbot-surface); }
+.knowledge-card__title { display: flex; align-items: flex-start; gap: 12px; }
+.knowledge-card__title > span { font-size: 34px; }
+.knowledge-stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.knowledge-stats span { padding: 5px 8px; border-radius: 999px; background: var(--astrbot-hover); }
+.knowledge-page .stats-overview { margin-bottom: 0; }
+.knowledge-retrieval { display: grid; gap: 10px; }
+.knowledge-chunk-preview { max-width: 700px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.knowledge-chunk-content { max-height: 65vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.button-file { display: inline-flex; min-height: 32px; align-items: center; padding: 5px 10px; border: 1px solid var(--astrbot-border); border-radius: 7px; cursor: pointer; }
+.button-file input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .data-filters { justify-content: flex-start; flex-wrap: wrap; }
 .data-filters input { min-width: min(320px, 100%); }
 .pagination { justify-content: flex-end; padding: 10px 0; }
@@ -675,6 +698,8 @@ textarea {
   .config-profile-list { max-height: 260px; overflow: auto; }
   .config-editor-panel { min-height: 500px; }
   .config-card-grid { grid-template-columns: 1fr; }
+  .extension-grid, .knowledge-grid { grid-template-columns: 1fr; }
+  .extension-install { flex-direction: column; }
 }
 
 .dashboard-bootstrap__error,
