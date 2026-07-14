@@ -120,6 +120,7 @@ test:
 	fi
 
 doctor:
+	@node scripts/check-node-version.mjs
 	@echo "node:  $$(node -v)"
 	@echo "pnpm:  $$(pnpm -v)"
 	@echo "rustc: $$(rustc -V)"

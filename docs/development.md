@@ -8,7 +8,7 @@
 
 建议先准备以下工具：
 
-- Node.js
+- Node.js 20.12 或更高版本
 - `pnpm`
 - Rust toolchain
 - Tauri 所需系统依赖
@@ -18,6 +18,8 @@
 ```bash
 make doctor
 ```
+
+项目脚本依赖 Node.js 20.12 引入的 `process.loadEnvFile`。`make doctor`、`make dev`、`make build` 和资源准备入口都会提前校验版本，并在版本过低时给出升级提示。
 
 ## 2. 快速开始
 
@@ -94,6 +96,14 @@ make prune
   - 若本机有 `pnpm`，执行资源准备脚本行为测试（`pnpm run test:prepare-resources`）
 - `make prune`
   - 清理较大的本地 runtime / vendor 缓存，便于回收磁盘空间
+
+在干净 checkout 中可以直接执行 Rust 静态检查：
+
+```bash
+cargo check --manifest-path src-tauri/Cargo.toml --locked
+```
+
+`build.rs` 会为检查过程创建缺失的 `resources/backend` 和 `resources/webui` 空目录。空目录只用于通过 Tauri 的资源路径校验；启动或打包应用前仍需运行 `make prepare`（正式构建入口会自动准备完整资源）。
 
 ## 4. 版本同步
 

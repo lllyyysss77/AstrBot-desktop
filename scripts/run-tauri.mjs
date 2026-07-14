@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
+import { assertSupportedNodeVersion } from './node-version.mjs';
 import { loadProjectEnv } from './project-env.mjs';
 
 const subcommand = process.argv[2];
@@ -7,6 +8,7 @@ if (!['dev', 'build'].includes(subcommand)) {
   throw new Error('Expected a Tauri subcommand: dev or build.');
 }
 
+assertSupportedNodeVersion();
 loadProjectEnv();
 if (subcommand === 'dev') {
   const { ensureDevSource } = await import('./ensure-dev-source.mjs');
