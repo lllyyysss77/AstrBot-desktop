@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createHashRouter, RouterProvider } from 'react-router-dom';
+import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { RequireAuth } from '@/auth/RequireAuth';
 import { LegacyFallback } from '@/routes/LegacyFallback';
@@ -17,6 +17,13 @@ const ConsolePage = lazy(() => import('@/routes/monitoring/ConsolePage'));
 const TracePage = lazy(() => import('@/routes/monitoring/TracePage'));
 const ConversationPage = lazy(() => import('@/routes/monitoring/ConversationPage'));
 const SessionManagementPage = lazy(() => import('@/routes/monitoring/SessionManagementPage'));
+const PlatformPage = lazy(() => import('@/routes/configuration/PlatformPage'));
+const ProviderPage = lazy(() => import('@/routes/configuration/ProviderPage'));
+const ConfigPage = lazy(() => import('@/routes/configuration/ConfigPage'));
+const SettingsPage = lazy(() => import('@/routes/configuration/SettingsPage'));
+const PersonaPage = lazy(() => import('@/routes/configuration/PersonaPage'));
+const SubagentPage = lazy(() => import('@/routes/configuration/SubagentPage'));
+const CronPage = lazy(() => import('@/routes/configuration/CronPage'));
 
 function loading(element: React.ReactNode) {
   return <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>{element}</Suspense>;
@@ -32,6 +39,15 @@ const reactRouteElements: Partial<Record<string, React.ReactNode>> = {
   '/trace': <FullLayout>{loading(<TracePage />)}</FullLayout>,
   '/conversation': <FullLayout>{loading(<ConversationPage />)}</FullLayout>,
   '/session-management': <FullLayout>{loading(<SessionManagementPage />)}</FullLayout>,
+  '/platforms': <FullLayout>{loading(<PlatformPage />)}</FullLayout>,
+  '/providers': <FullLayout>{loading(<ProviderPage />)}</FullLayout>,
+  '/config': <FullLayout>{loading(<ConfigPage />)}</FullLayout>,
+  '/normal': <Navigate replace to="/config" />,
+  '/system': <Navigate replace to="/settings#system-config" />,
+  '/settings': <FullLayout>{loading(<SettingsPage />)}</FullLayout>,
+  '/persona': <FullLayout>{loading(<PersonaPage />)}</FullLayout>,
+  '/subagent': <FullLayout>{loading(<SubagentPage />)}</FullLayout>,
+  '/cron': <FullLayout>{loading(<CronPage />)}</FullLayout>,
 };
 
 function resolveReactRoute(path: string) {

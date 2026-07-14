@@ -1,0 +1,14 @@
+import { useCallback, useEffect, useState } from 'react';
+import { getSubagentConfig, listSubagentAvailableTools, updateSubagentConfig } from '@/api/openapi';
+import { MonacoEditor } from '@/components/editor/MonacoEditor';
+import { toast } from '@/stores/feedback';
+import { ConfigPageShell, LoadingState } from './ConfigurationUi';
+import { errorMessage, JsonObject, objectList, parseJsonObject, prettyJson, responseData } from './model';
+
+export default function SubagentPage() {
+  const [source, setSource] = useState('{}'); const [saved, setSaved] = useState('{}'); const [tools, setTools] = useState<JsonObject[]>([]); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
+  const load = useCallback(async () => { setLoading(true); setError(''); try { const [configResponse, toolsResponse] = await Promise.all([getSubagentConfig(), listSubagentAvailableTools()]); const text = prettyJson(responseData(configResponse)); setSource(text); setSaved(text); setTools(objectList(responseData(toolsResponse), ['tools', 'items'])); } catch (cause) { setError(errorMessage(cause, 'Failed to load subagent configuration.')); } finally { setLoading(false); } }, []);
+  useEffect(() => { void load(); }, [load]);
+  const save = async () => { let config: JsonObject; try { config = parseJsonObject(source); } catch (cause) { toast.error(errorMessage(cause, 'Invalid JSON.')); return; } const agents = config.agents; if (agents !== undefined && !Array.isArray(agents)) { toast.warning('agents must be an array.'); return; } setSaving(true); try { await updateSubagentConfig({ body: config }); setSaved(prettyJson(config)); toast.success('Subagent configuration saved.'); } catch (cause) { toast.error(errorMessage(cause, 'Failed to save subagent configuration.')); } finally { setSaving(false); } };
+  return <ConfigPageShell actions={<><button disabled={loading || source === saved} onClick={() => setSource(saved)} type="button">Reset</button><button className="button--primary" disabled={loading || saving || source === saved} onClick={() => void save()} type="button">{saving ? 'Saving…' : 'Save'}</button></>} description="Configure delegated agents, personas, providers and duplicate-tool handling." title="Subagents"><LoadingState error={error} loading={loading} />{!loading && <div className="config-workspace config-workspace--subagent"><section className="route-card config-editor-panel"><MonacoEditor ariaLabel="Subagent configuration JSON" language="json" onChange={setSource} value={source} /></section><aside className="route-card config-tool-list"><h2>Available tools</h2>{tools.map((tool, index) => <div key={String(tool.name || tool.id || index)}><strong>{String(tool.name || tool.id || `tool-${index}`)}</strong><small>{String(tool.description || '')}</small></div>)}{!tools.length && <p>No tool metadata returned.</p>}</aside></div>}</ConfigPageShell>;
+}

@@ -13,7 +13,7 @@ describe('route migration manifest', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it('tracks the completed authentication and static route batch', () => {
+  it('tracks every completed route batch', () => {
     expect(routeMigrationManifest.length).toBeGreaterThan(0);
     expect(migratedRoutePaths).toEqual([
       '/auth/login',
@@ -25,6 +25,15 @@ describe('route migration manifest', () => {
       '/trace',
       '/conversation',
       '/session-management',
+      '/platforms',
+      '/providers',
+      '/config',
+      '/normal',
+      '/system',
+      '/settings',
+      '/persona',
+      '/subagent',
+      '/cron',
     ]);
   });
 
