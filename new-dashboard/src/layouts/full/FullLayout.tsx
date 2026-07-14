@@ -1,6 +1,9 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
+import { Header } from './Header';
+import { Sidebar } from './Sidebar';
+
 type FullLayoutProps = PropsWithChildren<{
   header?: ReactNode;
   sidebar?: ReactNode;
@@ -23,7 +26,11 @@ export function getFullLayoutMode(pathname: string): FullLayoutMode {
   };
 }
 
-export function FullLayout({ children, header, sidebar }: FullLayoutProps) {
+export function FullLayout({
+  children,
+  header = <Header />,
+  sidebar = <Sidebar />,
+}: FullLayoutProps) {
   const { pathname } = useLocation();
   const mode = getFullLayoutMode(pathname);
   const showSidebar = !mode.isChatRoute && sidebar != null;
