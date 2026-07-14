@@ -524,3 +524,20 @@ textarea {
   font-weight: 700;
   line-height: 1;
 }
+
+.monaco-editor-host {
+  width: 100%;
+  min-height: 240px;
+}
+
+.desktop-restart-status {
+  position: fixed;
+  z-index: 9500;
+  right: 18px;
+  bottom: 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--astrbot-border);
+  border-radius: 8px;
+  background: var(--astrbot-surface);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+}

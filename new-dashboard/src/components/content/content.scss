@@ -1,0 +1,20 @@
+.markdown-body {
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.markdown-body pre {
+  max-width: 100%;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+
+.markdown-body img,
+.markdown-body svg {
+  max-width: 100%;
+}
+
+.markdown-body--error {
+  color: var(--astrbot-error);
+}

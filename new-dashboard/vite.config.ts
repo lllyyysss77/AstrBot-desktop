@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@legacy-i18n': fileURLToPath(new URL('../dashboard/src/i18n', import.meta.url)),
+      '@legacy-mermaid': fileURLToPath(new URL('../dashboard/node_modules/mermaid', import.meta.url)),
     },
   },
   server: {
