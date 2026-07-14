@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
 
+import { resolveCargoCommand } from './cargo-command.mjs';
 import { assertSupportedNodeVersion } from './node-version.mjs';
 import { loadProjectEnv } from './project-env.mjs';
 
@@ -27,12 +29,29 @@ if (subcommand === 'build' && !process.env.TAURI_SIGNING_PRIVATE_KEY?.trim()) {
   );
 }
 
-const result = spawnSync('cargo', tauriArgs, {
-  env: process.env,
+const { command: cargoCommand, defaultCargoPath } = resolveCargoCommand();
+const cargoEnv = { ...process.env };
+if (path.isAbsolute(cargoCommand)) {
+  const pathEnvKey = Object.keys(cargoEnv).find(
+    (key) => key.toLowerCase() === 'path',
+  ) ?? 'PATH';
+  cargoEnv[pathEnvKey] = [
+    path.dirname(cargoCommand),
+    cargoEnv[pathEnvKey],
+  ].filter(Boolean).join(path.delimiter);
+}
+const result = spawnSync(cargoCommand, tauriArgs, {
+  env: cargoEnv,
   stdio: 'inherit',
 });
 
 if (result.error) {
+  if (result.error.code === 'ENOENT') {
+    throw new Error(
+      `Cargo was not found. Install the Rust toolchain, add Cargo to PATH, or set CARGO to the executable path. Checked the rustup default path: ${defaultCargoPath}`,
+      { cause: result.error },
+    );
+  }
   throw result.error;
 }
 process.exit(result.status ?? 1);
