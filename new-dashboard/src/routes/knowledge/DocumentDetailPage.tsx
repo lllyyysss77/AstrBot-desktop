@@ -1,15 +1,70 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
+
 import { deleteKnowledgeChunk, getKnowledgeDocument, listKnowledgeChunks } from '@/api/openapi';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
+import { MdiIcon } from '@/components/icons/MdiIcon';
 import { confirmAction, toast } from '@/stores/feedback';
 import { errorMessage, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
+import { chunkCount, documentName, formatFileSize, formatKnowledgeDate } from './knowledgeModel';
 
 export default function DocumentDetailPage() {
-  const { kbId = '', docId = '' } = useParams(); const [document, setDocument] = useState<JsonObject>({}); const [chunks, setChunks] = useState<JsonObject[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [page, setPage] = useState(1); const [pageSize, setPageSize] = useState(10); const [total, setTotal] = useState(0); const [search, setSearch] = useState(''); const [selected, setSelected] = useState<JsonObject | null>(null);
-  const load = useCallback(async () => { setLoading(true); setError(''); try { const [docResponse, chunksResponse] = await Promise.all([getKnowledgeDocument({ path: { kb_id: kbId, document_id: docId } }), listKnowledgeChunks({ path: { kb_id: kbId }, query: { document_id: docId, page, page_size: pageSize } })]); const chunkData = responseData<JsonObject>(chunksResponse); setDocument(responseData<JsonObject>(docResponse) ?? {}); setChunks(objectList(chunkData, ['items', 'chunks'])); setTotal(typeof chunkData?.total === 'number' ? chunkData.total : objectList(chunkData, ['items']).length); } catch (cause) { setError(errorMessage(cause, 'Failed to load document.')); } finally { setLoading(false); } }, [docId, kbId, page, pageSize]);
+  const { kbId = '', docId = '' } = useParams();
+  const { t, i18n } = useTranslation();
+  const k = (key: string, options?: Record<string, unknown>) => t(`features.knowledge-base.document.${key}`, options);
+  const [document, setDocument] = useState<JsonObject>({});
+  const [chunks, setChunks] = useState<JsonObject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<JsonObject | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const [docResponse, chunksResponse] = await Promise.all([getKnowledgeDocument({ path: { kb_id: kbId, document_id: docId } }), listKnowledgeChunks({ path: { kb_id: kbId }, query: { document_id: docId, page, page_size: pageSize } })]);
+      const data = responseData<JsonObject>(chunksResponse) ?? {};
+      setDocument(responseData<JsonObject>(docResponse) ?? {});
+      const rows = objectList(data, ['items', 'chunks']); setChunks(rows); setTotal(typeof data.total === 'number' ? data.total : rows.length);
+    } catch (cause) { setError(errorMessage(cause, k('title'))); }
+    finally { setLoading(false); }
+  }, [docId, kbId, page, pageSize, t]);
   useEffect(() => { void load(); }, [load]);
-  const remove = async (chunk: JsonObject) => { const id = recordId(chunk, 'chunk_id', 'id'); if (!id || !await confirmAction({ danger: true, title: 'Delete chunk', message: 'Delete this document chunk?' })) return; try { await deleteKnowledgeChunk({ path: { kb_id: kbId, chunk_id: id }, query: { document_id: docId } }); toast.success('Chunk deleted.'); await load(); } catch (cause) { toast.error(errorMessage(cause, 'Failed to delete chunk.')); } };
-  const visible = useMemo(() => chunks.filter((chunk) => String(chunk.content || chunk.text || '').toLowerCase().includes(search.toLowerCase())), [chunks, search]);
-  return <div className="monitor-page knowledge-page"><header className="monitor-header"><div><h1>{String(document.file_name || document.name || docId)}</h1><p>{String(document.file_type || document.type || 'Document')} · {String(document.file_size || document.size || '—')}</p></div><div className="monitor-actions"><Link to={`/knowledge-base/${encodeURIComponent(kbId)}`}>Back to knowledge base</Link><button disabled={loading} onClick={() => void load()} type="button">Refresh</button></div></header>{error && <div className="monitor-error">{error}</div>}<section className="route-card"><div className="monitor-toolbar"><div><h2>Document chunks</h2><p>{total} chunks</p></div><input onChange={(event) => setSearch(event.target.value)} placeholder="Filter current page" value={search} /></div><div className="monitor-table-wrap"><table className="monitor-table"><thead><tr><th>Index</th><th>Content</th><th>Characters</th><th /></tr></thead><tbody>{visible.map((chunk, index) => { const id = recordId(chunk, 'chunk_id', 'id') || `chunk-${index}`; const content = String(chunk.content || chunk.text || ''); return <tr key={id}><td>{String(chunk.chunk_index ?? index + 1)}</td><td className="knowledge-chunk-preview">{content.slice(0, 260)}</td><td>{String(chunk.char_count ?? content.length)}</td><td><button onClick={() => setSelected(chunk)} type="button">View</button><button className="button--danger" onClick={() => void remove(chunk)} type="button">Delete</button></td></tr>; })}</tbody></table>{!loading && !visible.length && <div className="monitor-empty">No chunks.</div>}</div><div className="pagination"><select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 20, 50].map((size) => <option key={size}>{size}</option>)}</select><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">‹</button><span>{page}/{Math.max(1, Math.ceil(total / pageSize))}</span><button disabled={page * pageSize >= total} onClick={() => setPage((value) => value + 1)} type="button">›</button></div></section><Dialog onOpenChange={(open) => !open && setSelected(null)} open={Boolean(selected)} title={`Chunk ${String(selected?.chunk_index ?? '')}`}><pre className="knowledge-chunk-content">{String(selected?.content || selected?.text || '')}</pre><div className="dialog-actions"><DialogClose asChild><button type="button">Close</button></DialogClose></div></Dialog></div>;
+
+  const remove = async (chunk: JsonObject) => {
+    const id = recordId(chunk, 'chunk_id', 'id');
+    if (!id || !await confirmAction({ danger: true, title: k('delete.title'), message: `${k('delete.confirmText')}\n${k('delete.warning')}` })) return;
+    try { await deleteKnowledgeChunk({ path: { kb_id: kbId, chunk_id: id }, query: { document_id: docId } }); toast.success(k('delete.deleteSuccess')); await load(); }
+    catch (cause) { toast.error(errorMessage(cause, k('delete.deleteFailed'))); }
+  };
+  const visible = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return query ? chunks.filter((chunk) => String(chunk.content || chunk.text || '').toLocaleLowerCase().includes(query)) : chunks;
+  }, [chunks, search]);
+  const name = documentName(document) || docId;
+
+  return <div className="knowledge-document-page">
+    <header className="knowledge-detail-header"><Link aria-label={k('backToKB')} to={`/knowledge-base/${encodeURIComponent(kbId)}`}><MdiIcon name="mdi-arrow-left" /></Link><span className="knowledge-document-icon"><MdiIcon name={fileIcon(String(document.file_type || name))} /></span><div><h1>{name}</h1><p>{k('title')}</p></div><button disabled={loading} onClick={() => void load()} type="button"><MdiIcon className={loading ? 'mdi-spin' : ''} name="mdi-refresh" /></button></header>
+    {error && <div className="monitor-error" role="alert">{error}</div>}
+    <section className="knowledge-document-info"><h2>{k('info.title')}</h2><div><Info icon="mdi-label" label={k('info.name')} value={name} /><Info icon={fileIcon(String(document.file_type || name))} label={k('info.type')} value={String(document.file_type || '—')} /><Info icon="mdi-file-chart" label={k('info.size')} value={formatFileSize(document.file_size ?? document.size)} /><Info icon="mdi-text-box-outline" label={k('info.chunkCount')} value={String(chunkCount(document) || total)} /><Info icon="mdi-calendar" label={k('info.createdAt')} value={formatKnowledgeDate(document.created_at, i18n.language)} /></div></section>
+    <section className="knowledge-chunks"><header><div><h2>{k('chunks.title')}</h2><span>{total}</span></div><label><MdiIcon name="mdi-magnify" /><input onChange={(event) => setSearch(event.target.value)} placeholder={k('chunks.searchPlaceholder')} value={search} /></label></header><div className="knowledge-table"><table><thead><tr><th>{k('chunks.index')}</th><th>{k('chunks.content')}</th><th>{k('chunks.charCount')}</th><th>{k('chunks.actions')}</th></tr></thead><tbody>{visible.map((chunk, index) => { const id = recordId(chunk, 'chunk_id', 'id') || `chunk-${index}`; const content = String(chunk.content || chunk.text || ''); return <tr key={id}><td><span className="knowledge-chunk-index">#{Number(chunk.chunk_index ?? (page - 1) * pageSize + index) + 1}</span></td><td><p className="knowledge-chunk-preview">{content}</p></td><td>{String(chunk.char_count ?? content.length)}</td><td><div className="knowledge-row-actions"><button aria-label={k('chunks.view')} onClick={() => setSelected(chunk)} title={k('chunks.view')} type="button"><MdiIcon name="mdi-eye" /></button><button aria-label={k('chunks.delete')} className="button--danger" onClick={() => void remove(chunk)} title={k('chunks.delete')} type="button"><MdiIcon name="mdi-delete-outline" /></button></div></td></tr>; })}</tbody></table>{loading && <div className="knowledge-table__state"><MdiIcon className="mdi-spin" name="mdi-loading" /></div>}{!loading && !visible.length && <div className="knowledge-table__state"><MdiIcon name="mdi-text-box-outline" /><span>{k('chunks.empty')}</span></div>}</div>{!search && total > 0 && <div className="knowledge-pagination"><span>{k('chunks.showing')} {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} / {total}</span><div><select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 25, 50, 100].map((size) => <option key={size}>{size}</option>)}</select><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">‹</button><span>{page}/{Math.max(1, Math.ceil(total / pageSize))}</span><button disabled={page * pageSize >= total} onClick={() => setPage((value) => value + 1)} type="button">›</button></div></div>}</section>
+    <Dialog onOpenChange={(open) => !open && setSelected(null)} open={Boolean(selected)} title={k('view.title')}><div className="knowledge-chunk-dialog"><dl><div><dt>{k('view.index')}</dt><dd>#{Number(selected?.chunk_index ?? 0) + 1}</dd></div><div><dt>{k('view.charCount')}</dt><dd>{String(selected?.char_count ?? String(selected?.content || '').length)}</dd></div><div><dt>{k('view.vecDocId')}</dt><dd>{recordId(selected ?? {}, 'chunk_id', 'id') || '—'}</dd></div></dl><h3>{k('view.content')}</h3><pre>{String(selected?.content || selected?.text || '')}</pre><div className="dialog-actions"><DialogClose asChild><button type="button">{k('view.close')}</button></DialogClose></div></div></Dialog>
+  </div>;
+}
+
+function Info({ icon, label, value }: { icon: `mdi-${string}`; label: string; value: string }) {
+  return <article><MdiIcon name={icon} /><span><small>{label}</small><strong>{value}</strong></span></article>;
+}
+
+function fileIcon(file: string): `mdi-${string}` {
+  const type = file.toLowerCase();
+  if (type.includes('pdf')) return 'mdi-file-pdf-box';
+  if (type.includes('epub')) return 'mdi-book-open-page-variant';
+  if (type.includes('.md') || type.includes('markdown')) return 'mdi-language-markdown-outline';
+  if (type.includes('xls')) return 'mdi-file-excel-box';
+  return 'mdi-file-document-outline';
 }
