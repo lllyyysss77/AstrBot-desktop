@@ -3,6 +3,14 @@ import type { JsonObject } from '@/routes/configuration/model';
 export type ChatPart = JsonObject & { type: string; text?: string; think?: string; attachment_id?: string; filename?: string; stored_filename?: string };
 export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean } };
 export type ChatSession = JsonObject & { session_id: string; display_name?: string; updated_at?: string };
+export type StagedAttachmentType = 'image' | 'record' | 'file';
+
+export function stagedAttachmentType(serverType: unknown, mimeType: string): StagedAttachmentType {
+  if (serverType === 'image' || serverType === 'record') return serverType;
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('audio/')) return 'record';
+  return 'file';
+}
 
 export function normalizeParts(value: unknown): ChatPart[] {
   if (typeof value === 'string') return value ? [{ type: 'plain', text: value }] : [];

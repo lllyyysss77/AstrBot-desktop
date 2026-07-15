@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { appendStreamPayload, normalizeRecord, parseSseEvents, sessionList } from './model';
+import { appendStreamPayload, normalizeRecord, parseSseEvents, sessionList, stagedAttachmentType } from './model';
 
 describe('chat model', () => {
+  it('classifies recorded audio as a record attachment', () => {
+    expect(stagedAttachmentType('record', 'application/octet-stream')).toBe('record');
+    expect(stagedAttachmentType(undefined, 'audio/webm;codecs=opus')).toBe('record');
+    expect(stagedAttachmentType(undefined, 'image/png')).toBe('image');
+  });
+
   it('normalizes stored history and appends streaming text', () => {
     const record = normalizeRecord({ sender_id: 'bot', content: { message: 'Hello' } });
     appendStreamPayload(record, { type: 'plain', data: ' world', streaming: true });

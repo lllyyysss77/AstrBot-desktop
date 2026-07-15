@@ -1156,14 +1156,16 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 .chat-composer-menu__config { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; padding: 7px 8px; color: var(--chat-muted); font-size: 12px; }
 .chat-composer-menu__config select { grid-column: 1 / -1; width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--astrbot-border); border-radius: 7px; background: var(--astrbot-surface); color: inherit; }
 .chat-composer-menu__config small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-stream-indicator { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; }
-.chat-stream-indicator > span { width: 18px; height: 18px; border: 2px solid color-mix(in srgb, var(--astrbot-text) 16%, transparent); border-radius: 50%; }
-.chat-stream-indicator.is-active > span { border-top-color: var(--astrbot-primary); }
+.chat-record { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50% !important; color: var(--astrbot-text); font-size: 20px; }
+.chat-record:hover { background: color-mix(in srgb, var(--astrbot-text) 5%, transparent) !important; }
+.chat-record.is-recording { color: var(--astrbot-error); }
+.chat-record:disabled { cursor: not-allowed; opacity: .45; }
 .chat-send { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50% !important; background: var(--astrbot-primary) !important; color: #fff !important; font-size: 20px; }
 .chat-send:disabled { background: color-mix(in srgb, var(--astrbot-text) 7%, var(--astrbot-surface)) !important; color: color-mix(in srgb, var(--astrbot-text) 24%, transparent) !important; cursor: not-allowed; }
 .chat-files { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 4px 4px; }
 .chat-files span { display: inline-flex; min-width: 0; max-width: 240px; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 7px; background: var(--chat-session-active); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-files button { padding: 0; }
+.chat-audio { display: block; width: min(360px, 100%); margin-top: 8px; }
 .chat-composer:has(.chat-files) { border-radius: 30px; }
 .chat-sidebar-backdrop { display: none; }
 @keyframes chat-pulse { 50% { opacity: .35; } }

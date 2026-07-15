@@ -18,6 +18,7 @@ import { MdiIcon } from '@/components/icons/MdiIcon';
 import { errorMessage, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
 import { confirmAction, toast } from '@/stores/feedback';
 import { useLayoutStore } from '@/stores/layout';
+import { AudioRecorder } from './audioRecorder';
 import {
   appendStreamPayload,
   type ChatPart,
@@ -26,10 +27,12 @@ import {
   normalizeRecord,
   parseSseEvents,
   sessionList,
+  type StagedAttachmentType,
+  stagedAttachmentType,
 } from './model';
 
 type ChatPageProps = { chatbox?: boolean };
-type StagedFile = { attachment_id: string; filename: string; type: 'image' | 'file' };
+type StagedFile = { attachment_id: string; filename: string; type: StagedAttachmentType };
 
 export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const { t } = useTranslation();
@@ -44,6 +47,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingBusy, setRecordingBusy] = useState(false);
   const [error, setError] = useState('');
   const [chatboxSidebarOpen, setChatboxSidebarOpen] = useState(false);
   const [configId, setConfigId] = useState('default');
@@ -53,6 +58,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const layoutChatSidebarOpen = useLayoutStore((state) => state.chatSidebarOpen);
   const setLayoutChatSidebarOpen = useLayoutStore((state) => state.setChatSidebarOpen);
   const abortRef = useRef<AbortController | null>(null);
+  const audioRecorderRef = useRef(new AudioRecorder());
   const activeSessionRef = useRef('');
   const pendingLocalSessionRef = useRef<string | null>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
@@ -113,7 +119,10 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     void loadMessages();
   }, [conversationId, loadMessages]);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    audioRecorderRef.current.cancel();
+  }, []);
   useEffect(() => { messageEnd.current?.scrollIntoView({ behavior: sending ? 'auto' : 'smooth' }); }, [messages, sending]);
   useEffect(() => { localStorage.setItem('selectedProvider', provider); }, [provider]);
   useEffect(() => { localStorage.setItem('selectedProviderModel', model); }, [model]);
@@ -133,10 +142,12 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const newChat = () => {
     abortRef.current?.abort();
+    audioRecorderRef.current.cancel();
     activeSessionRef.current = '';
     pendingLocalSessionRef.current = null;
     setMessages([]);
     setFiles([]);
+    setRecording(false);
     setSending(false);
     navigate(basePath);
     setSidebarOpen(false);
@@ -175,7 +186,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       setFiles((currentFiles) => [...currentFiles, {
         attachment_id: id,
         filename: String(data.filename || data.original_name || file.name),
-        type: file.type.startsWith('image/') ? 'image' : 'file',
+        type: stagedAttachmentType(data.type, file.type),
       }]);
     } catch (cause) {
       toast.error(errorMessage(cause, 'Failed to upload file.'));
@@ -184,9 +195,30 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   };
 
+  const toggleRecording = async () => {
+    if (recordingBusy || sending || uploading) return;
+    setRecordingBusy(true);
+    try {
+      if (recording) {
+        setRecording(false);
+        const audioFile = await audioRecorderRef.current.stop();
+        await upload(audioFile);
+      } else {
+        await audioRecorderRef.current.start();
+        setRecording(true);
+      }
+    } catch (cause) {
+      setRecording(false);
+      audioRecorderRef.current.cancel();
+      toast.error(errorMessage(cause, t('features.chat.voice.error')));
+    } finally {
+      setRecordingBusy(false);
+    }
+  };
+
   const send = async () => {
     const text = draft.trim();
-    if ((!text && !files.length) || sending) return;
+    if ((!text && !files.length) || sending || recording) return;
     setSending(true);
     setError('');
     let sessionId = conversationId;
@@ -337,7 +369,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         <div ref={messageEnd} />
       </section>
       <footer className="chat-composer">
-        {files.length > 0 && <div className="chat-files">{files.map((file) => <span key={file.attachment_id}>{file.filename}<button onClick={() => setFiles((items) => items.filter((item) => item.attachment_id !== file.attachment_id))} type="button">×</button></span>)}</div>}
+        {files.length > 0 && <div className="chat-files">{files.map((file) => <span key={file.attachment_id}>{file.type === 'record' && <MdiIcon name="mdi-microphone" />}{file.type === 'record' ? t('features.chat.voice.recording') : file.filename}<button aria-label={t('features.chat.input.clear')} onClick={() => setFiles((items) => items.filter((item) => item.attachment_id !== file.attachment_id))} type="button">×</button></span>)}</div>}
         <div className="chat-input-row">
           <details className="chat-composer-menu">
             <summary aria-label={t('features.chat.input.upload')}><MdiIcon name="mdi-plus" /></summary>
@@ -348,8 +380,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
             </div>
           </details>
           <textarea aria-label={t('features.chat.input.placeholder')} disabled={sending} onChange={(event) => setDraft(event.target.value)} onInput={(event) => { const target = event.currentTarget; target.style.height = 'auto'; target.style.height = `${Math.min(target.scrollHeight, 160)}px`; }} onKeyDown={keyDown} placeholder={t('features.chat.input.placeholder')} ref={inputRef} rows={1} value={draft} />
-          <button aria-label={streaming ? t('features.chat.streaming.enabled') : t('features.chat.streaming.disabled')} aria-pressed={streaming} className={`chat-stream-indicator ${streaming ? 'is-active' : ''}`} onClick={() => setStreaming((value) => !value)} title={streaming ? t('features.chat.streaming.enabled') : t('features.chat.streaming.disabled')} type="button"><span /></button>
-          {sending ? <button aria-label={t('features.chat.input.stopGenerating')} className="chat-send" onClick={() => void stop()} type="button"><MdiIcon name="mdi-stop" /></button> : <button aria-label={t('features.chat.input.send')} className="chat-send" disabled={!draft.trim() && !files.length} onClick={() => void send()} type="button"><MdiIcon name="mdi-arrow-up" /></button>}
+          <button aria-label={recording ? t('features.chat.voice.stop') : t('features.chat.voice.startRecording')} aria-pressed={recording} className={`chat-record ${recording ? 'is-recording' : ''}`} disabled={recordingBusy || uploading || sending} onClick={() => void toggleRecording()} title={recording ? t('features.chat.voice.stop') : t('features.chat.voice.startRecording')} type="button"><MdiIcon name={recording ? 'mdi-stop-circle' : 'mdi-microphone'} /></button>
+          {sending ? <button aria-label={t('features.chat.input.stopGenerating')} className="chat-send" onClick={() => void stop()} type="button"><MdiIcon name="mdi-stop" /></button> : <button aria-label={t('features.chat.input.send')} className="chat-send" disabled={recording || (!draft.trim() && !files.length)} onClick={() => void send()} type="button"><MdiIcon name="mdi-arrow-up" /></button>}
         </div>
       </footer>
     </main>
@@ -377,6 +409,7 @@ function MessagePart({ part, streaming, user }: { part: ChatPart; streaming: boo
   const filename = part.filename || part.stored_filename || 'attachment';
   const url = id ? `/api/v1/files/${encodeURIComponent(id)}/content` : part.stored_filename ? `/api/v1/files/content?filename=${encodeURIComponent(part.stored_filename)}` : '';
   if (part.type === 'image' && url) return <a href={url} rel="noreferrer" target="_blank"><img alt={filename} className="chat-image" src={url} /></a>;
+  if (part.type === 'record' && url) return <audio className="chat-audio" controls preload="metadata" src={url} />;
   return <a className="chat-file" href={url || undefined} rel="noreferrer" target="_blank">📎 {filename}</a>;
 }
 
