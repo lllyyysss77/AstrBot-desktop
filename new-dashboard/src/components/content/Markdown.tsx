@@ -20,6 +20,8 @@ const plugins = { cjk, code, math, mermaid };
 export function Markdown({ className = '', content, streaming = false }: MarkdownProps) {
   return (
     <Streamdown
+      animated
+      caret="block"
       className={`markdown-body ${className}`.trim()}
       controls={false}
       dir="auto"

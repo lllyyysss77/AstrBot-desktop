@@ -8,7 +8,10 @@ describe('Streamdown Markdown renderer', () => {
     const html = renderToStaticMarkup(<Markdown content="A **streaming response" streaming />);
 
     expect(html).toContain('data-streamdown="strong"');
-    expect(html).toContain('streaming response</span>');
+    expect(html).toContain('>streaming</span>');
+    expect(html).toContain('>response</span>');
+    expect(html).toContain('data-sd-animate="true"');
+    expect(html).toContain('--streamdown-caret');
   });
 
   it('renders static GFM without allowing raw HTML', () => {
@@ -16,5 +19,7 @@ describe('Streamdown Markdown renderer', () => {
 
     expect(html).toContain('<del>done</del>');
     expect(html).not.toContain('<script>');
+    expect(html).not.toContain('data-sd-animate');
+    expect(html).not.toContain('--streamdown-caret');
   });
 });
