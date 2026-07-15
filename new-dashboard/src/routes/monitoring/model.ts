@@ -36,6 +36,24 @@ export function logIdentity(log: LogItem) {
   return `${log.time ?? ''}:${log.level ?? ''}:${log.type ?? ''}:${log.span_id ?? ''}:${log.action ?? ''}:${log.data ?? ''}`;
 }
 
+const ansiOscPattern = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g;
+const ansiCsiPattern = /(?:\u001B\[|\u009B|\uFFFD\[|\\u001b\[|\\x1b\[)[0-?]*[ -/]*[@-~]/gi;
+const ansiCharsetPattern = /\u001B[()][0-2A-Z]/g;
+
+/**
+ * Logs normally contain ANSI color escapes. Some Windows log paths decode the
+ * ESC byte as U+FFFD before it reaches the browser, producing text such as
+ * `�[1;36m`. The legacy console removed the color prefix and reset marker
+ * before rendering, so accept both representations here.
+ */
+export function cleanConsoleLog(value: unknown) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return (text ?? '')
+    .replace(ansiOscPattern, '')
+    .replace(ansiCsiPattern, '')
+    .replace(ansiCharsetPattern, '');
+}
+
 export function formatTimestamp(value: unknown, locale?: string) {
   if (value == null || value === '') return '—';
   const numeric = typeof value === 'number' ? value : Number(value);

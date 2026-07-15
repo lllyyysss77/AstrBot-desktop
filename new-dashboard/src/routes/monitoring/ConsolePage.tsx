@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { installPipPackage } from '@/api/openapi';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { toast } from '@/stores/feedback';
+import { cleanConsoleLog } from './model';
 import { useLogFeed } from './useLogFeed';
 
 const levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
@@ -54,7 +55,7 @@ export default function ConsolePage() {
         <button onClick={() => setPipOpen(true)} type="button">{t('features.console.pipInstall.button')}</button>
       </div></header>
       <div className="monitor-filters">{levels.map((level) => <button aria-pressed={selected.has(level)} key={level} onClick={() => toggleLevel(level)} type="button">{level}</button>)}</div>
-      <div className="monitor-terminal" ref={terminalRef}>{visible.map((item) => <pre className={levelClass(item.level)} key={`${item.time}-${item.data}`}>{item.data ?? JSON.stringify(item)}</pre>)}</div>
+      <div className="monitor-terminal" ref={terminalRef}>{visible.map((item) => <pre className={levelClass(item.level)} key={`${item.time}-${item.data}`}>{cleanConsoleLog(item.data ?? item)}</pre>)}</div>
       <Dialog onOpenChange={setPipOpen} open={pipOpen} title={t('features.console.pipInstall.dialogTitle')}>
         <div className="dialog-form"><label>{t('features.console.pipInstall.packageLabel')}<input onChange={(event) => setPipPackage(event.target.value)} value={pipPackage} /></label><label>{t('features.console.pipInstall.mirrorLabel')}<input onChange={(event) => setMirror(event.target.value)} value={mirror} /></label><small>{t('features.console.pipInstall.mirrorHint')}</small><div className="dialog-actions"><DialogClose asChild><button type="button">×</button></DialogClose><button className="button--primary" disabled={installing || !pipPackage.trim()} onClick={() => void install()} type="button">{t('features.console.pipInstall.installButton')}</button></div></div>
       </Dialog>
