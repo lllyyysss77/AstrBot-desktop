@@ -23,6 +23,34 @@ export function pluginList(data: unknown) {
   return objectList(data, ['plugins', 'items', 'data', 'results']);
 }
 
+export function marketPluginList(data: unknown) {
+  const list = pluginList(data);
+  if (list.length || Array.isArray(data)) return list;
+  if (!isObject(data)) return [];
+  return Object.entries(data).flatMap(([key, value]) => {
+    if (key === '$meta' || !isObject(value)) return [];
+    const fallbackName = key.includes('/') ? '' : key.trim();
+    const name = String(value.name || '').trim() || fallbackName;
+    const author = pluginAuthor(value).trim();
+    return [{
+      ...value,
+      name: name || key,
+      market_plugin_id: String(value.market_plugin_id || '').trim() || (author && name ? `${author}/${name}` : ''),
+    }];
+  });
+}
+
+export function marketPluginTotal(data: unknown, fallback: number) {
+  if (!isObject(data)) return fallback;
+  const meta = isObject(data.$meta) ? data.$meta : {};
+  const pagination = isObject(data.pagination) ? data.pagination : {};
+  for (const value of [data.total, data.total_count, meta.total, meta.total_count, pagination.total]) {
+    const total = Number(value);
+    if (Number.isFinite(total) && total >= 0) return total;
+  }
+  return fallback;
+}
+
 export function sourceList(data: unknown) {
   return objectList(data, ['sources', 'items', 'data']);
 }
