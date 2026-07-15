@@ -56,6 +56,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [failedSave, setFailedSave] = useState('');
   const [restartRequired, setRestartRequired] = useState(false);
   const [keyName, setKeyName] = useState('');
   const [expiry, setExpiry] = useState<number | 'permanent'>(30);
@@ -86,22 +87,29 @@ export default function SettingsPage() {
   useEffect(() => { void load(); }, [load]);
 
   const rootMetadata = useMemo(() => systemMetadataRoot(metadata), [metadata]);
-  const dirty = JSON.stringify(config) !== saved;
+  const configSnapshot = useMemo(() => JSON.stringify(config), [config]);
   const resolveText = useCallback((path: string, field: 'description' | 'hint', fallback = '') => t(`features.config-metadata.${path}.${field}`, { defaultValue: fallback }), [t]);
 
-  const save = async () => {
-    setSaving(true);
-    try {
-      await updateSystemConfig({ body: config });
-      setSaved(JSON.stringify(config));
-      setRestartRequired(true);
-      toast.success(t(`${prefix}.systemConfig.messages.saveSuccess`));
-    } catch (cause) {
-      toast.error(errorMessage(cause, t(`${prefix}.systemConfig.messages.saveFailed`)));
-    } finally {
-      setSaving(false);
-    }
-  };
+  useEffect(() => {
+    if (loading || saving || configSnapshot === saved || configSnapshot === failedSave) return;
+    const nextConfig = config;
+    const timeout = window.setTimeout(() => {
+      setSaving(true);
+      void updateSystemConfig({ body: nextConfig })
+        .then(() => {
+          setSaved(configSnapshot);
+          setFailedSave('');
+          setRestartRequired(true);
+          toast.success(t(`${prefix}.systemConfig.messages.saveSuccess`));
+        })
+        .catch((cause) => {
+          setFailedSave(configSnapshot);
+          toast.error(errorMessage(cause, t(`${prefix}.systemConfig.messages.saveFailed`)));
+        })
+        .finally(() => setSaving(false));
+    }, 450);
+    return () => window.clearTimeout(timeout);
+  }, [config, configSnapshot, failedSave, loading, saved, saving, t]);
 
   const applyColor = (name: 'primary' | 'secondary', value: string) => {
     const storageKey = name === 'primary' ? 'themePrimary' : 'themeSecondary';
@@ -173,7 +181,7 @@ export default function SettingsPage() {
     { description: t('features.welcome.resources.afdianDesc'), icon: 'mdi-hand-heart' as const, label: t('features.welcome.resources.afdianTitle'), url: 'https://afdian.com/a/astrbot_team' },
   ];
 
-  return <div className="settings-page"><header className="settings-page__header"><h1>{t(`${prefix}.page.title`)}</h1>{section !== 'about' && <div className="settings-page__actions"><button disabled={!dirty || loading} onClick={() => setConfig(JSON.parse(saved) as ConfigRecord)} type="button">{t('core.actions.reset')}</button><button className="button--primary" disabled={!dirty || saving || loading} onClick={() => void save()} type="button"><MdiIcon name="mdi-content-save" />{saving ? '…' : t('core.actions.save')}</button></div>}</header><div className="settings-layout"><nav aria-label={t(`${prefix}.page.title`)} className="settings-nav">{NAV_ITEMS.map((item) => <button aria-pressed={section === item.id} key={item.id} onClick={() => setSection(item.id)} type="button"><MdiIcon name={item.icon} /><span>{item.id === 'about' ? t('core.navigation.about') : t(`${prefix}.sections.${item.id}.title`)}</span></button>)}</nav><main className="settings-main">
+  return <div className="settings-page"><div className="settings-layout"><nav aria-label={t(`${prefix}.page.title`)} className="settings-nav">{NAV_ITEMS.map((item) => <button aria-pressed={section === item.id} key={item.id} onClick={() => setSection(item.id)} type="button"><MdiIcon name={item.icon} /><span>{item.id === 'about' ? t('core.navigation.about') : t(`${prefix}.sections.${item.id}.title`)}</span></button>)}</nav><main className="settings-main">
     {section === 'about' && <section className="settings-section"><header className="settings-section__heading"><h2 className="settings-section__title">{t('core.navigation.about')}</h2></header><div className="settings-about-card settings-list-card">{aboutResources.map((resource) => <article className="settings-about-item" key={resource.label}><div><strong>{resource.label}</strong><p>{resource.description}</p></div><a href={resource.url} rel="noreferrer" target="_blank"><MdiIcon name={resource.icon} />{resource.label}</a></article>)}</div></section>}
     {section !== 'about' && <>
     {restartRequired && <div className="settings-restart" role="status"><span><MdiIcon name="mdi-alert-circle" />{t(`${prefix}.systemConfig.restartRequired`)}</span><button onClick={() => void restart()} type="button"><MdiIcon name="mdi-restart" />{t(`${prefix}.system.restart.button`)}</button></div>}

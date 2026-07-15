@@ -1467,18 +1467,13 @@ textarea {
 .headless-dialog__content:has(.dynamic-config-dialog) { width: min(900px, calc(100vw - 32px)); }
 
 .settings-page { --settings-border: color-mix(in srgb, var(--astrbot-text) 13%, transparent); --settings-divider: color-mix(in srgb, var(--astrbot-text) 9%, transparent); width: min(100%, 940px); min-height: 100%; margin: 0 auto; padding: 36px 18px 48px; }
-.settings-page__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
-.settings-page__header h1 { margin: 0; font-size: 1.72rem; font-weight: 780; line-height: 1.25; }
-.settings-page__actions,
 .settings-color-controls,
 .api-key-create { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.settings-page__actions button,
 .settings-item > button,
 .settings-color-controls button,
 .api-key-create button,
 .config-secret button,
 .settings-restart button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 7px; padding: 7px 13px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: inherit; cursor: pointer; }
-.settings-page__actions button:disabled,
 .api-key-create button:disabled { cursor: not-allowed; opacity: .5; }
 .settings-layout { display: grid; grid-template-columns: 126px minmax(0, 1fr); align-items: start; gap: 34px; }
 .settings-nav { position: sticky; top: 76px; display: flex; flex-direction: column; gap: 5px; padding-top: 2px; }
@@ -2356,8 +2351,6 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 
 @media (max-width: 720px) {
   .settings-page { padding: 32px 14px 44px; }
-  .settings-page__header { align-items: flex-start; flex-direction: column; margin-bottom: 22px; }
-  .settings-page__header h1 { font-size: 1.36rem; }
   .settings-layout { grid-template-columns: 1fr; gap: 22px; }
   .settings-nav { position: static; flex-flow: row wrap; gap: 6px; }
   .settings-nav button { width: auto; flex: 0 0 auto; border: 1px solid var(--settings-border); background: var(--astrbot-surface); }
@@ -2408,8 +2401,6 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
   .chat-message--user .chat-message__body { padding: 10px 14px; }
   .chat-composer { bottom: 8px; width: calc(100% - 20px); }
   .chat-composer-menu__panel { position: fixed; right: 10px; bottom: 82px; left: 10px; width: auto; }
-  .settings-page__actions { width: 100%; }
-  .settings-page__actions button { flex: 1; }
   .settings-restart { align-items: flex-start; flex-direction: column; }
   .dynamic-config__row { grid-template-columns: 1fr; gap: 10px; }
   .api-key-create { align-items: stretch; flex-direction: column; }
