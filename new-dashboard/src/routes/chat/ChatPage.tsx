@@ -10,14 +10,16 @@ import {
   listChatConfigs,
   listChatProjects,
   listChatSessions,
+  listProviders,
   stopChatSession,
+  testProviderById,
   updateChatSession,
   uploadFile,
 } from '@/api/openapi';
 import { readAuthToken } from '@/auth/storage';
 import { Markdown } from '@/components/content/Markdown';
 import { MdiIcon } from '@/components/icons/MdiIcon';
-import { errorMessage, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
+import { errorMessage, isObject, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
 import { confirmAction, toast } from '@/stores/feedback';
 import { useLayoutStore } from '@/stores/layout';
 import { AudioRecorder } from './audioRecorder';
@@ -35,6 +37,7 @@ import {
 
 type ChatPageProps = { chatbox?: boolean };
 type StagedFile = { attachment_id: string; filename: string; type: StagedAttachmentType };
+type ProviderConfig = JsonObject & { id: string; model: string };
 
 export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const { t } = useTranslation();
@@ -45,6 +48,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [messages, setMessages] = useState<ChatRecord[]>([]);
   const [configs, setConfigs] = useState<JsonObject[]>([]);
   const [projects, setProjects] = useState<JsonObject[]>([]);
+  const [providers, setProviders] = useState<ProviderConfig[]>([]);
+  const [providerMetadata, setProviderMetadata] = useState<Record<string, JsonObject>>({});
+  const [providerSearch, setProviderSearch] = useState('');
+  const [providersLoading, setProvidersLoading] = useState(false);
+  const [testingProvider, setTestingProvider] = useState('');
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<StagedFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,10 +73,16 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const audioRecorderRef = useRef(new AudioRecorder());
   const activeSessionRef = useRef('');
   const pendingLocalSessionRef = useRef<string | null>(null);
+  const modelMenuRef = useRef<HTMLDetailsElement>(null);
   const messageEnd = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const current = useMemo(() => sessions.find((item) => item.session_id === conversationId), [conversationId, sessions]);
   const currentConfig = useMemo(() => configs.find((config) => recordId(config, 'id', 'conf_id') === configId), [configId, configs]);
+  const currentProvider = useMemo(() => providers.find((item) => item.id === provider), [provider, providers]);
+  const filteredProviders = useMemo(() => {
+    const query = providerSearch.trim().toLowerCase();
+    return query ? providers.filter((item) => item.id.toLowerCase().includes(query) || item.model.toLowerCase().includes(query)) : providers;
+  }, [providerSearch, providers]);
   const sidebarOpen = chatbox ? chatboxSidebarOpen : layoutChatSidebarOpen;
   const setSidebarOpen = useCallback((open: boolean) => {
     if (chatbox) setChatboxSidebarOpen(open);
@@ -94,6 +108,26 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   }, []);
 
+  const loadProviders = useCallback(async () => {
+    setProvidersLoading(true);
+    try {
+      const data = responseData<unknown>(await listProviders({ query: { capability: 'chat', enabled: true } }));
+      const envelope = isObject(data) ? data : {};
+      const items = objectList(data, ['providers', 'data'])
+        .filter((item) => (item.enable ?? item.enabled) !== false)
+        .map((item) => ({ ...item, id: recordId(item, 'id', 'provider_id'), model: String(item.model || '') }))
+        .filter((item): item is ProviderConfig => Boolean(item.id));
+      setProviders(items);
+      setProviderMetadata(isObject(envelope.model_metadata) ? envelope.model_metadata as Record<string, JsonObject> : {});
+      const selected = items.find((item) => item.id === provider);
+      if (selected?.model) setModel(selected.model);
+    } catch (cause) {
+      toast.error(errorMessage(cause, 'Failed to load models.'));
+    } finally {
+      setProvidersLoading(false);
+    }
+  }, [provider]);
+
   const loadMessages = useCallback(async () => {
     if (!conversationId) {
       setMessages([]);
@@ -117,10 +151,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   useEffect(() => {
     void loadSessions();
     void loadProjects();
+    void loadProviders();
     void listChatConfigs()
       .then((response) => setConfigs(objectList(unwrap(response), ['configs', 'items'])))
       .catch(() => undefined);
-  }, [loadProjects, loadSessions]);
+  }, [loadProjects, loadProviders, loadSessions]);
 
   useEffect(() => {
     if (pendingLocalSessionRef.current === conversationId) {
@@ -198,6 +233,27 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       await loadProjects();
     } catch (cause) {
       toast.error(errorMessage(cause, 'Failed to create project.'));
+    }
+  };
+
+  const selectProvider = (item: ProviderConfig) => {
+    setProvider(item.id);
+    setModel(item.model);
+    modelMenuRef.current?.removeAttribute('open');
+  };
+
+  const testProvider = async (item: ProviderConfig) => {
+    if (testingProvider) return;
+    setTestingProvider(item.id);
+    const startedAt = performance.now();
+    try {
+      const data = responseData<unknown>(await testProviderById({ body: { provider_id: item.id } }));
+      if (isObject(data) && data.error) throw new Error(String(data.error));
+      toast.success(t('features.provider.models.testSuccessWithLatency', { id: item.id, latency: Math.max(0, Math.round(performance.now() - startedAt)) }));
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('features.provider.models.testError')));
+    } finally {
+      setTestingProvider('');
     }
   };
 
@@ -337,6 +393,75 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   };
 
+  const regenerate = async (target: ChatRecord, selectedProvider = provider, selectedModel = model) => {
+    if (!conversationId || target.id == null || sending) return;
+    const targetId = String(target.id);
+    const index = messages.findIndex((item) => item === target || String(item.id) === targetId);
+    if (index < 0) return;
+    const regenerated: ChatRecord = {
+      ...target,
+      id: `local-regenerate-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      content: { type: 'bot', message: [], reasoning: '', isLoading: true },
+    };
+    setMessages((items) => items.map((item, itemIndex) => itemIndex === index ? regenerated : item));
+    setSending(true);
+    setError('');
+    const abort = new AbortController();
+    abortRef.current = abort;
+    activeSessionRef.current = conversationId;
+    try {
+      const token = readAuthToken(localStorage);
+      const locale = localStorage.getItem('astrbot-locale');
+      const response = await fetch(`/api/v1/chat/sessions/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(targetId)}/regenerate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(locale ? { 'Accept-Language': locale } : {}),
+        },
+        body: JSON.stringify({ selected_provider: selectedProvider || undefined, selected_model: selectedModel || undefined, enable_streaming: streaming }),
+        signal: abort.signal,
+      });
+      if (!response.ok || !response.body) throw new Error(`Regenerate failed: ${response.status}`);
+      if (!(response.headers.get('content-type') || '').includes('text/event-stream')) {
+        const payload = await response.json().catch(() => null) as JsonObject | null;
+        throw new Error(String(payload?.message || 'Regenerate failed.'));
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const applyPayloads = (payloads: unknown[]) => {
+        let changed = false;
+        payloads.forEach((payload) => { changed = appendStreamPayload(regenerated, payload) || changed; });
+        if (changed) setMessages((items) => [...items]);
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parsed = parseSseEvents(buffer);
+        buffer = parsed.remainder;
+        applyPayloads(parsed.payloads);
+      }
+      buffer += decoder.decode();
+      applyPayloads(parseSseEvents(buffer, true).payloads);
+      await loadSessions();
+    } catch (cause) {
+      if ((cause as Error)?.name !== 'AbortError') {
+        const message = errorMessage(cause, 'Failed to regenerate message.');
+        setError(message);
+        toast.error(message);
+      }
+    } finally {
+      regenerated.content.isLoading = false;
+      setMessages((items) => [...items]);
+      if (abortRef.current === abort) abortRef.current = null;
+      if (activeSessionRef.current === conversationId) activeSessionRef.current = '';
+      setSending(false);
+    }
+  };
+
   const stop = async () => {
     abortRef.current?.abort();
     const sessionId = activeSessionRef.current || conversationId;
@@ -352,7 +477,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   };
 
   const sessionTitle = current?.display_name || t('features.chat.conversation.newConversation');
-  const modelTitle = model || provider || 'Default model';
+  const modelTitle = provider || 'Default model';
+  const modelMeta = currentProvider?.model || model;
   const configTitle = String(currentConfig?.name || configId || 'default');
 
   return <div className={`chat-shell ${chatbox ? 'chat-shell--box' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
@@ -385,18 +511,29 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     <main className="chat-main">
       <header className="chat-toolbar">
         <button aria-label="Open conversations" className="chat-toolbar__sidebar-open" onClick={() => setSidebarOpen(true)} type="button"><MdiIcon name="mdi-menu" /></button>
-        <details className="chat-model-menu">
-          <summary><span>{modelTitle}<MdiIcon name="mdi-chevron-down" /></span><small>{sessionTitle}</small></summary>
+        <details className="chat-model-menu" onToggle={(event) => { if (event.currentTarget.open) void loadProviders(); }} ref={modelMenuRef}>
+          <summary><span><strong>{modelTitle}</strong>{modelMeta && modelMeta !== modelTitle && <em>{modelMeta}</em>}<MdiIcon name="mdi-chevron-down" /></span><small>{sessionTitle}</small></summary>
           <div className="chat-model-menu__panel">
-            <label><span>Provider ID</span><input onChange={(event) => setProvider(event.target.value)} placeholder="Default provider" value={provider} /></label>
-            <label><span>Model</span><input onChange={(event) => setModel(event.target.value)} placeholder="Default model" value={model} /></label>
+            <label className="chat-model-search"><MdiIcon name="mdi-magnify" /><input aria-label="Search models" onChange={(event) => setProviderSearch(event.target.value)} placeholder="Search models" value={providerSearch} /></label>
+            <div className="chat-model-list">
+              {filteredProviders.map((item) => {
+                const selected = item.id === provider;
+                const metadata = providerMetadata[item.model];
+                return <div className={selected ? 'is-selected' : ''} key={item.id}>
+                  <button className="chat-model-list__copy" onClick={() => selectProvider(item)} type="button"><strong>{item.id}</strong><small><span>{item.model}</span><span className="chat-model-badges">{providerCapabilityBadges(item, metadata).map((badge) => <span className={badge.enabled ? '' : 'is-disabled'} key={badge.key} title={t(`features.provider.models.metadata.${badge.enabled ? 'enabled' : 'supportedDisabled'}`, { capability: t(`features.provider.models.metadata.${badge.key}`) })}><MdiIcon name={badge.icon} /></span>)}{formatContextLimit(item, metadata) && <b title={t('features.provider.models.metadata.context', { tokens: formatContextLimit(item, metadata) })}>{formatContextLimit(item, metadata)}</b>}</span></small></button>
+                  <span className="chat-model-list__actions"><button aria-label={t('features.provider.models.testButton')} className={testingProvider === item.id ? 'is-loading' : ''} disabled={Boolean(testingProvider)} onClick={() => void testProvider(item)} title={t('features.provider.models.testButton')} type="button"><MdiIcon name="mdi-connection" /></button>{selected && <MdiIcon name="mdi-check" />}</span>
+                </div>;
+              })}
+              {providersLoading && <div className="chat-model-list__empty">Loading models…</div>}
+              {!providersLoading && !filteredProviders.length && <div className="chat-model-list__empty">No available models</div>}
+            </div>
           </div>
         </details>
       </header>
       <section aria-live="polite" className="chat-messages">
         {loading && <div className="monitor-loading">Loading…</div>}
         {!loading && !messages.length && <div className="chat-empty"><h1>{t('features.chat.welcome.title')}</h1><p>{t('features.chat.welcome.subtitle')}</p></div>}
-        {messages.map((message, index) => <Message isStreaming={sending && message.content.type !== 'user' && index === messages.length - 1} key={String(message.id || index)} message={message} />)}
+        {messages.map((message, index) => <Message canRegenerate={!sending && message.content.type !== 'user' && index === messages.length - 1 && message.id != null && !String(message.id).startsWith('local-') && Boolean(message.llm_checkpoint_id)} isStreaming={sending && message.content.type !== 'user' && index === messages.length - 1} key={String(message.id || index)} message={message} onRegenerate={(selectedProvider, selectedModel) => void regenerate(message, selectedProvider, selectedModel)} providerMetadata={providerMetadata} providers={providers} selectedModel={model} selectedProvider={provider} />)}
         {error && <div className="monitor-error">{error}</div>}
         <div ref={messageEnd} />
       </section>
@@ -420,16 +557,51 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   </div>;
 }
 
-function Message({ isStreaming, message }: { isStreaming: boolean; message: ChatRecord }) {
+type MessageProps = {
+  canRegenerate: boolean;
+  isStreaming: boolean;
+  message: ChatRecord;
+  onRegenerate: (provider: string, model: string) => void;
+  providerMetadata: Record<string, JsonObject>;
+  providers: ProviderConfig[];
+  selectedModel: string;
+  selectedProvider: string;
+};
+
+function Message({ canRegenerate, isStreaming, message, onRegenerate, providerMetadata, providers, selectedModel, selectedProvider }: MessageProps) {
   const { t } = useTranslation();
   const user = message.content.type === 'user';
   const time = messageTime(message.created_at);
+  const stats = message.content.agentStats;
   const copy = () => navigator.clipboard?.writeText(message.content.message.map((part) => part.text || '').join('\n'));
   return <article className={`chat-message ${user ? 'chat-message--user' : 'chat-message--bot'}`}>
     {!user && <div className="chat-message__avatar"><ChatLogo /></div>}
     <div className="chat-message__stack">
       <div className="chat-message__body">{message.content.reasoning && <details><summary>{t('features.chat.reasoning.thinking')}</summary><pre>{message.content.reasoning}</pre></details>}{message.content.message.map((part, index) => <MessagePart key={`${part.type}-${index}`} part={part} streaming={isStreaming} user={user} />)}{message.content.isLoading && !message.content.message.length && <span className="chat-typing">{t('features.chat.message.loading')}</span>}</div>
-      <div className="chat-message__meta">{time && <span>{time}</span>}{!user && <button aria-label={t('features.chat.actions.copy')} onClick={() => void copy()} type="button"><MdiIcon name="mdi-content-copy" /></button>}</div>
+      {!isStreaming && !message.content.isLoading && <div className="chat-message__meta">
+        {time && <span>{time}</span>}
+        {canRegenerate && <details className="chat-regenerate-menu">
+          <summary aria-label={t('features.chat.actions.retry')} title={t('features.chat.actions.retry')}><MdiIcon name="mdi-refresh" /></summary>
+          <div className="chat-message-action-panel">
+            <button onClick={() => onRegenerate(selectedProvider, selectedModel)} type="button"><MdiIcon name="mdi-refresh" /><span>{t('features.chat.actions.retry')}</span></button>
+            <div className="chat-regenerate-submenu">
+              <button type="button"><MdiIcon name="mdi-creation" /><span>{t('features.chat.actions.retryWithModel')}</span><MdiIcon name="mdi-chevron-right" /></button>
+              <div className="chat-regenerate-models">{providers.map((item) => <button key={item.id} onClick={() => onRegenerate(item.id, item.model)} type="button"><span><strong>{item.id}</strong><small>{item.model}</small></span><span className="chat-model-badges">{providerCapabilityBadges(item, providerMetadata[item.model]).map((badge) => <MdiIcon className={badge.enabled ? '' : 'is-disabled'} key={badge.key} name={badge.icon} />)}{formatContextLimit(item, providerMetadata[item.model]) && <b>{formatContextLimit(item, providerMetadata[item.model])}</b>}</span></button>)}{!providers.length && <div>{t('features.chat.actions.noAvailableModels')}</div>}</div>
+            </div>
+          </div>
+        </details>}
+        {!user && <button aria-label={t('features.chat.actions.copy')} onClick={() => void copy()} title={t('features.chat.actions.copy')} type="button"><MdiIcon name="mdi-content-copy" /></button>}
+        {!user && stats && <details className="chat-message-stats">
+          <summary aria-label={t('features.chat.stats.tokens')} title={t('features.chat.stats.tokens')}><MdiIcon name="mdi-information-outline" /></summary>
+          <div className="chat-stats-card">
+            {cachedInputTokens(stats) > 0 && <div><span>{t('features.chat.stats.cachedTokens')}</span><strong>{cachedInputTokens(stats)}</strong></div>}
+            <div><span>{t('features.chat.stats.inputTokens')}</span><strong>{inputTokens(stats)}</strong></div>
+            <div><span>{t('features.chat.stats.outputTokens')}</span><strong>{outputTokens(stats)}</strong></div>
+            {agentTtft(stats) && <div><span>{t('features.chat.stats.ttft')}</span><strong>{agentTtft(stats)}</strong></div>}
+            <div><span>{t('features.chat.stats.duration')}</span><strong>{agentDuration(stats)}</strong></div>
+          </div>
+        </details>}
+      </div>}
     </div>
   </article>;
 }
@@ -449,6 +621,72 @@ function messageTime(value: unknown) {
   if (typeof value !== 'string' && typeof value !== 'number') return '';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function inputTokens(stats: JsonObject) {
+  return isObject(stats.token_usage) ? Number(stats.token_usage.input_other || 0) : 0;
+}
+
+function outputTokens(stats: JsonObject) {
+  return isObject(stats.token_usage) ? Number(stats.token_usage.output || 0) : 0;
+}
+
+function cachedInputTokens(stats: JsonObject) {
+  return isObject(stats.token_usage) ? Number(stats.token_usage.input_cached || 0) : 0;
+}
+
+function agentDuration(stats: JsonObject) {
+  const direct = positiveNumber(stats, ['duration', 'total_duration']);
+  if (direct !== null) return formatDuration(direct);
+  const start = positiveNumber(stats, ['start_time']);
+  const end = positiveNumber(stats, ['end_time']);
+  return start === null || end === null || end < start ? '—' : formatDuration(end - start);
+}
+
+function agentTtft(stats: JsonObject) {
+  const value = positiveNumber(stats, ['time_to_first_token', 'ttft', 'first_token_latency']);
+  return value === null ? '' : formatDuration(value);
+}
+
+function positiveNumber(source: JsonObject, keys: string[]) {
+  for (const key of keys) {
+    const value = Number(source[key]);
+    if (Number.isFinite(value) && value > 0) return value;
+  }
+  return null;
+}
+
+function formatDuration(seconds: number) {
+  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+}
+
+function providerCapabilityBadges(provider: ProviderConfig, metadata?: JsonObject) {
+  const modalities = metadata?.modalities;
+  const metadataModalities = isObject(modalities) && Array.isArray(modalities.input) ? modalities.input.map(String) : [];
+  const enabledModalities = Array.isArray(provider.modalities) ? provider.modalities.map(String) : [];
+  const definitions: Array<{ key: string; icon: `mdi-${string}`; supported: boolean; enabled: boolean }> = [
+    { key: 'image', icon: 'mdi-image-outline', supported: metadataModalities.includes('image'), enabled: enabledModalities.includes('image') },
+    { key: 'audio', icon: 'mdi-music-note-outline', supported: metadataModalities.includes('audio'), enabled: enabledModalities.includes('audio') },
+    { key: 'toolUse', icon: 'mdi-wrench-outline', supported: Boolean(metadata?.tool_call), enabled: enabledModalities.includes('tool_use') },
+    { key: 'reasoning', icon: 'mdi-brain', supported: Boolean(metadata?.reasoning), enabled: Boolean(provider.reasoning) },
+  ];
+  return definitions.filter((item) => item.supported || item.enabled).map((item) => ({ ...item, enabled: !metadata || item.enabled }));
+}
+
+function formatContextLimit(provider: ProviderConfig, metadata?: JsonObject) {
+  const metadataLimit = metadata?.limit;
+  const limit = isObject(metadataLimit) ? Number(metadataLimit.context) : 0;
+  const tokens = limit || Number(provider.max_context_tokens || 0);
+  if (!Number.isFinite(tokens) || tokens <= 0) return '';
+  if (tokens >= 1_000_000) return `${compactNumber(tokens / 1_000_000)}M`;
+  if (tokens >= 1_000) return `${compactNumber(tokens / 1_000)}K`;
+  return String(Math.round(tokens));
+}
+
+function compactNumber(value: number) {
+  return String(Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10).replace(/\.0$/, '');
 }
 
 function ChatLogo() {

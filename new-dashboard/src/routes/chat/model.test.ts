@@ -24,6 +24,13 @@ describe('chat model', () => {
     expect(record.content.message).toEqual([{ type: 'think', think: 'Step one' }]);
   });
 
+  it('preserves historical and streaming agent statistics', () => {
+    const record = normalizeRecord({ sender_id: 'bot', content: { message: [], agent_stats: { token_usage: { output: 3 } } } });
+    expect(record.content.agentStats).toEqual({ token_usage: { output: 3 } });
+    appendStreamPayload(record, { type: 'agent_stats', data: { duration: 1.2 } });
+    expect(record.content.agentStats).toEqual({ duration: 1.2 });
+  });
+
   it('parses complete SSE events and preserves an incomplete event', () => {
     const result = parseSseEvents('data: {"type":"plain","data":"A"}\n\ndata: {"type"');
     expect(result.payloads).toEqual([{ type: 'plain', data: 'A' }]);

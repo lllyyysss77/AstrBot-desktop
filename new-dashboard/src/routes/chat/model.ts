@@ -1,7 +1,7 @@
 import type { JsonObject } from '@/routes/configuration/model';
 
 export type ChatPart = JsonObject & { type: string; text?: string; think?: string; attachment_id?: string; filename?: string; stored_filename?: string };
-export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean } };
+export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean; agentStats?: JsonObject } };
 export type ChatSession = JsonObject & { session_id: string; display_name?: string; updated_at?: string };
 export type StagedAttachmentType = 'image' | 'record' | 'file';
 
@@ -25,7 +25,8 @@ export function normalizeParts(value: unknown): ChatPart[] {
 export function normalizeRecord(value: unknown): ChatRecord {
   const record = value && typeof value === 'object' ? value as JsonObject : {};
   const rawContent = record.content && typeof record.content === 'object' ? record.content as JsonObject : {};
-  return { ...record, content: { type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')), message: normalizeParts(rawContent.message), reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined } } as ChatRecord;
+  const rawStats = rawContent.agentStats || rawContent.agent_stats;
+  return { ...record, content: { type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')), message: normalizeParts(rawContent.message), reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined, agentStats: rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? rawStats as JsonObject : undefined } } as ChatRecord;
 }
 
 export function appendStreamPayload(record: ChatRecord, payload: unknown) {
@@ -33,7 +34,8 @@ export function appendStreamPayload(record: ChatRecord, payload: unknown) {
   const raw = payload as JsonObject; const normalized = raw.ct === 'chat' ? { ...raw, type: raw.type || raw.t } : raw;
   const type = String(normalized.type || normalized.t || ''); const chain = String(normalized.chain_type || ''); const data = normalized.data;
   if (['session_id', 'session_bound', 'user_message_saved'].includes(type)) return false;
-  if (type === 'message_saved' && data && typeof data === 'object') { const saved = data as JsonObject; record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id; record.content.isLoading = false; return true; }
+  if (type === 'message_saved' && data && typeof data === 'object') { const saved = data as JsonObject; record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id; record.created_at = saved.created_at || record.created_at; record.llm_checkpoint_id = saved.llm_checkpoint_id || record.llm_checkpoint_id; record.content.isLoading = false; return true; }
+  if ((type === 'agent_stats' || chain === 'agent_stats') && data && typeof data === 'object' && !Array.isArray(data)) { record.content.agentStats = data as JsonObject; record.content.isLoading = false; return true; }
   if (type === 'error') { appendPlain(record, `\n\n${String(data ?? 'Unknown error')}`); return true; }
   if (['complete', 'break'].includes(type)) { if (!plainText(record)) appendPlain(record, payloadText(data), false); record.content.isLoading = false; return true; }
   if (type === 'end') { record.content.isLoading = false; return true; }
