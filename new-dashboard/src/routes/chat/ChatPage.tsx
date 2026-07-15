@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import {
+  createChatProject,
   createChatSession,
   deleteChatSession,
   getChatSession,
   listChatConfigs,
+  listChatProjects,
   listChatSessions,
   stopChatSession,
   updateChatSession,
@@ -42,6 +44,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<ChatRecord[]>([]);
   const [configs, setConfigs] = useState<JsonObject[]>([]);
+  const [projects, setProjects] = useState<JsonObject[]>([]);
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<StagedFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +54,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [recordingBusy, setRecordingBusy] = useState(false);
   const [error, setError] = useState('');
   const [chatboxSidebarOpen, setChatboxSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [configId, setConfigId] = useState('default');
   const [provider, setProvider] = useState(() => localStorage.getItem('selectedProvider') || '');
   const [model, setModel] = useState(() => localStorage.getItem('selectedProviderModel') || '');
@@ -81,6 +85,15 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const data = unwrap<unknown>(await listChatProjects());
+      setProjects(objectList(data, ['projects', 'items']));
+    } catch {
+      setProjects([]);
+    }
+  }, []);
+
   const loadMessages = useCallback(async () => {
     if (!conversationId) {
       setMessages([]);
@@ -103,10 +116,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   useEffect(() => {
     void loadSessions();
+    void loadProjects();
     void listChatConfigs()
       .then((response) => setConfigs(objectList(unwrap(response), ['configs', 'items'])))
       .catch(() => undefined);
-  }, [loadSessions]);
+  }, [loadProjects, loadSessions]);
 
   useEffect(() => {
     if (pendingLocalSessionRef.current === conversationId) {
@@ -173,6 +187,17 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       await loadSessions();
     } catch (cause) {
       toast.error(errorMessage(cause, 'Failed to rename conversation.'));
+    }
+  };
+
+  const createProject = async () => {
+    const title = window.prompt(t('features.chat.project.name'))?.trim();
+    if (!title) return;
+    try {
+      await createChatProject({ body: { title, workspace_type: 'session' } });
+      await loadProjects();
+    } catch (cause) {
+      toast.error(errorMessage(cause, 'Failed to create project.'));
     }
   };
 
@@ -330,22 +355,29 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const modelTitle = model || provider || 'Default model';
   const configTitle = String(currentConfig?.name || configId || 'default');
 
-  return <div className={`chat-shell ${chatbox ? 'chat-shell--box' : ''}`}>
+  return <div className={`chat-shell ${chatbox ? 'chat-shell--box' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
     <aside className={`chat-sessions ${sidebarOpen ? 'is-open' : ''}`}>
       <div className="chat-sessions__brand">
         <div className="chat-sessions__brand-title"><ChatLogo /><span><strong>AstrBot</strong><small>ChatUI</small></span></div>
+        <button aria-label="Toggle sidebar" className="chat-sessions__collapse" onClick={() => setSidebarCollapsed((value) => !value)} title="Toggle sidebar" type="button"><PanelLeftIcon /></button>
         <button aria-label="Close conversations" className="chat-sessions__close" onClick={() => setSidebarOpen(false)} type="button"><MdiIcon name="mdi-close" /></button>
       </div>
       <nav className="chat-sessions__actions">
-        <Link to="/providers"><MdiIcon name="mdi-creation" /><span>{t('features.chat.actions.providerConfig')}</span></Link>
-        <button onClick={newChat} type="button"><MdiIcon name="mdi-pencil-outline" /><span>{t('features.chat.actions.newChat')}</span></button>
+        <Link title={t('features.chat.actions.providerConfig')} to="/providers"><BoxIcon /><span>{t('features.chat.actions.providerConfig')}</span></Link>
+        <button onClick={newChat} title={t('features.chat.actions.newChat')} type="button"><SquarePenIcon /><span>{t('features.chat.actions.newChat')}</span></button>
       </nav>
-      <div className="chat-session-list">
-        <div className="chat-session-list__label">{t('features.chat.conversation.title')}</div>
-        {sessions.map((session) => <div className={session.session_id === conversationId ? 'is-active' : ''} key={session.session_id}>
-          <button onClick={() => { navigate(`${basePath}/${encodeURIComponent(session.session_id)}`); setSidebarOpen(false); }} type="button"><span>{session.display_name || session.session_id}</span></button>
-          <div><button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} type="button"><MdiIcon name="mdi-pencil-outline" /></button><button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} type="button"><MdiIcon name="mdi-delete-outline" /></button></div>
-        </div>)}
+      <div className="chat-sessions__content">
+        <section className="chat-project-list">
+          <div className="chat-section-header"><span>{t('features.chat.project.title')}</span><button aria-label={t('features.chat.project.create')} onClick={() => void createProject()} title={t('features.chat.project.create')} type="button"><PlusIcon /></button></div>
+          {projects.map((project, index) => <div className="chat-project-row" key={recordId(project, 'project_id', 'id') || `project-${index}`}><span>{String(project.emoji || '📁')}</span><strong>{String(project.title || t('features.chat.project.title'))}</strong></div>)}
+        </section>
+        <div className="chat-session-list">
+          <div className="chat-session-list__label">{t('features.chat.conversation.title')}</div>
+          {sessions.map((session) => <div className={session.session_id === conversationId ? 'is-active' : ''} key={session.session_id}>
+            <button onClick={() => { navigate(`${basePath}/${encodeURIComponent(session.session_id)}`); setSidebarOpen(false); }} type="button"><span>{session.display_name || session.session_id}</span></button>
+            <div><button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} title={t('features.chat.conversation.editDisplayName')} type="button"><PencilIcon /></button><button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} title={t('features.chat.actions.deleteChat')} type="button"><TrashIcon /></button></div>
+          </div>)}
+        </div>
       </div>
       {!chatbox && <Link className="chat-sessions__settings" to="/settings"><MdiIcon name="mdi-cog-outline" /><span>{t('core.common.settings')}</span></Link>}
     </aside>
@@ -421,4 +453,32 @@ function messageTime(value: unknown) {
 
 function ChatLogo() {
   return <svg aria-hidden="true" className="chat-logo" focusable="false" viewBox="0 0 24 24"><path d="M11.96 2.6c.22-.53.97-.53 1.19 0l.76 1.84a7.05 7.05 0 0 0 3.72 3.77l1.75.78c.53.23.53 1 0 1.23l-1.81.8a6.86 6.86 0 0 0-3.66 3.68l-.76 1.75c-.22.52-.97.52-1.19 0l-.75-1.75a6.86 6.86 0 0 0-3.66-3.68l-1.81-.8a.67.67 0 0 1 0-1.23l1.75-.78a7.05 7.05 0 0 0 3.72-3.77l.75-1.84Z" fill="currentColor"/><path d="M18.72 15.2c.12-.3.54-.3.67 0l.3.73c.4.96 1.15 1.72 2.1 2.14l.63.28c.3.13.3.56 0 .69l-.67.3a3.5 3.5 0 0 0-2.06 2.06l-.3.68c-.13.3-.55.3-.68 0l-.3-.68a3.5 3.5 0 0 0-2.05-2.06l-.68-.3a.38.38 0 0 1 0-.69l.64-.28a3.7 3.7 0 0 0 2.1-2.14l.3-.73Z" fill="currentColor"/></svg>;
+}
+
+function SidebarIcon({ children }: { children: ReactNode }) {
+  return <svg aria-hidden="true" className="chat-sidebar-icon" fill="none" focusable="false" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">{children}</svg>;
+}
+
+function PanelLeftIcon() {
+  return <SidebarIcon><rect height="18" rx="2" width="18" x="3" y="3"/><path d="M9 3v18"/></SidebarIcon>;
+}
+
+function BoxIcon() {
+  return <SidebarIcon><path d="m21 8-9 5-9-5"/><path d="m3 8 9-5 9 5v8l-9 5-9-5Z"/><path d="M12 13v8"/></SidebarIcon>;
+}
+
+function SquarePenIcon() {
+  return <SidebarIcon><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></SidebarIcon>;
+}
+
+function PencilIcon() {
+  return <SidebarIcon><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></SidebarIcon>;
+}
+
+function TrashIcon() {
+  return <SidebarIcon><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v5M14 11v5"/></SidebarIcon>;
+}
+
+function PlusIcon() {
+  return <SidebarIcon><path d="M12 5v14M5 12h14"/></SidebarIcon>;
 }
