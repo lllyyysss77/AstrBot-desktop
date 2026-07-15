@@ -69,6 +69,7 @@ function NavigationEntry({ item, mini }: { item: NavigationItem; mini: boolean }
 
 export function Sidebar() {
   const { t } = useTranslation();
+  const location = useLocation();
   const drawerOpen = useLayoutStore((state) => state.drawerOpen);
   const mini = useLayoutStore((state) => state.miniSidebar);
   const sidebarWidth = useLayoutStore((state) => state.sidebarWidth);
@@ -118,9 +119,13 @@ export function Sidebar() {
         </ul>
         {!mini && (
           <div className="sidebar-footer">
-            <Link to="/settings"><MdiIcon name="mdi-cog" />{t('core.navigation.settings')}</Link>
-            <a href="https://docs.astrbot.app" rel="noreferrer" target="_blank"><MdiIcon name="mdi-book-open-variant" />{t('core.navigation.documentation')}</a>
-            <a href="https://github.com/AstrBotDevs/AstrBot" rel="noreferrer" target="_blank"><MdiIcon name="mdi-github" />GitHub</a>
+            <Link
+              aria-current={location.pathname === '/settings' ? 'page' : undefined}
+              className={location.pathname === '/settings' ? 'sidebar-nav__item--active' : undefined}
+              to="/settings"
+            >
+              <MdiIcon name="mdi-cog" />{t('core.navigation.settings')}
+            </Link>
           </div>
         )}
         {!mini && (

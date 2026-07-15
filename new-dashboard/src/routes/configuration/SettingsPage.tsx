@@ -9,7 +9,7 @@ import { confirmAction, toast } from '@/stores/feedback';
 import { LoadingState } from './ConfigurationUi';
 import { errorMessage, JsonObject, objectList, recordId, responseData } from './model';
 
-type SettingsSection = 'general' | 'appearance' | 'network' | 'security' | 'maintenance' | 'openapi';
+type SettingsSection = 'general' | 'appearance' | 'network' | 'security' | 'maintenance' | 'openapi' | 'about';
 type ApiScope = 'bot' | 'provider' | 'persona' | 'im' | 'config' | 'chat' | 'data' | 'file' | 'plugin' | 'mcp' | 'skill';
 
 const SYSTEM_GROUPS = {
@@ -28,6 +28,7 @@ const NAV_ITEMS: Array<{ icon: `mdi-${string}`; id: SettingsSection }> = [
   { id: 'security', icon: 'mdi-shield-lock-outline' },
   { id: 'maintenance', icon: 'mdi-tools' },
   { id: 'openapi', icon: 'mdi-api' },
+  { id: 'about', icon: 'mdi-information-outline' },
 ];
 
 const API_SCOPES: ApiScope[] = ['bot', 'provider', 'persona', 'im', 'config', 'chat', 'data', 'file', 'plugin', 'mcp', 'skill'];
@@ -44,7 +45,7 @@ function selectMetadata(metadata: ConfigGroupMetadata, keys: readonly string[]):
 }
 
 export default function SettingsPage() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const prefix = 'features.settings';
   const initialSection = NAV_ITEMS.find((item) => window.location.hash.includes(item.id))?.id ?? 'general';
   const [section, setSection] = useState<SettingsSection>(initialSection);
@@ -159,7 +160,21 @@ export default function SettingsPage() {
 
   const renderGroup = (group: keyof typeof SYSTEM_GROUPS) => <ConfigGroup key={group} metadata={selectMetadata(rootMetadata, SYSTEM_GROUPS[group])} onChange={setConfig} resolveText={resolveText} title={t(`${prefix}.systemConfig.groups.${group}.title`)} translationPath="system_group.system" value={config} variant="settings" />;
 
-  return <div className="settings-page"><header className="settings-page__header"><h1>{t(`${prefix}.page.title`)}</h1><div className="settings-page__actions"><button disabled={!dirty || loading} onClick={() => setConfig(JSON.parse(saved) as ConfigRecord)} type="button">{t('core.actions.reset')}</button><button className="button--primary" disabled={!dirty || saving || loading} onClick={() => void save()} type="button"><MdiIcon name="mdi-content-save" />{saving ? '…' : t('core.actions.save')}</button></div></header><div className="settings-layout"><nav aria-label={t(`${prefix}.page.title`)} className="settings-nav">{NAV_ITEMS.map((item) => <button aria-pressed={section === item.id} key={item.id} onClick={() => setSection(item.id)} type="button"><MdiIcon name={item.icon} /><span>{t(`${prefix}.sections.${item.id}.title`)}</span></button>)}</nav><main className="settings-main">
+  const aboutDescriptions = i18n.resolvedLanguage === 'en-US'
+    ? ['View updates for current and previous versions.', 'Open the official AstrBot documentation.', 'Browse common questions and troubleshooting guides.', 'Visit the AstrBot repository on GitHub.']
+    : i18n.resolvedLanguage === 'ru-RU'
+      ? ['Просмотреть изменения текущей и предыдущих версий.', 'Открыть официальную документацию AstrBot.', 'Открыть ответы на частые вопросы и инструкции.', 'Открыть репозиторий AstrBot на GitHub.']
+      : ['查看当前版本和历史版本的更新内容。', '打开 AstrBot 官方文档。', '查看常见问题与排障说明。', '访问 AstrBot GitHub 仓库。'];
+  const aboutResources = [
+    { description: aboutDescriptions[0], icon: 'mdi-file-document-outline' as const, label: t('core.navigation.changelog'), url: 'https://github.com/AstrBotDevs/AstrBot/releases' },
+    { description: aboutDescriptions[1], icon: 'mdi-book-open-variant' as const, label: t('core.navigation.documentation'), url: 'https://docs.astrbot.app/' },
+    { description: aboutDescriptions[2], icon: 'mdi-frequently-asked-questions' as const, label: t('core.navigation.faq'), url: 'https://docs.astrbot.app/faq.html' },
+    { description: aboutDescriptions[3], icon: 'mdi-github' as const, label: t('core.navigation.github'), url: 'https://github.com/AstrBotDevs/AstrBot' },
+  ];
+
+  return <div className="settings-page"><header className="settings-page__header"><h1>{t(`${prefix}.page.title`)}</h1>{section !== 'about' && <div className="settings-page__actions"><button disabled={!dirty || loading} onClick={() => setConfig(JSON.parse(saved) as ConfigRecord)} type="button">{t('core.actions.reset')}</button><button className="button--primary" disabled={!dirty || saving || loading} onClick={() => void save()} type="button"><MdiIcon name="mdi-content-save" />{saving ? '…' : t('core.actions.save')}</button></div>}</header><div className="settings-layout"><nav aria-label={t(`${prefix}.page.title`)} className="settings-nav">{NAV_ITEMS.map((item) => <button aria-pressed={section === item.id} key={item.id} onClick={() => setSection(item.id)} type="button"><MdiIcon name={item.icon} /><span>{item.id === 'about' ? t('core.navigation.about') : t(`${prefix}.sections.${item.id}.title`)}</span></button>)}</nav><main className="settings-main">
+    {section === 'about' && <section className="settings-section"><header className="settings-section__heading"><h2 className="settings-section__title">{t('core.navigation.about')}</h2></header><div className="settings-about-card settings-list-card">{aboutResources.map((resource) => <article className="settings-about-item" key={resource.label}><div><strong>{resource.label}</strong><p>{resource.description}</p></div><a href={resource.url} rel="noreferrer" target="_blank"><MdiIcon name={resource.icon} />{resource.label}</a></article>)}</div></section>}
+    {section !== 'about' && <>
     {restartRequired && <div className="settings-restart" role="status"><span><MdiIcon name="mdi-alert-circle" />{t(`${prefix}.systemConfig.restartRequired`)}</span><button onClick={() => void restart()} type="button"><MdiIcon name="mdi-restart" />{t(`${prefix}.system.restart.button`)}</button></div>}
     <LoadingState error={error} loading={loading} />
     {!loading && <section className="settings-section"><header className="settings-section__heading"><h2 className="settings-section__title">{t(`${prefix}.sections.${section}.title`)}</h2></header><div className="settings-section__content">
@@ -170,5 +185,6 @@ export default function SettingsPage() {
     {!loading && section === 'maintenance' && <section className="settings-list-card route-card"><div className="settings-item"><div><h2>{t(`${prefix}.system.restart.title`)}</h2><p>{t(`${prefix}.system.restart.subtitle`)}</p></div><button className="button--danger" onClick={() => void restart()} type="button"><MdiIcon name="mdi-restart" />{t(`${prefix}.system.restart.button`)}</button></div></section>}
     {!loading && section === 'openapi' && <section className="settings-list-card route-card"><header><h2>{t(`${prefix}.apiKey.manageTitle`)}</h2><p>{t(`${prefix}.apiKey.subtitle`)}</p></header><div className="api-key-create"><input onChange={(event) => setKeyName(event.target.value)} placeholder={t(`${prefix}.apiKey.name`)} value={keyName} /><select aria-label={t(`${prefix}.apiKey.expiresInDays`)} onChange={(event) => setExpiry(event.target.value === 'permanent' ? 'permanent' : Number(event.target.value))} value={expiry}><option value={1}>{t(`${prefix}.apiKey.expiryOptions.day1`)}</option><option value={7}>{t(`${prefix}.apiKey.expiryOptions.day7`)}</option><option value={30}>{t(`${prefix}.apiKey.expiryOptions.day30`)}</option><option value={90}>{t(`${prefix}.apiKey.expiryOptions.day90`)}</option><option value="permanent">{t(`${prefix}.apiKey.expiryOptions.permanent`)}</option></select><button disabled={!keyName.trim() || !scopes.length} onClick={() => void addKey()} type="button"><MdiIcon name="mdi-key-plus" />{t(`${prefix}.apiKey.create`)}</button></div><div className="api-key-scopes"><span>{t(`${prefix}.apiKey.scopes`)}</span>{API_SCOPES.map((scope) => <label className={scopes.includes(scope) ? 'is-selected' : ''} key={scope}><input checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} type="checkbox" />{scope}</label>)}</div>{createdKey && <div className="config-secret" role="status"><strong>{t(`${prefix}.apiKey.plaintextHint`)}</strong><code>{createdKey}</code><button onClick={() => void navigator.clipboard?.writeText(createdKey)} type="button"><MdiIcon name="mdi-content-copy" />{t(`${prefix}.apiKey.copy`)}</button></div>}<div className="monitor-table-wrap"><table className="monitor-table"><thead><tr><th>{t(`${prefix}.apiKey.table.name`)}</th><th>{t(`${prefix}.apiKey.table.scopes`)}</th><th>{t(`${prefix}.apiKey.table.status`)}</th><th>{t(`${prefix}.apiKey.table.createdAt`)}</th><th>{t(`${prefix}.apiKey.table.actions`)}</th></tr></thead><tbody>{keys.map((item, index) => { const id = recordId(item, 'key_id', 'id') || `key-${index}`; const inactive = item.is_revoked || item.is_expired; return <tr key={id}><td><strong>{String(item.name || id)}</strong><small>{String(item.key_prefix || '')}</small></td><td>{Array.isArray(item.scopes) ? item.scopes.join(', ') : '—'}</td><td><span className={`status-chip ${inactive ? 'status-chip--error' : 'status-chip--success'}`}>{t(`${prefix}.apiKey.status.${inactive ? 'inactive' : 'active'}`)}</span></td><td>{String(item.created_at || '—')}</td><td><button className="button--danger" onClick={() => void removeKey(item)} type="button">{t(`${prefix}.apiKey.delete`)}</button></td></tr>; })}</tbody></table>{!keys.length && <div className="monitor-empty">{t(`${prefix}.apiKey.empty`)}</div>}</div></section>}
     </div></section>}
+    </>}
   </main></div></div>;
 }
