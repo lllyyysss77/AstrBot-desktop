@@ -8,7 +8,7 @@ import {
 } from './migrationManifest';
 
 describe('route migration manifest', () => {
-  it('contains each legacy route only once', () => {
+  it('contains each migrated route only once', () => {
     const paths = routeMigrationManifest.map((route) => route.path);
 
     expect(new Set(paths).size).toBe(paths.length);
@@ -71,8 +71,8 @@ describe('route migration manifest', () => {
     expect(routeRequiresAuth('/dashboard/default')).toBe(true);
   });
 
-  it('has no legacy fallback route after the route migration', () => {
-    expect(routeMigrationManifest.filter((route) => route.runtime === 'legacy')).toEqual([]);
+  it('contains only React route metadata after migration completion', () => {
+    expect(routeMigrationManifest.every((route) => Object.keys(route).length === 1)).toBe(true);
   });
 
   it.each([

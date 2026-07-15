@@ -11,7 +11,6 @@ export const runDashboardNew = ({
   processLike = process,
   logger = console,
 } = {}) => {
-  const legacyDashboardDir = path.join(projectRoot, 'dashboard');
   const reactDashboardDir = path.join(projectRoot, 'new-dashboard');
 
   const runChecked = (command, args, cwd) => {
@@ -51,15 +50,7 @@ export const runDashboardNew = ({
   });
 
   try {
-    ensureInstalled(legacyDashboardDir, 'legacy Dashboard');
     ensureInstalled(reactDashboardDir, 'React Dashboard');
-
-    logger.log('[dashboard:new] Generating legacy MDI font subset ...');
-    runChecked(
-      processLike.execPath,
-      [path.join(legacyDashboardDir, 'scripts', 'subset-mdi-font.mjs')],
-      legacyDashboardDir,
-    );
   } catch (error) {
     logger.error(
       '[dashboard:new] Failed to prepare development dependencies.',
@@ -70,21 +61,8 @@ export const runDashboardNew = ({
   }
 
   logger.log('[dashboard:new] React entry: http://localhost:1420');
-  logger.log('[dashboard:new] Read-only legacy compatibility server: http://localhost:1421/legacy/');
 
-  const children = [
-    spawnPnpm([
-      '--dir',
-      'dashboard',
-      'exec',
-      'vite',
-      '--host',
-      '--port',
-      '1421',
-      '--base=/legacy/',
-    ]),
-    spawnPnpm(['--dir', 'new-dashboard', 'dev']),
-  ];
+  const children = [spawnPnpm(['--dir', 'new-dashboard', 'dev'])];
 
   let stopping = false;
   const stop = (exitCode = 0) => {

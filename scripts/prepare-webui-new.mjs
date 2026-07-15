@@ -8,7 +8,6 @@ import { assertSupportedNodeVersion } from './node-version.mjs';
 import { loadProjectEnv } from './project-env.mjs';
 import {
   patchMonacoCssNestingWarnings,
-  verifyDesktopBridgeArtifacts,
 } from './prepare-resources/desktop-bridge-checks.mjs';
 
 const syncDirectory = async (source, target) => {
@@ -23,14 +22,12 @@ export const prepareWebuiNew = async ({
   pathExists = existsSync,
   sync = syncDirectory,
   patchMonaco = patchMonacoCssNestingWarnings,
-  verifyDesktopBridge = verifyDesktopBridgeArtifacts,
   assertNodeVersion = assertSupportedNodeVersion,
   loadEnv = loadProjectEnv,
   env = process.env,
   platform = process.platform,
   logger = console,
 } = {}) => {
-  const legacyDashboardDir = path.join(projectRoot, 'dashboard');
   const reactDashboardDir = path.join(projectRoot, 'new-dashboard');
 
   assertNodeVersion();
@@ -66,44 +63,12 @@ export const prepareWebuiNew = async ({
     env.ASTRBOT_DESKTOP_RELEASE_BASE_URL?.trim() ||
     'https://github.com/AstrBotDevs/AstrBot-desktop/releases';
   const releaseEnv = { VITE_ASTRBOT_RELEASE_BASE_URL: releaseBaseUrl };
-  const strictBridgeChecks = new Set(['1', 'true', 'yes', 'on']).has(
-    env.ASTRBOT_DESKTOP_STRICT_BRIDGE_EXPECTATIONS?.trim().toLowerCase(),
-  );
-
-  ensureInstalled(legacyDashboardDir, 'legacy Dashboard');
   ensureInstalled(reactDashboardDir, 'React Dashboard');
 
   await patchMonaco({
-    dashboardDir: legacyDashboardDir,
+    dashboardDir: reactDashboardDir,
     projectRoot,
   });
-  await verifyDesktopBridge({
-    dashboardDir: legacyDashboardDir,
-    projectRoot,
-    isDesktopBridgeExpectationStrict: strictBridgeChecks,
-  });
-
-  runChecked(
-    'node',
-    [path.join(legacyDashboardDir, 'scripts', 'subset-mdi-font.mjs')],
-    legacyDashboardDir,
-    releaseEnv,
-  );
-  runPnpm(
-    ['--dir', legacyDashboardDir, 'exec', 'vue-tsc', '--noEmit'],
-    legacyDashboardDir,
-    releaseEnv,
-  );
-  runPnpm(
-    ['--dir', legacyDashboardDir, 'exec', 'vite', 'build', '--base=/legacy/'],
-    legacyDashboardDir,
-    releaseEnv,
-  );
-
-  await sync(
-    path.join(legacyDashboardDir, 'dist'),
-    path.join(reactDashboardDir, 'public', 'legacy'),
-  );
   runPnpm(['--dir', reactDashboardDir, 'build'], reactDashboardDir, releaseEnv);
 
   const reactDist = path.join(reactDashboardDir, 'dist');

@@ -7,7 +7,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@legacy-i18n': fileURLToPath(new URL('../dashboard/src/i18n', import.meta.url)),
     },
   },
   server: {
@@ -17,11 +16,6 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:6185/',
-        changeOrigin: true,
-        ws: true,
-      },
-      '/legacy': {
-        target: 'http://127.0.0.1:1421/',
         changeOrigin: true,
         ws: true,
       },

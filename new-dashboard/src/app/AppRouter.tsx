@@ -2,7 +2,6 @@ import { lazy, Suspense } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { RequireAuth } from '@/auth/RequireAuth';
-import { LegacyFallback } from '@/routes/LegacyFallback';
 import { routeMigrationManifest, routeRequiresAuth } from '@/routes/migrationManifest';
 import { NotFoundPage } from '@/routes/NotFoundPage';
 import { BlankLayout } from '@/layouts/blank/BlankLayout';
@@ -81,11 +80,9 @@ function UnregisteredReactRoute({ path }: { path: string }): never {
 
 const manifestRoutes = routeMigrationManifest.map((route) => ({
   path: route.path,
-  element: route.runtime === 'legacy'
-    ? <LegacyFallback />
-    : routeRequiresAuth(route.path)
-      ? <RequireAuth>{resolveReactRoute(route.path)}</RequireAuth>
-      : resolveReactRoute(route.path),
+  element: routeRequiresAuth(route.path)
+    ? <RequireAuth>{resolveReactRoute(route.path)}</RequireAuth>
+    : resolveReactRoute(route.path),
 }));
 
 const router = createHashRouter([

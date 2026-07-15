@@ -1,7 +1,7 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-import { translations } from '@legacy-i18n/translations';
+import { translations } from './translations';
 
 const LOCALE_STORAGE_KEY = 'astrbot-locale';
 const storedLocale = localStorage.getItem(LOCALE_STORAGE_KEY);

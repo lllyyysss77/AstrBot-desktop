@@ -37,11 +37,11 @@ const createProcess = (overrides = {}) => {
   };
 };
 
-test('runDashboardNew prepares dependencies and starts both Vite servers', () => {
+test('runDashboardNew prepares dependencies and starts the React Vite server', () => {
   const projectRoot = path.resolve('/project');
   const syncCalls = [];
   const spawnCalls = [];
-  const children = [createChild(), createChild()];
+  const children = [createChild()];
   const processLike = createProcess();
 
   const result = runDashboardNew({
@@ -49,7 +49,7 @@ test('runDashboardNew prepares dependencies and starts both Vite servers', () =>
     processLike,
     logger: { log() {}, error() {} },
     pathExists(file) {
-      return file === path.join(projectRoot, 'dashboard', 'pnpm-lock.yaml');
+      return false;
     },
     spawnCommandSync(command, args, options) {
       syncCalls.push({ command, args, options });
@@ -63,20 +63,17 @@ test('runDashboardNew prepares dependencies and starts both Vite servers', () =>
 
   assert.ok(result);
   assert.deepEqual(syncCalls.map(({ command, args }) => [command, args]), [
-    ['pnpm', ['--dir', path.join(projectRoot, 'dashboard'), 'install', '--frozen-lockfile']],
     ['pnpm', ['--dir', path.join(projectRoot, 'new-dashboard'), 'install']],
-    ['/runtime/node', [path.join(projectRoot, 'dashboard', 'scripts', 'subset-mdi-font.mjs')]],
   ]);
   assert.deepEqual(spawnCalls.map(({ command, args }) => [command, args]), [
-    ['pnpm', ['--dir', 'dashboard', 'exec', 'vite', '--host', '--port', '1421', '--base=/legacy/']],
     ['pnpm', ['--dir', 'new-dashboard', 'dev']],
   ]);
   assert.equal(spawnCalls[0].options.cwd, projectRoot);
   assert.deepEqual([...processLike.handlers.keys()], ['SIGINT', 'SIGTERM']);
 });
 
-test('runDashboardNew stops sibling servers when one server exits', () => {
-  const children = [createChild(), createChild()];
+test('runDashboardNew exits when the React server stops', () => {
+  const children = [createChild()];
   const processLike = createProcess();
   let childIndex = 0;
 
@@ -91,7 +88,6 @@ test('runDashboardNew stops sibling servers when one server exits', () => {
   children[0].handlers.get('exit')(7, null);
 
   assert.equal(children[0].killed, true);
-  assert.equal(children[1].killed, true);
   assert.deepEqual(processLike.exitCodes, [7]);
 
   processLike.handlers.get('SIGTERM')();
@@ -105,7 +101,7 @@ test('runDashboardNew exits before spawning servers when preparation fails', () 
   const result = runDashboardNew({
     processLike,
     logger: { log() {}, error() {} },
-    pathExists: () => true,
+    pathExists: () => false,
     spawnCommandSync: () => ({ status: 1 }),
     spawnCommand: () => {
       spawnCount += 1;
