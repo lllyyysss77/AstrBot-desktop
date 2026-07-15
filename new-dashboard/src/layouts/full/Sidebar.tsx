@@ -2,6 +2,7 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useState } from 'rea
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 
+import { MdiIcon } from '@/components/icons/MdiIcon';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_MAX_WIDTH,
@@ -35,9 +36,9 @@ function NavigationEntry({ item, mini }: { item: NavigationItem; mini: boolean }
           title={mini ? t(item.title) : undefined}
           type="button"
         >
-          <span aria-hidden="true" className="sidebar-nav__icon">{item.icon}</span>
+          <span className="sidebar-nav__icon"><MdiIcon name={item.icon} /></span>
           {!mini && <span>{t(item.title)}</span>}
-          {!mini && <span aria-hidden="true" className="sidebar-nav__chevron">{open ? '⌃' : '⌄'}</span>}
+          {!mini && <MdiIcon className="sidebar-nav__chevron" name={open ? 'mdi-chevron-up' : 'mdi-chevron-down'} />}
         </button>
         {open && !mini && (
           <ul className="sidebar-nav__children">
@@ -59,7 +60,7 @@ function NavigationEntry({ item, mini }: { item: NavigationItem; mini: boolean }
         title={mini ? t(item.title) : undefined}
         to={item.to ?? '/'}
       >
-        <span aria-hidden="true" className="sidebar-nav__icon">{item.icon}</span>
+        <span className="sidebar-nav__icon"><MdiIcon name={item.icon} /></span>
         {!mini && <span>{t(item.title)}</span>}
       </Link>
     </li>
@@ -117,9 +118,9 @@ export function Sidebar() {
         </ul>
         {!mini && (
           <div className="sidebar-footer">
-            <Link to="/settings">⚙ {t('core.navigation.settings')}</Link>
-            <a href="https://docs.astrbot.app" rel="noreferrer" target="_blank">▤ {t('core.navigation.documentation')}</a>
-            <a href="https://github.com/AstrBotDevs/AstrBot" rel="noreferrer" target="_blank">◆ GitHub</a>
+            <Link to="/settings"><MdiIcon name="mdi-cog" />{t('core.navigation.settings')}</Link>
+            <a href="https://docs.astrbot.app" rel="noreferrer" target="_blank"><MdiIcon name="mdi-book-open-variant" />{t('core.navigation.documentation')}</a>
+            <a href="https://github.com/AstrBotDevs/AstrBot" rel="noreferrer" target="_blank"><MdiIcon name="mdi-github" />GitHub</a>
           </div>
         )}
         {!mini && (

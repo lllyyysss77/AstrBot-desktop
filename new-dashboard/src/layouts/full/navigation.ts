@@ -1,6 +1,6 @@
 export type NavigationItem = {
   children?: NavigationItem[];
-  icon: string;
+  icon: `mdi-${string}`;
   title: string;
   to?: string;
 };
@@ -8,35 +8,35 @@ export type NavigationItem = {
 export const MORE_GROUP_KEY = 'core.navigation.groups.more';
 
 const moreItems: NavigationItem[] = [
-  { title: 'core.navigation.conversation', icon: '◫', to: '/conversation' },
-  { title: 'core.navigation.sessionManagement', icon: '⌑', to: '/session-management' },
-  { title: 'core.navigation.cron', icon: '◷', to: '/cron' },
-  { title: 'core.navigation.subagent', icon: '⌘', to: '/subagent' },
-  { title: 'core.navigation.dashboard', icon: '▦', to: '/dashboard/default' },
-  { title: 'core.navigation.console', icon: '›_', to: '/console' },
-  { title: 'core.navigation.trace', icon: '≋', to: '/trace' },
+  { title: 'core.navigation.conversation', icon: 'mdi-database', to: '/conversation' },
+  { title: 'core.navigation.sessionManagement', icon: 'mdi-pencil-ruler', to: '/session-management' },
+  { title: 'core.navigation.cron', icon: 'mdi-clock-outline', to: '/cron' },
+  { title: 'core.navigation.subagent', icon: 'mdi-vector-link', to: '/subagent' },
+  { title: 'core.navigation.dashboard', icon: 'mdi-view-dashboard', to: '/dashboard/default' },
+  { title: 'core.navigation.console', icon: 'mdi-console', to: '/console' },
+  { title: 'core.navigation.trace', icon: 'mdi-timeline-text-outline', to: '/trace' },
 ];
 
 export const defaultNavigationItems: NavigationItem[] = [
-  { title: 'core.navigation.welcome', icon: '◉', to: '/welcome' },
-  { title: 'core.navigation.platforms', icon: '♙', to: '/platforms' },
-  { title: 'core.navigation.providers', icon: '✦', to: '/providers' },
-  { title: 'core.navigation.config', icon: '⚙', to: '/config' },
+  { title: 'core.navigation.welcome', icon: 'mdi-hand-wave-outline', to: '/welcome' },
+  { title: 'core.navigation.platforms', icon: 'mdi-robot', to: '/platforms' },
+  { title: 'core.navigation.providers', icon: 'mdi-creation', to: '/providers' },
+  { title: 'core.navigation.config', icon: 'mdi-cog', to: '/config' },
   {
     title: 'core.navigation.extension',
-    icon: '◆',
+    icon: 'mdi-puzzle',
     to: '/extension#installed',
     children: [
-      { title: 'core.navigation.extensionTabs.installed', icon: '◆', to: '/extension#installed' },
-      { title: 'core.navigation.extensionTabs.market', icon: '▣', to: '/extension#market' },
-      { title: 'core.navigation.extensionTabs.mcp', icon: '⌘', to: '/extension#mcp' },
-      { title: 'core.navigation.extensionTabs.skills', icon: 'ϟ', to: '/extension#skills' },
-      { title: 'core.navigation.extensionTabs.components', icon: '⚒', to: '/extension#components' },
+      { title: 'core.navigation.extensionTabs.installed', icon: 'mdi-puzzle', to: '/extension#installed' },
+      { title: 'core.navigation.extensionTabs.market', icon: 'mdi-store', to: '/extension#market' },
+      { title: 'core.navigation.extensionTabs.mcp', icon: 'mdi-server-network', to: '/extension#mcp' },
+      { title: 'core.navigation.extensionTabs.skills', icon: 'mdi-lightning-bolt', to: '/extension#skills' },
+      { title: 'core.navigation.extensionTabs.components', icon: 'mdi-wrench', to: '/extension#components' },
     ],
   },
-  { title: 'core.navigation.knowledgeBase', icon: '▤', to: '/knowledge-base' },
-  { title: 'core.navigation.persona', icon: '♥', to: '/persona' },
-  { title: MORE_GROUP_KEY, icon: '•••', children: moreItems },
+  { title: 'core.navigation.knowledgeBase', icon: 'mdi-book-open-variant', to: '/knowledge-base' },
+  { title: 'core.navigation.persona', icon: 'mdi-heart', to: '/persona' },
+  { title: MORE_GROUP_KEY, icon: 'mdi-dots-horizontal', children: moreItems },
 ];
 
 type SidebarCustomization = { mainItems?: unknown; moreItems?: unknown };
@@ -65,7 +65,12 @@ export function resolveNavigationItems(
   const defaultMore = moreGroup?.children ?? [];
   const main = mainKeys.map((key) => allItems.get(key)!).concat(defaultMain.filter((item) => !used.has(item.title)));
   const more = moreKeys.map((key) => allItems.get(key)!).concat(defaultMore.filter((item) => !used.has(item.title)));
-  return more.length ? [...main, { title: MORE_GROUP_KEY, icon: '•••', children: more }] : main;
+  const resolvedMoreGroup: NavigationItem = {
+    title: MORE_GROUP_KEY,
+    icon: 'mdi-dots-horizontal',
+    children: more,
+  };
+  return more.length ? [...main, resolvedMoreGroup] : main;
 }
 
 export function readNavigationItems() {

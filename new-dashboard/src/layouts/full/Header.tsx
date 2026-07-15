@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { Menu, MenuItem } from '@/components/headless/Menu';
+import { MdiIcon } from '@/components/icons/MdiIcon';
 import { useAuthStore } from '@/stores/auth';
 import { type ThemeMode, useLayoutStore } from '@/stores/layout';
 
@@ -24,10 +25,10 @@ const languageOptions = [
   { code: 'ru-RU', label: 'Русский', flag: '🇷🇺' },
 ] as const;
 
-const themeOptions: Array<{ mode: ThemeMode; label: string }> = [
-  { mode: 'light', label: '☀ Light' },
-  { mode: 'dark', label: '☾ Dark' },
-  { mode: 'system', label: '◐ System' },
+const themeOptions: Array<{ icon: `mdi-${string}`; mode: ThemeMode; label: string }> = [
+  { icon: 'mdi-white-balance-sunny', mode: 'light', label: 'Light' },
+  { icon: 'mdi-weather-night', mode: 'dark', label: 'Dark' },
+  { icon: 'mdi-theme-light-dark', mode: 'system', label: 'System' },
 ];
 
 export function Header() {
@@ -79,7 +80,7 @@ export function Header() {
           onClick={mobile ? toggleDrawer : toggleMiniSidebar}
           type="button"
         >
-          ☰
+          <MdiIcon name="mdi-menu" />
         </button>
       )}
       {!isChat && <Link className="app-header__logo" to="/about">Astr<span>Bot</span></Link>}
@@ -91,7 +92,7 @@ export function Header() {
           onClick={toggleChatSidebar}
           type="button"
         >
-          {chatSidebarOpen ? '‹' : '›'}
+          <MdiIcon name={chatSidebarOpen ? 'mdi-chevron-left' : 'mdi-chevron-right'} />
         </button>
       )}
       <div className="app-header__spacer" />
@@ -100,12 +101,13 @@ export function Header() {
         onClick={() => navigate(getModeSwitchTarget(location.pathname, sessionStorage))}
         type="button"
       >
-        {isChat ? '♙ Bot' : '◌ Chat'}
+        <MdiIcon name={isChat ? 'mdi-robot' : 'mdi-chat'} />
+        {isChat ? 'Bot' : 'Chat'}
       </button>
       <Menu
         label={t('core.header.buttons.menu', 'Application menu')}
         trigger={(props) => (
-          <button {...props} aria-label={t('core.header.buttons.menu', 'Application menu')} className="app-header__icon-button" type="button">•••</button>
+          <button {...props} aria-label={t('core.header.buttons.menu', 'Application menu')} className="app-header__icon-button" type="button"><MdiIcon name="mdi-dots-vertical" /></button>
         )}
       >
         <div className="headless-menu__label">{t('core.common.language')}</div>
@@ -120,7 +122,7 @@ export function Header() {
         <div className="headless-menu__label">{t('core.header.buttons.theme.title')}</div>
         {themeOptions.map((theme) => (
           <MenuItem key={theme.mode} onSelect={() => setThemeMode(theme.mode)}>
-            <span>{theme.label}</span>
+            <span className="headless-menu__item-label"><MdiIcon name={theme.icon} />{theme.label}</span>
             {themeMode === theme.mode && <span aria-label={t('core.common.selected', 'Selected')}>✓</span>}
           </MenuItem>
         ))}

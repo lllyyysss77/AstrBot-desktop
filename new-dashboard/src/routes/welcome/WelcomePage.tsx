@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { getConfigProfile, getProviderSchema, getSystemConfig, updateConfigProfileContent } from '@/api/openapi';
 import { Markdown } from '@/components/content/Markdown';
+import { MdiIcon } from '@/components/icons/MdiIcon';
 import { toast } from '@/stores/feedback';
 import {
   greetingPeriod,
@@ -69,10 +70,10 @@ export default function WelcomePage() {
     }
   };
 
-  const resources = [
-    { description: t(`${prefix}.resources.githubDesc`), label: 'GitHub', url: 'https://github.com/AstrBotDevs/AstrBot/' },
-    { description: t(`${prefix}.resources.docsDesc`), label: t(`${prefix}.resources.docsTitle`), url: 'https://docs.astrbot.app' },
-    { description: t(`${prefix}.resources.afdianDesc`), label: t(`${prefix}.resources.afdianTitle`), url: 'https://afdian.com/a/astrbot_team' },
+  const resources: Array<{ description: string; icon: `mdi-${string}`; label: string; url: string }> = [
+    { description: t(`${prefix}.resources.githubDesc`), icon: 'mdi-github', label: 'GitHub', url: 'https://github.com/AstrBotDevs/AstrBot/' },
+    { description: t(`${prefix}.resources.docsDesc`), icon: 'mdi-book-open-variant', label: t(`${prefix}.resources.docsTitle`), url: 'https://docs.astrbot.app' },
+    { description: t(`${prefix}.resources.afdianDesc`), icon: 'mdi-hand-heart', label: t(`${prefix}.resources.afdianTitle`), url: 'https://afdian.com/a/astrbot_team' },
   ];
   return (
     <div className="welcome-page route-page">
@@ -84,34 +85,40 @@ export default function WelcomePage() {
         <h2>{t(`${prefix}.onboard.title`)}</h2>
         <ol className="onboarding-list">
           <li className={hasProvider ? 'is-complete' : ''}>
-            <h3>{t(`${prefix}.onboard.step1Title`)}</h3><p>{t(`${prefix}.onboard.step1Desc`)}</p>
-            <Link className="button--primary" to="/providers">{t(`${prefix}.onboard.configure`)}</Link>
-            {hasProvider && <span className="onboarding-complete">✓ {t(`${prefix}.onboard.completed`)}</span>}
+            <span className="onboarding-list__marker"><MdiIcon name="mdi-numeric-1" /></span>
+            <div className="onboarding-list__content"><h3>{t(`${prefix}.onboard.step1Title`)}</h3><p>{t(`${prefix}.onboard.step1Desc`)}</p>
+              <Link className="button--primary" to="/providers">{t(`${prefix}.onboard.configure`)}</Link>
+              {hasProvider && <span className="onboarding-complete">{t(`${prefix}.onboard.completed`)}</span>}
+            </div>
           </li>
           <li className={hasPlatform ? 'is-complete' : ''}>
-            <h3>{t(`${prefix}.onboard.step2Title`)}</h3><p>{t(`${prefix}.onboard.step2Desc`)}</p>
-            <Link className="button--primary" to="/platforms">{t(`${prefix}.onboard.configure`)}</Link>
-            {hasPlatform && <span className="onboarding-complete">✓ {t(`${prefix}.onboard.completed`)}</span>}
+            <span className="onboarding-list__marker"><MdiIcon name="mdi-numeric-2" /></span>
+            <div className="onboarding-list__content"><h3>{t(`${prefix}.onboard.step2Title`)}</h3><p>{t(`${prefix}.onboard.step2Desc`)}</p>
+              <Link className="button--primary" to="/platforms">{t(`${prefix}.onboard.configure`)}</Link>
+              {hasPlatform && <span className="onboarding-complete">{t(`${prefix}.onboard.completed`)}</span>}
+            </div>
           </li>
           <li>
-            <h3>{t(`${prefix}.onboard.step3Title`)}</h3><p>{t(`${prefix}.onboard.step3Desc`)}</p>
-            <select disabled={savingRuntime} onChange={(event) => void saveRuntime(event.target.value as ComputerAccessRuntime)} value={runtime}>
-              <option value="local">{t(`${prefix}.onboard.step3Allow`)}</option>
-              <option value="none">{t(`${prefix}.onboard.step3Deny`)}</option>
-            </select>
-            <details className="onboarding-help">
-              <summary>{t(`${prefix}.onboard.step3HelpTitle`)}</summary>
-              <ol>
-                <li>{t(`${prefix}.onboard.step3HelpItem1`)}</li>
-                <li>{t(`${prefix}.onboard.step3HelpItem2`)}</li>
-                <li>{t(`${prefix}.onboard.step3HelpItem3`)}</li>
-              </ol>
-            </details>
+            <span className="onboarding-list__marker"><MdiIcon name="mdi-numeric-3" /></span>
+            <div className="onboarding-list__content"><h3>{t(`${prefix}.onboard.step3Title`)}</h3><p>{t(`${prefix}.onboard.step3Desc`)}</p>
+              <select disabled={savingRuntime} onChange={(event) => void saveRuntime(event.target.value as ComputerAccessRuntime)} value={runtime}>
+                <option value="local">{t(`${prefix}.onboard.step3Allow`)}</option>
+                <option value="none">{t(`${prefix}.onboard.step3Deny`)}</option>
+              </select>
+              <details className="onboarding-help">
+                <summary>{t(`${prefix}.onboard.step3HelpTitle`)}</summary>
+                <ol>
+                  <li>{t(`${prefix}.onboard.step3HelpItem1`)}</li>
+                  <li>{t(`${prefix}.onboard.step3HelpItem2`)}</li>
+                  <li>{t(`${prefix}.onboard.step3HelpItem3`)}</li>
+                </ol>
+              </details>
+            </div>
           </li>
         </ol>
       </section>
       <section className="route-card"><h2>{t(`${prefix}.resources.title`)}</h2><div className="resource-grid">
-        {resources.map((resource) => <a href={resource.url} key={resource.url} rel="noreferrer" target="_blank"><strong>{resource.label}</strong><p>{resource.description}</p></a>)}
+        {resources.map((resource) => <a href={resource.url} key={resource.url} rel="noreferrer" target="_blank"><div className="resource-grid__title"><MdiIcon name={resource.icon} size={32} /><strong>{resource.label}</strong></div><p>{resource.description}</p></a>)}
       </div></section>
       {announcement && <section className="route-card"><h2>{t(`${prefix}.announcement.title`)}</h2><Markdown content={announcement} /></section>}
     </div>

@@ -11,6 +11,13 @@ describe('sidebar navigation compatibility', () => {
     expect(resolveNavigationItems(defaultNavigationItems, null)).toBe(defaultNavigationItems);
   });
 
+  it('uses the same MDI icon names as the legacy sidebar', () => {
+    const items = defaultNavigationItems.flatMap((item) => [item, ...(item.children ?? [])]);
+    expect(items.every((item) => item.icon.startsWith('mdi-'))).toBe(true);
+    expect(defaultNavigationItems.find((item) => item.to === '/welcome')?.icon).toBe('mdi-hand-wave-outline');
+    expect(defaultNavigationItems.find((item) => item.to === '/platforms')?.icon).toBe('mdi-robot');
+  });
+
   it('applies existing sidebar customization and keeps new defaults', () => {
     const result = resolveNavigationItems(defaultNavigationItems, {
       mainItems: ['core.navigation.console', 'missing', 'core.navigation.console'],
