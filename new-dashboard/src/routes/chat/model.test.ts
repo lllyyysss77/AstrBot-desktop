@@ -5,8 +5,17 @@ describe('chat model', () => {
   it('normalizes stored history and appends streaming text', () => {
     const record = normalizeRecord({ sender_id: 'bot', content: { message: 'Hello' } });
     appendStreamPayload(record, { type: 'plain', data: ' world', streaming: true });
+    appendStreamPayload(record, { type: 'plain', data: { content: '!' }, streaming: true });
     expect(record.content.type).toBe('bot');
-    expect(record.content.message[0].text).toBe('Hello world');
+    expect(record.content.message[0].text).toBe('Hello world!');
+  });
+
+  it('merges streaming reasoning chunks', () => {
+    const record = normalizeRecord({ sender_id: 'bot', content: { message: [] } });
+    appendStreamPayload(record, { type: 'plain', chain_type: 'reasoning', data: { message: 'Step ' } });
+    appendStreamPayload(record, { type: 'plain', chain_type: 'reasoning', data: { text: 'one' } });
+    expect(record.content.reasoning).toBe('Step one');
+    expect(record.content.message).toEqual([{ type: 'think', think: 'Step one' }]);
   });
 
   it('parses complete SSE events and preserves an incomplete event', () => {

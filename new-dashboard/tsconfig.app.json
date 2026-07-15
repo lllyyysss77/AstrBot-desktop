@@ -14,8 +14,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@legacy-i18n/*": ["../dashboard/src/i18n/*"],
-      "@legacy-mermaid": ["../dashboard/node_modules/mermaid/dist/mermaid.d.ts"]
+      "@legacy-i18n/*": ["../dashboard/src/i18n/*"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,

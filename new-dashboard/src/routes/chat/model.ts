@@ -29,14 +29,29 @@ export function appendStreamPayload(record: ChatRecord, payload: unknown) {
   if (type === 'error') { appendPlain(record, `\n\n${String(data ?? 'Unknown error')}`); return true; }
   if (['complete', 'break'].includes(type)) { if (!plainText(record)) appendPlain(record, payloadText(data), false); record.content.isLoading = false; return true; }
   if (type === 'end') { record.content.isLoading = false; return true; }
-  if (type === 'plain') { if (chain === 'reasoning') { const text = payloadText(data); record.content.reasoning = `${record.content.reasoning || ''}${text}`; record.content.message.push({ type: 'think', think: text }); } else if (chain !== 'tool_call' && chain !== 'tool_call_result') appendPlain(record, payloadText(data), normalized.streaming !== false); return true; }
+  if (type === 'plain') { if (chain === 'reasoning') { appendReasoning(record, payloadText(data)); } else if (chain !== 'tool_call' && chain !== 'tool_call_result') appendPlain(record, payloadText(data), normalized.streaming !== false); return true; }
   if (['image', 'record', 'file', 'video'].includes(type)) { const rawName = String(data ?? '').replace(/^\[(IMAGE|RECORD|FILE|VIDEO)\]/, ''); const split = rawName.indexOf('|'); const stored = split >= 0 ? rawName.slice(0, split) : rawName; const filename = split >= 0 ? rawName.slice(split + 1) : stored; record.content.message.push({ type, filename, ...(stored !== filename ? { stored_filename: stored } : {}) }); return true; }
   return false;
 }
 
-function payloadText(value: unknown) { return typeof value === 'string' ? value : value && typeof value === 'object' && 'text' in value ? String((value as JsonObject).text ?? '') : String(value ?? ''); }
+function payloadText(value: unknown) {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const data = value as JsonObject;
+    if (typeof data.text === 'string') return data.text;
+    if (typeof data.content === 'string') return data.content;
+    if (typeof data.message === 'string') return data.message;
+  }
+  return String(value ?? '');
+}
 function plainText(record: ChatRecord) { return record.content.message.filter((part) => part.type === 'plain').map((part) => part.text || '').join(''); }
 function appendPlain(record: ChatRecord, text: string, streaming = true) { const last = record.content.message.at(-1); if (streaming && last?.type === 'plain') last.text = `${last.text || ''}${text}`; else if (text) record.content.message.push({ type: 'plain', text }); record.content.isLoading = false; }
+function appendReasoning(record: ChatRecord, text: string) {
+  record.content.reasoning = `${record.content.reasoning || ''}${text}`;
+  const last = record.content.message.at(-1);
+  if (last?.type === 'think') last.think = `${last.think || ''}${text}`;
+  else if (text) record.content.message.push({ type: 'think', think: text });
+}
 
 export function parseSseEvents(buffer: string, flush = false) {
   const normalized = buffer.replace(/\r\n/g, '\n'); const blocks = normalized.split('\n\n'); const remainder = flush ? '' : blocks.pop() || ''; const payloads: unknown[] = [];
