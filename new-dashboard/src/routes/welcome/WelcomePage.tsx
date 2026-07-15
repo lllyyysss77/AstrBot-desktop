@@ -70,11 +70,6 @@ export default function WelcomePage() {
     }
   };
 
-  const resources: Array<{ description: string; icon: `mdi-${string}`; label: string; url: string }> = [
-    { description: t(`${prefix}.resources.githubDesc`), icon: 'mdi-github', label: 'GitHub', url: 'https://github.com/AstrBotDevs/AstrBot/' },
-    { description: t(`${prefix}.resources.docsDesc`), icon: 'mdi-book-open-variant', label: t(`${prefix}.resources.docsTitle`), url: 'https://docs.astrbot.app' },
-    { description: t(`${prefix}.resources.afdianDesc`), icon: 'mdi-hand-heart', label: t(`${prefix}.resources.afdianTitle`), url: 'https://afdian.com/a/astrbot_team' },
-  ];
   return (
     <div className="welcome-page route-page">
       <header className="route-page__heading">
@@ -117,9 +112,6 @@ export default function WelcomePage() {
           </li>
         </ol>
       </section>
-      <section className="route-card"><h2>{t(`${prefix}.resources.title`)}</h2><div className="resource-grid">
-        {resources.map((resource) => <a href={resource.url} key={resource.url} rel="noreferrer" target="_blank"><div className="resource-grid__title"><MdiIcon name={resource.icon} size={32} /><strong>{resource.label}</strong></div><p>{resource.description}</p></a>)}
-      </div></section>
       {announcement && <section className="route-card"><h2>{t(`${prefix}.announcement.title`)}</h2><Markdown content={announcement} /></section>}
     </div>
   );
