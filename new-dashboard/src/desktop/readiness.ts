@@ -19,7 +19,8 @@ export async function waitForDesktopBackendReady({
   const startedAt = now();
   while (now() - startedAt < timeoutMs) {
     try {
-      if ((await bridge.getBackendState()).running) return true;
+      const state = await bridge.getBackendState();
+      if (state.running && !state.spawning && !state.restarting) return true;
     } catch {
       // Backend and bridge can both be unavailable briefly during restart.
     }

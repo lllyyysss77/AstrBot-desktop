@@ -34,6 +34,64 @@ textarea {
   height: 100%;
 }
 
+.app-bootstrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 14px;
+  background: var(--astrbot-background);
+  color: color-mix(in srgb, var(--astrbot-text) 68%, transparent);
+}
+
+.app-bootstrap__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--astrbot-text);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.app-bootstrap__brand .mdi {
+  color: var(--astrbot-primary);
+}
+
+.app-bootstrap__spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--astrbot-border);
+  border-top-color: var(--astrbot-primary);
+  border-radius: 50%;
+  animation: app-bootstrap-spin 0.8s linear infinite;
+}
+
+.app-bootstrap p {
+  margin: 0;
+}
+
+.app-bootstrap__retry {
+  min-width: 80px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: 1px solid var(--astrbot-border);
+  border-radius: 8px;
+  background: var(--astrbot-surface);
+  color: var(--astrbot-text);
+  cursor: pointer;
+}
+
+.app-bootstrap__retry:hover {
+  border-color: var(--astrbot-primary);
+  color: var(--astrbot-primary);
+}
+
+@keyframes app-bootstrap-spin {
+  to { transform: rotate(360deg); }
+}
+
 .blank-layout {
   display: flex;
   flex-direction: column;

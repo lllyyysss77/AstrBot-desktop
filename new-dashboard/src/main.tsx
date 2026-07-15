@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import { AppBootstrap } from './app/AppBootstrap';
 import './assets/mdi-subset/materialdesignicons-subset.css';
 import './styles/index.scss';
 
@@ -9,5 +9,5 @@ if (storedPrimary) document.documentElement.style.setProperty('--astrbot-primary
 if (storedSecondary) document.documentElement.style.setProperty('--astrbot-secondary', storedSecondary);
 
 createRoot(document.getElementById('root')!).render(
-  <App />,
+  <AppBootstrap />,
 );
