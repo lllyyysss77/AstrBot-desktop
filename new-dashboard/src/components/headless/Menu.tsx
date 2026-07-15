@@ -18,6 +18,7 @@ type TriggerProps = {
 
 type MenuProps = {
   children: ReactNode;
+  className?: string;
   label: string;
   trigger: (props: TriggerProps) => ReactNode;
 };
@@ -43,7 +44,7 @@ export function getNextMenuItemIndex(
   return null;
 }
 
-export function Menu({ children, label, trigger }: MenuProps) {
+export function Menu({ children, className = '', label, trigger }: MenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -76,7 +77,7 @@ export function Menu({ children, label, trigger }: MenuProps) {
   };
 
   return (
-    <div className="headless-menu" ref={rootRef}>
+    <div className={`headless-menu${className ? ` ${className}` : ''}`} ref={rootRef}>
       {trigger({
         'aria-expanded': open,
         'aria-haspopup': 'menu',
