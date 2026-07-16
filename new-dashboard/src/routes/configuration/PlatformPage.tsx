@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createBot, deleteBotById, getSystemConfigRuntime, listBotStats, setBotEnabledById, updateBotById } from '@/api/openapi';
+import { createBot, createConfigProfile, deleteBotById, getConfigProfileSchema, getSystemConfigRuntime, listBotStats, listConfigProfiles, setBotEnabledById, updateBotById, upsertConfigRoute } from '@/api/openapi';
 import { ConfigGroup } from '@/components/config/DynamicConfigForm';
 import type { ConfigGroupMetadata, ConfigRecord } from '@/components/config/configFormModel';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
@@ -12,6 +12,7 @@ import { errorMessage, isObject, JsonObject, objectList, recordId, responseData 
 import { isValidPlatformId, mergePlatformTemplate, platformFormMetadata, platformQrPayload, platformTemplates, readPlatformRuntime, webhookUrl } from './platformModel';
 
 type EditorState = { config: JsonObject; originalId: string } | null;
+type ConfigProfileOption = { id: string; name: string };
 
 export default function PlatformPage() {
   const { t } = useTranslation();
@@ -23,6 +24,9 @@ export default function PlatformPage() {
   const [error, setError] = useState('');
   const [editor, setEditor] = useState<EditorState>(null);
   const [selectedType, setSelectedType] = useState('');
+  const [configProfiles, setConfigProfiles] = useState<ConfigProfileOption[]>([{ id: 'default', name: 'default' }]);
+  const [configMode, setConfigMode] = useState<'existing' | 'new'>('existing');
+  const [selectedConfigId, setSelectedConfigId] = useState('default');
   const [saving, setSaving] = useState(false);
   const [details, setDetails] = useState<{ kind: 'error' | 'qr' | 'webhook'; item: JsonObject; stat?: JsonObject } | null>(null);
 
@@ -66,10 +70,23 @@ export default function PlatformPage() {
   const templates = useMemo(() => platformTemplates(metadata), [metadata]);
   const formMetadata = useMemo(() => platformFormMetadata(metadata), [metadata]);
 
+  const loadConfigProfiles = useCallback(async () => {
+    try {
+      const data = responseData(await listConfigProfiles());
+      const profiles = objectList(data, ['info_list', 'configs', 'profiles']).map((profile, index) => ({
+        id: recordId(profile, 'conf_id', 'id') || `profile-${index}`,
+        name: String(profile.name || recordId(profile, 'conf_id', 'id') || `profile-${index}`),
+      }));
+      setConfigProfiles(profiles.some((profile) => profile.id === 'default') ? profiles : [{ id: 'default', name: 'default' }, ...profiles]);
+    } catch { /* The default profile remains available when the profile list cannot be loaded. */ }
+  }, []);
+
   const openCreate = () => {
-    const first = Object.keys(templates)[0] || '';
-    setSelectedType(first);
-    setEditor({ config: first ? mergePlatformTemplate({}, templates[first]) : { id: '', type: '', enable: true }, originalId: '' });
+    setSelectedType('');
+    setConfigMode('existing');
+    setSelectedConfigId('default');
+    setEditor({ config: { id: '', type: '', enable: true }, originalId: '' });
+    void loadConfigProfiles();
   };
   const openEdit = (item: JsonObject) => {
     const type = String(item.type || '');
@@ -91,7 +108,16 @@ export default function PlatformPage() {
     setSaving(true);
     try {
       if (editor.originalId) await updateBotById({ body: { bot_id: editor.originalId, config: editor.config } });
-      else await createBot({ body: { id, type, enabled: editor.config.enable !== false, config: editor.config } });
+      else {
+        await createBot({ body: { id, type, enabled: editor.config.enable !== false, config: editor.config } });
+        let configId = selectedConfigId;
+        if (configMode === 'new') {
+          const schema = responseData<JsonObject>(await getConfigProfileSchema()) ?? {};
+          const created = responseData<JsonObject>(await createConfigProfile({ body: { name: selectedConfigId.trim(), config: isObject(schema.config) ? schema.config : {} } })) ?? {};
+          configId = recordId(created, 'conf_id', 'id');
+        }
+        if (configId) await upsertConfigRoute({ path: { umo: `${id}:*:*` }, body: { config_id: configId } });
+      }
       toast.success(tm(editor.originalId ? 'messages.updateSuccess' : 'messages.addSuccess'));
       setEditor(null);
       await Promise.all([loadConfig(true), loadStats()]);
@@ -130,16 +156,16 @@ export default function PlatformPage() {
       {error && <div className="monitor-error" role="alert">{error}</div>}
       {!loading && !items.length && <div className="platform-empty"><MdiIcon name="mdi-connection" size={58} /><p>{tm('emptyText')}</p></div>}
       <section className="platform-grid">
-        {items.map((item, index) => <PlatformCard config={config} item={item} key={recordId(item, 'id', 'bot_id') || index} onDetails={setDetails} onEdit={openEdit} onRemove={(value) => void remove(value)} onToggle={(value) => void toggle(value)} stat={stats.get(recordId(item, 'id', 'bot_id'))} t={tm} />)}
+        {items.map((item, index) => <PlatformCard config={config} deleteLabel={t('core.common.itemCard.delete')} item={item} key={recordId(item, 'id', 'bot_id') || index} onDetails={setDetails} onEdit={openEdit} onRemove={(value) => void remove(value)} onToggle={(value) => void toggle(value)} stat={stats.get(recordId(item, 'id', 'bot_id'))} t={tm} />)}
       </section>
 
-      <PlatformEditor editor={editor} formMetadata={formMetadata} onChange={(next) => setEditor((current) => current ? { ...current, config: next } : current)} onOpenChange={(open) => !open && setEditor(null)} onSave={() => void save()} onTypeChange={chooseType} saving={saving} selectedType={selectedType} t={tm} templates={templates} />
+      <PlatformEditor configMode={configMode} configProfiles={configProfiles} editor={editor} formMetadata={formMetadata} onChange={(next) => setEditor((current) => current ? { ...current, config: next } : current)} onConfigModeChange={setConfigMode} onOpenChange={(open) => !open && setEditor(null)} onSave={() => void save()} onSelectedConfigChange={setSelectedConfigId} onTypeChange={chooseType} saving={saving} selectedConfigId={selectedConfigId} selectedType={selectedType} t={tm} templates={templates} />
       <DetailsDialog config={config} details={details} onOpenChange={(open) => !open && setDetails(null)} t={tm} />
     </div>
   );
 }
 
-function PlatformCard({ config, item, onDetails, onEdit, onRemove, onToggle, stat, t }: { config: JsonObject; item: JsonObject; onDetails: (details: { kind: 'error' | 'qr' | 'webhook'; item: JsonObject; stat?: JsonObject }) => void; onEdit: (item: JsonObject) => void; onRemove: (item: JsonObject) => void; onToggle: (item: JsonObject) => void; stat?: JsonObject; t: (key: string, options?: Record<string, unknown>) => string }) {
+function PlatformCard({ config, deleteLabel, item, onDetails, onEdit, onRemove, onToggle, stat, t }: { config: JsonObject; deleteLabel: string; item: JsonObject; onDetails: (details: { kind: 'error' | 'qr' | 'webhook'; item: JsonObject; stat?: JsonObject }) => void; onEdit: (item: JsonObject) => void; onRemove: (item: JsonObject) => void; onToggle: (item: JsonObject) => void; stat?: JsonObject; t: (key: string, options?: Record<string, unknown>) => string }) {
   const id = recordId(item, 'id', 'bot_id');
   const enabled = (item.enable ?? item.enabled) !== false;
   const status = String(stat?.status || (enabled ? 'running' : 'stopped'));
@@ -148,18 +174,36 @@ function PlatformCard({ config, item, onDetails, onEdit, onRemove, onToggle, sta
   const webhook = Boolean(stat?.unified_webhook && item.webhook_uuid);
   return <article className="platform-card">
     <div className="platform-card__watermark"><MdiIcon name={platformIcon(String(item.type || id))} /></div>
-    <header><span className="platform-card__icon"><MdiIcon name={platformIcon(String(item.type || id))} /></span><div><h2>{id}</h2><p>{String(item.type || 'unknown')}</p></div><label className="provider-switch" title={enabled ? t('status.enabled') : t('status.disabled')}><input checked={enabled} onChange={() => onToggle(item)} type="checkbox" /><span /></label></header>
+    <header><h2 title={id}>{id}</h2><label className="provider-switch" title={enabled ? t('status.enabled') : t('status.disabled')}><input checked={enabled} onChange={() => onToggle(item)} type="checkbox" /><span /></label></header>
     <div className="platform-card__badges">
       {status !== 'running' && <button className={`platform-badge platform-badge--${status}`} type="button"><MdiIcon name={statusIcon(status)} />{t(`runtimeStatus.${status === 'error' || status === 'pending' || status === 'stopped' ? status : 'unknown'}`)}</button>}
       {errors > 0 && <button className="platform-badge platform-badge--error" onClick={() => onDetails({ kind: 'error', item, stat })} type="button"><MdiIcon name="mdi-bug" />{errors} {t('runtimeStatus.errors')}</button>}
       {qr && <button className="platform-badge" onClick={() => onDetails({ kind: 'qr', item, stat })} type="button"><MdiIcon name="mdi-qrcode" />{t('platformQr.show')}</button>}
       {webhook && <button className="platform-badge" onClick={() => onDetails({ kind: 'webhook', item, stat })} title={webhookUrl(config, String(item.webhook_uuid))} type="button"><MdiIcon name="mdi-webhook" />{t('viewWebhook')}</button>}
     </div>
-    <footer><button onClick={() => onEdit(item)} type="button"><MdiIcon name="mdi-pencil-outline" />{t('dialog.edit')}</button><button className="button--danger" onClick={() => onRemove(item)} type="button"><MdiIcon name="mdi-delete-outline" /></button></footer>
+    <footer><button className="button--danger" onClick={() => onRemove(item)} type="button">{deleteLabel}</button><button className="platform-card__edit" onClick={() => onEdit(item)} type="button">{t('dialog.edit')}</button></footer>
   </article>;
 }
 
-function PlatformEditor({ editor, formMetadata, onChange, onOpenChange, onSave, onTypeChange, saving, selectedType, t, templates }: { editor: EditorState; formMetadata: JsonObject; onChange: (next: JsonObject) => void; onOpenChange: (open: boolean) => void; onSave: () => void; onTypeChange: (type: string) => void; saving: boolean; selectedType: string; t: (key: string, options?: Record<string, unknown>) => string; templates: Record<string, JsonObject> }) {
+function PlatformSelect({ ariaLabel, iconForValue, onChange, options, placeholder, value }: { ariaLabel: string; iconForValue?: (value: string) => `mdi-${string}`; onChange: (value: string) => void; options: ConfigProfileOption[]; placeholder: string; value: string }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.id === value);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+  return <div className="platform-select" ref={root}>
+    <button aria-expanded={open} aria-haspopup="listbox" aria-label={ariaLabel} className={!selected ? 'is-placeholder' : ''} onClick={() => setOpen((current) => !current)} type="button"><span>{selected ? selected.name : placeholder}</span><MdiIcon name={open ? 'mdi-chevron-up' : 'mdi-chevron-down'} /></button>
+    {open && <div className="platform-select__menu" role="listbox">{options.map((option) => <button aria-selected={option.id === value} className={option.id === value ? 'is-selected' : ''} key={option.id} onClick={() => { onChange(option.id); setOpen(false); }} role="option" type="button">{iconForValue && <MdiIcon name={iconForValue(option.id)} />}<span>{option.name}</span>{option.id === value && <MdiIcon name="mdi-check" />}</button>)}</div>}
+  </div>;
+}
+
+function PlatformEditor({ configMode, configProfiles, editor, formMetadata, onChange, onConfigModeChange, onOpenChange, onSave, onSelectedConfigChange, onTypeChange, saving, selectedConfigId, selectedType, t, templates }: { configMode: 'existing' | 'new'; configProfiles: ConfigProfileOption[]; editor: EditorState; formMetadata: JsonObject; onChange: (next: JsonObject) => void; onConfigModeChange: (mode: 'existing' | 'new') => void; onOpenChange: (open: boolean) => void; onSave: () => void; onSelectedConfigChange: (id: string) => void; onTypeChange: (type: string) => void; saving: boolean; selectedConfigId: string; selectedType: string; t: (key: string, options?: Record<string, unknown>) => string; templates: Record<string, JsonObject> }) {
+  const [showConfigSection, setShowConfigSection] = useState(true);
+  useEffect(() => { if (editor) setShowConfigSection(true); }, [editor]);
   const resolveText = (path: string, field: 'description' | 'hint', fallback = '') => {
     const exact = i18n.t(`features.config-metadata.${path}.${field}`, { defaultValue: '' });
     if (exact) return exact;
@@ -167,14 +211,18 @@ function PlatformEditor({ editor, formMetadata, onChange, onOpenChange, onSave, 
     return i18n.t(`features.config-metadata.${fallback}`, { defaultValue: fallback });
   };
   const editing = Boolean(editor?.originalId);
-  return <Dialog description={t('createDialog.step1Hint')} onOpenChange={onOpenChange} open={editor !== null} title={editing ? `${t('dialog.edit')} ${editor?.originalId} ${t('dialog.adapter')}` : t('dialog.addPlatform')}>
+  const platformId = editor ? recordId(editor.config, 'id', 'bot_id') : '';
+  const canSave = editing ? Boolean(platformId) : Boolean(selectedType && isValidPlatformId(platformId) && selectedConfigId.trim());
+  return <Dialog onOpenChange={onOpenChange} open={editor !== null} title={editing ? `${t('dialog.edit')} ${editor?.originalId} ${t('dialog.adapter')}` : t('dialog.addPlatform')}>
     {editor && <div className="platform-editor">
-      {!editing && <label className="platform-editor__type"><span>{t('createDialog.platformTypeLabel')}</span><select onChange={(event) => onTypeChange(event.target.value)} value={selectedType}><option value="">—</option>{Object.keys(templates).map((type) => <option key={type} value={type}>{type}</option>)}</select></label>}
-      {selectedType && <a className="platform-tutorial" href={tutorialLink(selectedType)} rel="noreferrer" target="_blank"><MdiIcon name="mdi-book-open-variant" />{t('dialog.viewTutorial')}</a>}
-      {isObject(formMetadata) && Object.keys(formMetadata).length > 0
-        ? <div className="dynamic-config-dialog"><ConfigGroup metadata={formMetadata as ConfigGroupMetadata} onChange={(next: ConfigRecord) => onChange(next)} resolveText={resolveText} title={t('adapters')} translationPath="platform_group.platform" value={editor.config} /></div>
-        : <FallbackPlatformForm config={editor.config} onChange={onChange} />}
-      <div className="dialog-actions"><DialogClose asChild><button type="button">{t('dialog.cancel')}</button></DialogClose><button className="button--primary" disabled={saving} onClick={onSave} type="button">{saving ? '…' : t('dialog.save')}</button></div>
+      <div className="platform-editor__body">
+        <section className="platform-editor__step"><MdiIcon name="mdi-numeric-1-circle" /><div><h3>{t('createDialog.step1Title')}</h3><p>{t('createDialog.step1Hint')}</p>{!editing && <div className="platform-editor__type"><PlatformSelect ariaLabel={t('createDialog.platformTypeLabel')} iconForValue={platformIcon} onChange={onTypeChange} options={Object.keys(templates).map((type) => ({ id: type, name: type }))} placeholder={t('createDialog.platformTypeLabel')} value={selectedType} /></div>}{selectedType && <a className="platform-tutorial" href={tutorialLink(selectedType)} rel="noreferrer" target="_blank"><MdiIcon name="mdi-book-open-variant" />{t('dialog.viewTutorial')}</a>}</div></section>
+        {selectedType && (isObject(formMetadata) && Object.keys(formMetadata).length > 0
+          ? <div className="platform-editor__config"><ConfigGroup metadata={formMetadata as ConfigGroupMetadata} onChange={(next: ConfigRecord) => onChange(next)} resolveText={resolveText} title={t('adapters')} translationPath="platform_group.platform" value={editor.config} /></div>
+          : <FallbackPlatformForm config={editor.config} onChange={onChange} />)}
+        {!editing && <section className="platform-editor__step platform-editor__step--config"><MdiIcon name="mdi-numeric-2-circle" /><div><div className="platform-editor__step-heading"><div><h3>{t('createDialog.configFileTitle')} <small>{t('createDialog.optional')}</small></h3><p>{t('createDialog.configHint')} {t('createDialog.configDefaultHint')}</p></div><button aria-expanded={showConfigSection} onClick={() => setShowConfigSection((current) => !current)} type="button"><MdiIcon name={showConfigSection ? 'mdi-chevron-up' : 'mdi-chevron-down'} /></button></div>{showConfigSection && <div className="platform-editor__profiles"><label><input checked={configMode === 'existing'} name="platform-config-mode" onChange={() => { onConfigModeChange('existing'); if (!selectedConfigId) onSelectedConfigChange('default'); }} type="radio" />{t('createDialog.useExistingConfig')}</label>{configMode === 'existing' && <div className="platform-editor__profile-select"><label><span>{t('createDialog.selectConfigLabel')}</span><PlatformSelect ariaLabel={t('createDialog.selectConfigLabel')} onChange={onSelectedConfigChange} options={configProfiles} placeholder={t('createDialog.selectConfigLabel')} value={selectedConfigId} /></label><a aria-label={t('createDialog.selectConfigLabel')} href="/config"><MdiIcon name="mdi-arrow-top-right-thick" /></a></div>}<label><input checked={configMode === 'new'} name="platform-config-mode" onChange={() => { onConfigModeChange('new'); onSelectedConfigChange(''); }} type="radio" />{t('createDialog.createNewConfig')}</label>{configMode === 'new' && <label className="platform-editor__new-profile"><span>{t('createDialog.newConfigNameLabel')}</span><input onChange={(event) => onSelectedConfigChange(event.target.value)} value={selectedConfigId} /></label>}</div>}</div></section>}
+      </div>
+      <div className="dialog-actions platform-editor__actions"><DialogClose asChild><button type="button">{t('dialog.cancel')}</button></DialogClose><button className="button--primary" disabled={saving || !canSave} onClick={onSave} type="button">{saving ? '…' : t('dialog.save')}</button></div>
     </div>}
   </Dialog>;
 }
