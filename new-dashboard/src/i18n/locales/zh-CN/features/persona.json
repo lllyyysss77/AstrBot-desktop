@@ -11,6 +11,7 @@
     "save": "保存",
     "move": "移动",
     "more": "更多操作",
+    "export": "导出",
     "addDialogPair": "添加对话对"
   },
   "labels": {
@@ -84,7 +85,9 @@
     "saveError": "保存失败",
     "deleteConfirm": "确定要删除人格 \"{id}\" 吗？此操作不可撤销。",
     "deleteSuccess": "删除成功",
-    "deleteError": "删除失败"
+    "deleteError": "删除失败",
+    "exportSuccess": "导出成功",
+    "exportError": "导出失败"
   },
   "persona": {
     "personasTitle": "人格",

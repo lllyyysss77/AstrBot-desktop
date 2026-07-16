@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { filterFolderTree, findFolderPath, flattenFolders, importPersonaRecords, normalizeFolderTree, personaFormValue } from './personaModel';
+import {
+  exportPersonaRecord, filterFolderTree, findFolderPath, flattenFolders, importPersonaRecords, normalizeFolderTree,
+  personaExportFilename, personaFormValue,
+} from './personaModel';
 
 describe('persona model helpers', () => {
   const tree = normalizeFolderTree([{ folder_id: 'work', name: 'Work', children: [{ folder_id: 'code', name: 'Code' }] }, { folder_id: 'life', name: 'Life' }]);
@@ -21,5 +24,26 @@ describe('persona model helpers', () => {
     expect(importPersonaRecords({ persona_id: 'one' })).toHaveLength(1);
     expect(importPersonaRecords({ personas: [{ persona_id: 'one' }, { persona_id: 'two' }] })).toHaveLength(2);
     expect(importPersonaRecords([{ persona_id: 'one' }])).toHaveLength(1);
+  });
+
+  it('exports a portable persona record with a safe filename', () => {
+    expect(exportPersonaRecord({
+      persona_id: 'helper',
+      system_prompt: 'Be helpful.',
+      custom_error_message: null,
+      begin_dialogs: ['Hi', 'Hello'],
+      tools: null,
+      skills: ['writer'],
+      folder_id: 'work',
+      created_at: '2026-07-16',
+    })).toEqual({
+      persona_id: 'helper',
+      system_prompt: 'Be helpful.',
+      custom_error_message: null,
+      begin_dialogs: ['Hi', 'Hello'],
+      tools: null,
+      skills: ['writer'],
+    });
+    expect(personaExportFilename({ persona_id: 'helper:writer?' })).toBe('helper_writer_.json');
   });
 });

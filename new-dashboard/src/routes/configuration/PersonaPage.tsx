@@ -11,8 +11,9 @@ import { MdiIcon } from '@/components/icons/MdiIcon';
 import { confirmAction, toast } from '@/stores/feedback';
 import { errorMessage, type JsonObject, objectList, recordId, responseData } from './model';
 import {
-  emptyPersonaForm, filterFolderTree, findFolderPath, flattenFolders, formatPersonaDate, importPersonaRecords,
-  normalizeFolderTree, personaFormValue, stringList, type PersonaFolderNode, type PersonaFormValue,
+  emptyPersonaForm, exportPersonaRecord, filterFolderTree, findFolderPath, flattenFolders, formatPersonaDate,
+  importPersonaRecords, normalizeFolderTree, personaExportFilename, personaFormValue, stringList,
+  type PersonaFolderNode, type PersonaFormValue,
 } from './personaModel';
 
 type FolderDialog = { mode: 'create' | 'rename'; folder?: JsonObject; name: string; description: string } | null;
@@ -273,6 +274,22 @@ export default function PersonaPage() {
     void moveItem(folderId, { type: 'persona', item });
   };
   const dragPersona = (event: DragEvent, id: string) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/persona-id', id); };
+  const exportPersona = (item: JsonObject) => {
+    try {
+      const blob = new Blob([JSON.stringify(exportPersonaRecord(item), null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = personaExportFilename(item);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success(k('messages.exportSuccess'));
+    } catch (cause) {
+      toast.error(errorMessage(cause, k('messages.exportError')));
+    }
+  };
   const importPersonas = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     event.target.value = '';
@@ -335,6 +352,7 @@ export default function PersonaPage() {
                   <div>
                     <button onClick={() => openPersona(persona)} type="button"><MdiIcon name="mdi-pencil-outline" />{k('buttons.edit')}</button>
                     <button onClick={() => setMoveDialog({ type: 'persona', item: persona })} type="button"><MdiIcon name="mdi-folder-move" />{k('persona.contextMenu.moveTo')}</button>
+                    <button onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); exportPersona(persona); }} type="button"><MdiIcon name="mdi-download" />{k('buttons.export')}</button>
                     <hr />
                     <button className="button--danger" onClick={() => void removePersona(persona)} type="button"><MdiIcon name="mdi-delete-outline" />{k('buttons.delete')}</button>
                   </div>

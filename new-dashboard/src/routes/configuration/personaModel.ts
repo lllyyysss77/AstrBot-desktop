@@ -83,3 +83,20 @@ export function importPersonaRecords(value: unknown): JsonObject[] {
   if (isObject(value.persona)) return [value.persona];
   return [value];
 }
+
+export function exportPersonaRecord(value: JsonObject): JsonObject {
+  return {
+    persona_id: String(value.persona_id || value.id || ''),
+    system_prompt: String(value.system_prompt || ''),
+    custom_error_message: typeof value.custom_error_message === 'string' ? value.custom_error_message : null,
+    begin_dialogs: stringList(value.begin_dialogs),
+    tools: value.tools == null ? null : stringList(value.tools),
+    skills: value.skills == null ? null : stringList(value.skills),
+  };
+}
+
+export function personaExportFilename(value: JsonObject): string {
+  const id = String(value.persona_id || value.id || 'persona').trim() || 'persona';
+  const safeId = id.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/g, '') || 'persona';
+  return `${safeId}.json`;
+}
