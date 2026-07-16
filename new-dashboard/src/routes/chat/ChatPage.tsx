@@ -23,6 +23,7 @@ import { errorMessage, isObject, JsonObject, objectList, recordId, responseData 
 import { confirmAction, toast } from '@/stores/feedback';
 import { useLayoutStore } from '@/stores/layout';
 import { AudioRecorder } from './audioRecorder';
+import { ChatProjectDialog, type ChatProjectForm } from './ChatProjectDialog';
 import { createStreamRenderScheduler } from './streamRenderScheduler';
 import {
   appendStreamPayload,
@@ -57,6 +58,9 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [messages, setMessages] = useState<ChatRecord[]>([]);
   const [configs, setConfigs] = useState<JsonObject[]>([]);
   const [projects, setProjects] = useState<JsonObject[]>([]);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const [projectError, setProjectError] = useState('');
+  const [projectSaving, setProjectSaving] = useState(false);
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [providerMetadata, setProviderMetadata] = useState<Record<string, JsonObject>>({});
   const [providerSearch, setProviderSearch] = useState('');
@@ -301,14 +305,27 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   };
 
-  const createProject = async () => {
-    const title = window.prompt(t('features.chat.project.name'))?.trim();
-    if (!title) return;
+  const createProject = async (form: ChatProjectForm) => {
+    setProjectSaving(true);
+    setProjectError('');
     try {
-      await createChatProject({ body: { title, workspace_type: 'session' } });
+      await createChatProject({
+        body: {
+          description: form.description || undefined,
+          emoji: form.emoji || '📁',
+          title: form.title,
+          workspace_type: form.workspace_type,
+          workspace_path: form.workspace_type === 'custom' ? form.workspace_path : undefined,
+        },
+      });
       await loadProjects();
+      setProjectDialogOpen(false);
     } catch (cause) {
-      toast.error(errorMessage(cause, 'Failed to create project.'));
+      const message = errorMessage(cause, t('features.chat.errors.createProjectFailed', 'Failed to create project.'));
+      setProjectError(message);
+      toast.error(message);
+    } finally {
+      setProjectSaving(false);
     }
   };
 
@@ -600,7 +617,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       </nav>
       <div className="chat-sessions__content">
         <section className="chat-project-list">
-          <div className="chat-section-header"><span>{t('features.chat.project.title')}</span><button aria-label={t('features.chat.project.create')} onClick={() => void createProject()} title={t('features.chat.project.create')} type="button"><PlusIcon /></button></div>
+          <div className="chat-section-header"><span>{t('features.chat.project.title')}</span><button aria-label={t('features.chat.project.create')} onClick={() => { setProjectError(''); setProjectDialogOpen(true); }} title={t('features.chat.project.create')} type="button"><PlusIcon /></button></div>
           {projects.map((project, index) => <div className="chat-project-row" key={recordId(project, 'project_id', 'id') || `project-${index}`}><span>{String(project.emoji || '📁')}</span><strong>{String(project.title || t('features.chat.project.title'))}</strong></div>)}
         </section>
         <div className="chat-session-list">
@@ -679,6 +696,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           {sending ? <button aria-label={t('features.chat.input.stopGenerating')} className="chat-send" onClick={() => void stop()} type="button"><MdiIcon name="mdi-stop" /></button> : <button aria-label={t('features.chat.input.send')} className="chat-send" disabled={recording || (!draft.trim() && !files.length)} onClick={() => void send()} type="button"><MdiIcon name="mdi-arrow-up" /></button>}
         </div>
       </footer>
+      <ChatProjectDialog error={projectError} onOpenChange={(open) => { setProjectDialogOpen(open); if (!open) setProjectError(''); }} onSave={(form) => void createProject(form)} open={projectDialogOpen} saving={projectSaving} />
     </main>
   </div>;
 }
