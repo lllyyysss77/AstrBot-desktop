@@ -108,9 +108,96 @@ export function pluginPages(item: JsonObject): string[] {
 export function filterPlugins(items: JsonObject[], query: string) {
   const term = query.trim().toLowerCase();
   if (!term) return items;
-  return items.filter((item) => `${pluginTitle(item)} ${pluginId(item)} ${pluginAuthor(item)} ${pluginDescription(item)}`.toLowerCase().includes(term));
+  const loose = term.replace(/[\s_-]+/g, '');
+  return items.filter((item) => {
+    const fields = [
+      pluginTitle(item), pluginId(item), pluginAuthor(item), pluginDescription(item), item.short_desc, item.repo,
+      item.version, item.astrbot_version, ...(Array.isArray(item.tags) ? item.tags : []),
+      ...(Array.isArray(item.support_platforms) ? item.support_platforms : []), item.search_pinyin, item.search_initials,
+    ].map(String);
+    return fields.some((field) => {
+      const normalized = field.toLowerCase();
+      return normalized.includes(term) || normalized.replace(/[\s_-]+/g, '').includes(loose);
+    });
+  });
+}
+
+export async function addPluginPinyinSearchIndex(items: JsonObject[]) {
+  if (!items.some((item) => /\p{Unified_Ideograph}/u.test([
+    pluginTitle(item), pluginAuthor(item), pluginDescription(item), item.short_desc,
+  ].map(String).join(' ')))) return items;
+  const { pinyin } = await import('pinyin-pro');
+  return items.map((item) => {
+    const text = [
+      pluginTitle(item), pluginId(item), pluginAuthor(item), pluginDescription(item), item.short_desc,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+    ].map(String).join(' ');
+    if (!/\p{Unified_Ideograph}/u.test(text)) return item;
+    return {
+      ...item,
+      search_initials: pinyin(text, { pattern: 'first', toneType: 'none' }).replace(/\s+/g, '').toLowerCase(),
+      search_pinyin: pinyin(text, { toneType: 'none' }).replace(/\s+/g, '').toLowerCase(),
+    };
+  });
 }
 
 export function categoryValue(item: JsonObject) {
   return String(item.category || objectList(item.categories, ['items'])[0]?.name || 'other');
+}
+
+export function marketPluginDisplayName(item: JsonObject, showFullName = false) {
+  const displayName = String(item.display_name || '').trim();
+  if (displayName) return displayName;
+  const name = pluginTitle(item);
+  if (showFullName) return name;
+  return name.replace(/^astrbot[_-]plugin[_-]/i, '').replace(/^astrbot[_-]/i, '');
+}
+
+export function normalizeMarketCategory(value: unknown) {
+  return String(value || 'other').trim().toLowerCase().replace(/[\s-]+/g, '_') || 'other';
+}
+
+export function marketCategoryCounts(items: JsonObject[]) {
+  const counts = new Map<string, number>([['all', items.length]]);
+  items.forEach((item) => {
+    const category = normalizeMarketCategory(categoryValue(item));
+    counts.set(category, (counts.get(category) || 0) + 1);
+  });
+  return counts;
+}
+
+export function sortMarketPlugins(items: JsonObject[], sort: 'default' | 'stars' | 'author' | 'updated', order: 'asc' | 'desc') {
+  const direction = order === 'desc' ? -1 : 1;
+  const plugins = [...items];
+  if (sort === 'default') return [...plugins.filter((item) => Boolean(item.pinned)), ...plugins.filter((item) => !item.pinned)];
+  return plugins.sort((left, right) => {
+    if (sort === 'stars') return (Number(left.stars || 0) - Number(right.stars || 0)) * direction;
+    if (sort === 'updated') return (new Date(String(left.updated_at || 0)).getTime() - new Date(String(right.updated_at || 0)).getTime()) * direction;
+    return pluginAuthor(left).localeCompare(pluginAuthor(right), undefined, { sensitivity: 'base' }) * direction;
+  });
+}
+
+export function markInstalledMarketPlugins(market: JsonObject[], installed: JsonObject[], registryUrl: string) {
+  const registry = normalizePluginUrl(registryUrl);
+  const identifiers = new Map<string, JsonObject>();
+  const repos = new Map<string, JsonObject>();
+  const names = new Map<string, JsonObject>();
+  installed.forEach((item) => {
+    const source = isObject(item.install_source) ? item.install_source : {};
+    if (source.install_method === 'market' && normalizePluginUrl(source.registry_url) === registry && source.market_plugin_id) identifiers.set(String(source.market_plugin_id), item);
+    const repo = normalizePluginUrl(item.repo || source.repo);
+    if (repo) repos.set(repo, item);
+    else names.set(String(item.marketplace_name || pluginId(item)).trim().toLowerCase(), item);
+  });
+  const marked = market.map((item) => {
+    const repo = normalizePluginUrl(item.repo || item.repo_url);
+    const match = identifiers.get(String(item.market_plugin_id || '')) || (repo ? repos.get(repo) : undefined) || names.get(pluginId(item).toLowerCase());
+    return {
+      ...item,
+      astrbot_version: item.astrbot_version || match?.astrbot_version,
+      installed: Boolean(match),
+      support_platforms: Array.isArray(item.support_platforms) && item.support_platforms.length ? item.support_platforms : match?.support_platforms,
+    };
+  });
+  return [...marked.filter((item) => !item.installed), ...marked.filter((item) => item.installed)];
 }
