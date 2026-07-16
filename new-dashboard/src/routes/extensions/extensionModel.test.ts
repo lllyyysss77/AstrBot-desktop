@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterPlugins, marketPluginList, marketPluginTotal, normalizePluginUrl, pluginAuthor, pluginId, pluginInstallUrl, pluginPages } from './extensionModel';
+import { filterPlugins, localizedPluginConfigText, localizedPluginDescription, localizedPluginTitle, markdownContent, marketPluginList, marketPluginTotal, normalizePluginUrl, pluginAuthor, pluginId, pluginInstallUrl, pluginPages } from './extensionModel';
 
 describe('extension model helpers', () => {
   it('normalizes plugin identity and repository URLs', () => {
@@ -15,6 +15,18 @@ describe('extension model helpers', () => {
 
   it('searches across title, id, author and description', () => {
     expect(filterPlugins([{ name: 'weather', author: 'Alice', desc: 'Forecast' }], 'alice')).toHaveLength(1);
+  });
+
+  it('uses plugin locale metadata and unwraps README content', () => {
+    const plugin = {
+      name: 'weather',
+      desc: 'Forecast',
+      i18n: { 'zh-CN': { metadata: { display_name: '天气', desc: '天气预报' } } },
+    };
+    expect(localizedPluginTitle(plugin, 'zh-CN')).toBe('天气');
+    expect(localizedPluginDescription(plugin, 'zh_CN')).toBe('天气预报');
+    expect(localizedPluginConfigText({ 'zh-CN': { config: { weather: { city: { description: '城市' } } } } }, 'zh-CN', 'weather.city', 'description', 'City')).toBe('城市');
+    expect(markdownContent({ content: '# README' })).toBe('# README');
   });
 
   it('normalizes the keyed marketplace response used by the legacy dashboard', () => {

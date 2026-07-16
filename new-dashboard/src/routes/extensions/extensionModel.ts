@@ -12,6 +12,42 @@ export function pluginDescription(item: JsonObject) {
   return String(item.desc || item.description || '');
 }
 
+function nestedText(source: unknown, path: string) {
+  if (!isObject(source)) return '';
+  let current: unknown = source;
+  for (const key of path.split('.')) {
+    if (!isObject(current)) return '';
+    current = current[key];
+  }
+  return typeof current === 'string' ? current : '';
+}
+
+function pluginLocaleData(item: JsonObject, language: string) {
+  if (!isObject(item.i18n)) return undefined;
+  const normalized = language.replace('_', '-');
+  const short = normalized.split('-')[0];
+  const candidates = [normalized, short].map((value) => value.toLowerCase());
+  return Object.entries(item.i18n).find(([key]) => candidates.includes(key.replace('_', '-').toLowerCase()))?.[1];
+}
+
+export function localizedPluginTitle(item: JsonObject, language: string) {
+  return nestedText(pluginLocaleData(item, language), 'metadata.display_name') || pluginTitle(item);
+}
+
+export function localizedPluginDescription(item: JsonObject, language: string) {
+  return nestedText(pluginLocaleData(item, language), 'metadata.desc') || pluginDescription(item);
+}
+
+export function localizedPluginConfigText(i18n: unknown, language: string, path: string, field: 'description' | 'hint', fallback = '') {
+  return nestedText(pluginLocaleData({ i18n }, language), `config.${path}.${field}`) || fallback;
+}
+
+export function markdownContent(value: unknown) {
+  if (typeof value === 'string') return value;
+  if (!isObject(value)) return '';
+  return typeof value.content === 'string' ? value.content : '';
+}
+
 export function pluginAuthor(item: JsonObject) {
   const author = item.author;
   if (Array.isArray(author)) return author.join(', ');
