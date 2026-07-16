@@ -144,7 +144,8 @@
     "noProjects": "No projects",
     "confirmDelete": "Are you sure you want to delete project \"{title}\"? Conversations in this project will not be deleted.",
     "deleteFailed": "Failed to delete project. Please try again.",
-    "saveFailed": "Failed to save project. Please try again."
+    "saveFailed": "Failed to save project. Please try again.",
+    "loadFailed": "Failed to load project conversations. Please try again."
   },
   "time": {
     "today": "Today",

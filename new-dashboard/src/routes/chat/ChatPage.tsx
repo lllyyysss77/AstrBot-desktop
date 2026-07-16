@@ -9,6 +9,7 @@ import {
   deleteChatSession,
   getChatSession,
   listChatConfigs,
+  listChatProjectSessions,
   listChatProjects,
   listChatSessions,
   listProviders,
@@ -60,6 +61,16 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [messages, setMessages] = useState<ChatRecord[]>([]);
   const [configs, setConfigs] = useState<JsonObject[]>([]);
   const [projects, setProjects] = useState<JsonObject[]>([]);
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem('chat.projectExpandedIds') || '[]');
+      return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item)) : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [projectSessions, setProjectSessions] = useState<Record<string, ChatSession[]>>({});
+  const [loadingProjectIds, setLoadingProjectIds] = useState<Set<string>>(new Set());
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<JsonObject | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState('');
@@ -160,6 +171,23 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   }, []);
 
+  const loadProjectSessions = useCallback(async (projectId: string) => {
+    setLoadingProjectIds((current) => new Set(current).add(projectId));
+    try {
+      const data = unwrap<unknown>(await listChatProjectSessions({ path: { project_id: projectId } }));
+      setProjectSessions((current) => ({ ...current, [projectId]: sessionList(data) }));
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('features.chat.project.loadFailed')));
+      setProjectSessions((current) => ({ ...current, [projectId]: [] }));
+    } finally {
+      setLoadingProjectIds((current) => {
+        const next = new Set(current);
+        next.delete(projectId);
+        return next;
+      });
+    }
+  }, [t]);
+
   const loadProviders = useCallback(async () => {
     setProvidersLoading(true);
     try {
@@ -208,6 +236,14 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       .then((response) => setConfigs(objectList(unwrap(response), ['configs', 'items'])))
       .catch(() => undefined);
   }, [loadProjects, loadProviders, loadSessions]);
+  useEffect(() => {
+    const validIds = new Set(projects.map((project) => recordId(project, 'project_id', 'id')).filter(Boolean));
+    expandedProjectIds.forEach((projectId) => {
+      if (validIds.has(projectId) && !projectSessions[projectId] && !loadingProjectIds.has(projectId)) {
+        void loadProjectSessions(projectId);
+      }
+    });
+  }, [expandedProjectIds, loadProjectSessions, loadingProjectIds, projectSessions, projects]);
 
   useEffect(() => {
     if (pendingLocalSessionRef.current === conversationId) {
@@ -358,6 +394,17 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     try {
       await deleteChatProject({ path: { project_id: projectId } });
       setProjects((items) => items.filter((item) => recordId(item, 'project_id', 'id') !== projectId));
+      setProjectSessions((current) => {
+        const next = { ...current };
+        delete next[projectId];
+        return next;
+      });
+      setExpandedProjectIds((current) => {
+        const next = new Set(current);
+        next.delete(projectId);
+        localStorage.setItem('chat.projectExpandedIds', JSON.stringify([...next]));
+        return next;
+      });
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.chat.project.deleteFailed')));
     } finally {
@@ -375,6 +422,17 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     setEditingProject(project);
     setProjectError('');
     setProjectDialogOpen(true);
+  };
+
+  const toggleProject = (projectId: string) => {
+    if (!projectId) return;
+    setExpandedProjectIds((current) => {
+      const next = new Set(current);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      localStorage.setItem('chat.projectExpandedIds', JSON.stringify([...next]));
+      return next;
+    });
   };
 
   const selectProvider = (item: ProviderConfig) => {
@@ -668,16 +726,46 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           <div className="chat-section-header"><span>{t('features.chat.project.title')}</span><button aria-label={t('features.chat.project.create')} onClick={openCreateProject} title={t('features.chat.project.create')} type="button"><PlusIcon /></button></div>
           {projects.map((project, index) => {
             const projectId = recordId(project, 'project_id', 'id');
-            return <div className="chat-project-row" key={projectId || `project-${index}`}>
-              <span>{String(project.emoji || '📁')}</span>
-              <span className="chat-project-row__title">
-                <strong>{String(project.title || t('features.chat.project.title'))}</strong>
-                <MdiIcon name="mdi-chevron-right" />
-              </span>
-              <span className="chat-project-row__actions">
-                <button aria-label={t('features.chat.project.edit')} onClick={() => openEditProject(project)} title={t('features.chat.project.edit')} type="button"><PencilIcon /></button>
-                <button aria-label={t('core.common.delete')} disabled={!projectId || deletingProjectId === projectId} onClick={() => void removeProject(project)} title={t('core.common.delete')} type="button"><TrashIcon /></button>
-              </span>
+            const expanded = expandedProjectIds.has(projectId);
+            return <div className="chat-project-group" key={projectId || `project-${index}`}>
+              <div
+                aria-expanded={expanded}
+                className="chat-project-row"
+                onClick={() => toggleProject(projectId)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleProject(projectId);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <span>{String(project.emoji || '📁')}</span>
+                <span className="chat-project-row__title">
+                  <strong>{String(project.title || t('features.chat.project.title'))}</strong>
+                  <MdiIcon name={expanded ? 'mdi-chevron-down' : 'mdi-chevron-right'} />
+                </span>
+                <span className="chat-project-row__actions" onClick={(event) => event.stopPropagation()}>
+                  <button aria-label={t('features.chat.project.edit')} onClick={() => openEditProject(project)} title={t('features.chat.project.edit')} type="button"><PencilIcon /></button>
+                  <button aria-label={t('core.common.delete')} disabled={!projectId || deletingProjectId === projectId} onClick={() => void removeProject(project)} title={t('core.common.delete')} type="button"><TrashIcon /></button>
+                </span>
+              </div>
+              {expanded && <div className="chat-project-session-list">
+                {loadingProjectIds.has(projectId)
+                  ? <div className="chat-project-session-empty">{t('features.chat.project.loadingSessions')}</div>
+                  : projectSessions[projectId]?.length
+                    ? projectSessions[projectId].map((session) => <button
+                        className={session.session_id === conversationId ? 'is-active' : ''}
+                        key={session.session_id}
+                        onClick={() => {
+                          navigate(`${basePath}/${encodeURIComponent(session.session_id)}`);
+                          setSidebarOpen(false);
+                        }}
+                        type="button"
+                      >{session.display_name?.trim() || t('features.chat.conversation.newConversation')}</button>)
+                    : <div className="chat-project-session-empty">{t('features.chat.project.noSessions')}</div>}
+              </div>}
             </div>;
           })}
         </section>
