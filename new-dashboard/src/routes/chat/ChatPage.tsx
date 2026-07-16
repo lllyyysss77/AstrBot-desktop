@@ -274,13 +274,19 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const toggleTheme = () => setThemeMode(isDark ? 'light' : 'dark');
 
   const removeSession = async (session: ChatSession) => {
-    if (!await confirmAction({ danger: true, title: 'Delete conversation', message: `Delete ${session.display_name || session.session_id}?` })) return;
+    const name = session.display_name || session.session_id;
+    if (!await confirmAction({
+      confirmLabel: t('features.chat.batch.delete'),
+      danger: true,
+      message: t('features.chat.conversation.confirmDelete', { name }),
+      title: t('features.chat.actions.deleteChat'),
+    })) return;
     try {
       await deleteChatSession({ path: { session_id: session.session_id } });
       if (conversationId === session.session_id) newChat();
       await loadSessions();
     } catch (cause) {
-      toast.error(errorMessage(cause, 'Failed to delete conversation.'));
+      toast.error(errorMessage(cause, t('features.chat.batch.requestFailed')));
     }
   };
 

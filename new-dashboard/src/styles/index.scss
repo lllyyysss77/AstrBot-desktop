@@ -2701,6 +2701,7 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 
 .headless-dialog__overlay {
   position: fixed;
+  z-index: 1000;
   inset: 0;
   background: rgb(0 0 0 / 45%);
 }
@@ -2710,6 +2711,7 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 
 .headless-dialog__content {
   position: fixed;
+  z-index: 1001;
   top: 50%;
   left: 50%;
   width: min(560px, calc(100vw - 32px));
