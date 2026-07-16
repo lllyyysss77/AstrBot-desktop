@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -17,6 +18,79 @@ const emojiGroups = [
   ['objects', ['💡', '🔬', '🔭', '🏆', '🎯', '🎓', '🔑', '🔒', '🛠️', '⚙️']],
   ['symbols', ['❤️', '🧡', '💛', '💚', '💙', '💜', '⭐', '✨', '⚡', '🔥']],
 ] as const;
+
+type ProviderSelectProps = {
+  disabled?: boolean;
+  emptyLabel?: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  providers: JsonObject[];
+  subtitle: (provider: JsonObject) => string;
+  title: (provider: JsonObject) => string;
+  value: string;
+};
+
+function ProviderSelect({ disabled, emptyLabel, onChange, placeholder, providers, subtitle, title, value }: ProviderSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const selected = providers.find((provider) => String(provider.id) === value);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const positionMenu = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setMenuStyle({ left: rect.left, top: rect.bottom + 4, width: rect.width });
+    };
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    };
+    positionMenu();
+    window.addEventListener('resize', positionMenu);
+    window.addEventListener('scroll', positionMenu, true);
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    return () => {
+      window.removeEventListener('resize', positionMenu);
+      window.removeEventListener('scroll', positionMenu, true);
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+    };
+  }, [open]);
+
+  const choose = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+  };
+
+  return <>
+    <button
+      aria-expanded={open}
+      className={`knowledge-provider-select__trigger${open ? ' is-open' : ''}`}
+      disabled={disabled}
+      onClick={() => setOpen((current) => !current)}
+      ref={triggerRef}
+      type="button"
+    >
+      <span>
+        <strong>{selected ? title(selected) : (value === '' && emptyLabel ? emptyLabel : placeholder)}</strong>
+        {selected && <small>{subtitle(selected)}</small>}
+      </span>
+      <MdiIcon name="mdi-chevron-down" />
+    </button>
+    {open && typeof document !== 'undefined' && createPortal(
+      <div className="knowledge-provider-select__menu" ref={menuRef} role="listbox" style={menuStyle}>
+        {emptyLabel && <button aria-selected={!value} className={!value ? 'is-selected' : ''} onClick={() => choose('')} role="option" type="button"><strong>{emptyLabel}</strong></button>}
+        {providers.map((provider) => {
+          const providerId = String(provider.id);
+          return <button aria-selected={providerId === value} className={providerId === value ? 'is-selected' : ''} key={providerId} onClick={() => choose(providerId)} role="option" type="button"><strong>{title(provider)}</strong><small>{subtitle(provider)}</small></button>;
+        })}
+      </div>,
+      document.body,
+    )}
+  </>;
+}
 
 export default function KnowledgeBaseListPage() {
   const { t } = useTranslation();
@@ -87,18 +161,18 @@ export default function KnowledgeBaseListPage() {
     </article>; })}</section>
     {!loading && !items.length && <div className="knowledge-empty"><MdiIcon name="mdi-book-open-page-variant" /><h2>{k('list.empty')}</h2><button className="button--primary" onClick={() => open()} type="button"><MdiIcon name="mdi-plus" />{k('list.create')}</button></div>}
     {total > 20 && <div className="pagination"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">‹</button><span>{page} / {Math.ceil(total / 20)}</span><button disabled={page * 20 >= total} onClick={() => setPage((value) => value + 1)} type="button">›</button></div>}
-    <div className="knowledge-fab-stack">
+    {typeof document !== 'undefined' && createPortal(<div className="knowledge-fab-stack">
       <button aria-label={k('list.refresh')} className="knowledge-fab" disabled={loading} onClick={() => void load()} title={k('list.refresh')} type="button"><MdiIcon className={loading ? 'mdi-spin' : ''} name="mdi-refresh" /></button>
       <button aria-label={k('list.create')} className="knowledge-fab" onClick={() => open()} title={k('list.create')} type="button"><MdiIcon name="mdi-plus" /></button>
-    </div>
+    </div>, document.body)}
     <Dialog onOpenChange={(openValue) => !openValue && close()} open={editing !== null} title={knowledgeBaseId(editing ?? {}) ? k('edit.title') : k('create.title')}>
       <DialogClose asChild><button aria-label={t('core.common.close')} className="knowledge-form__close" type="button"><MdiIcon name="mdi-close" /></button></DialogClose>
       <div className="knowledge-form">
         <div className="knowledge-form__emoji"><button className="knowledge-emoji-button" onClick={() => setEmojiOpen(true)} title={k('create.emojiLabel')} type="button">{form.emoji}</button><small>{k('create.emojiLabel')}</small></div>
         <label>{k('create.nameLabel')}<input autoFocus onChange={(event) => setForm({ ...form, kb_name: event.target.value })} placeholder={k('create.namePlaceholder')} value={form.kb_name} /><small>{k('create.nameHint')}</small></label>
         <label>{k('create.descriptionLabel')}<textarea onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder={k('create.descriptionPlaceholder')} rows={3} value={form.description} /></label>
-        <label>{k('create.embeddingModelLabel')}<select disabled={Boolean(knowledgeBaseId(editing ?? {}))} onChange={(event) => setForm({ ...form, embedding_provider_id: event.target.value })} value={form.embedding_provider_id}><option disabled value="">{k('create.embeddingModelPlaceholder')}</option>{embeddingProviders.map((provider) => <option key={String(provider.id)} value={String(provider.id)}>{String(provider.embedding_model || provider.model || provider.id)}</option>)}</select><small>{k('create.embeddingModelHint')}</small></label>
-        <label>{k('create.rerankModelLabel')}<select onChange={(event) => setForm({ ...form, rerank_provider_id: event.target.value })} value={form.rerank_provider_id}><option value="">{k('create.noRerankModel')}</option>{rerankProviders.map((provider) => <option key={String(provider.id)} value={String(provider.id)}>{String(provider.rerank_model || provider.model || provider.id)}</option>)}</select></label>
+        <label>{k('create.embeddingModelLabel')}<ProviderSelect disabled={Boolean(knowledgeBaseId(editing ?? {}))} onChange={(embedding_provider_id) => setForm({ ...form, embedding_provider_id })} placeholder={k('create.embeddingModelPlaceholder')} providers={embeddingProviders} subtitle={(provider) => k('create.providerInfo', { id: String(provider.id), dimensions: provider.embedding_dimensions || 'N/A' })} title={(provider) => String(provider.embedding_model || provider.model || provider.id)} value={form.embedding_provider_id} /><small>{k('create.embeddingModelHint')}</small></label>
+        <label>{k('create.rerankModelLabel')}<ProviderSelect emptyLabel={k('create.noRerankModel')} onChange={(rerank_provider_id) => setForm({ ...form, rerank_provider_id })} placeholder={k('create.noRerankModel')} providers={rerankProviders} subtitle={(provider) => k('create.rerankProviderInfo', { id: String(provider.id) })} title={(provider) => String(provider.rerank_model || provider.model || provider.id)} value={form.rerank_provider_id} /></label>
         <div className="dialog-actions"><DialogClose asChild><button type="button">{k('create.cancel')}</button></DialogClose><button className="button--primary-soft" disabled={saving} onClick={() => void save()} type="button">{saving ? k('create.saving') : k(knowledgeBaseId(editing ?? {}) ? 'edit.submit' : 'create.submit')}</button></div>
       </div>
     </Dialog>

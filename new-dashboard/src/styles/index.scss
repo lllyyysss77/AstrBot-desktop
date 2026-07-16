@@ -2592,17 +2592,33 @@ textarea {
 .knowledge-form label > small { color: color-mix(in srgb, var(--astrbot-text) 55%, transparent); font-size: 11px; font-weight: 400; line-height: 1.45; }
 .knowledge-form input,
 .knowledge-form textarea,
-.knowledge-form select,
 .knowledge-url-field input,
 .knowledge-settings input,
 .knowledge-settings select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: var(--astrbot-text); }
-.knowledge-form select:disabled { cursor: not-allowed; opacity: .68; }
+.knowledge-provider-select__trigger { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: var(--astrbot-text); cursor: pointer; text-align: left; }
+.knowledge-provider-select__trigger > span { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.knowledge-provider-select__trigger strong { overflow-wrap: anywhere; font-size: 13px; }
+.knowledge-provider-select__trigger small { overflow-wrap: anywhere; color: color-mix(in srgb, var(--astrbot-text) 55%, transparent); font-size: 11px; font-weight: 400; }
+.knowledge-provider-select__trigger > .mdi { flex: 0 0 auto; font-size: 19px; transition: transform .16s ease; }
+.knowledge-provider-select__trigger.is-open { border-color: var(--astrbot-primary); box-shadow: 0 0 0 1px var(--astrbot-primary); }
+.knowledge-provider-select__trigger.is-open > .mdi { transform: rotate(180deg); }
+.knowledge-provider-select__trigger:disabled { cursor: not-allowed; opacity: .68; }
+.knowledge-provider-select__menu { position: fixed; z-index: 1200; display: grid; max-height: min(320px, 45vh); overflow-y: auto; border: 1px solid var(--astrbot-border); border-radius: 4px; background: var(--astrbot-surface); box-shadow: 0 5px 12px rgb(0 0 0 / 18%); }
+.knowledge-provider-select__menu button { display: grid; width: 100%; min-height: 52px; align-content: center; gap: 2px; padding: 8px 14px; border: 0; background: transparent; color: var(--astrbot-text); cursor: pointer; text-align: left; }
+.knowledge-provider-select__menu button:hover { background: var(--astrbot-hover); }
+.knowledge-provider-select__menu button.is-selected { background: color-mix(in srgb, var(--astrbot-primary) 12%, var(--astrbot-surface)); }
+.knowledge-provider-select__menu strong { overflow-wrap: anywhere; font-size: 14px; }
+.knowledge-provider-select__menu small { overflow-wrap: anywhere; color: color-mix(in srgb, var(--astrbot-text) 55%, transparent); font-size: 12px; font-weight: 400; }
 .knowledge-form__emoji { display: grid; justify-items: center; gap: 8px; margin-bottom: 2px; }
 .knowledge-form__emoji > small { color: color-mix(in srgb, var(--astrbot-text) 55%, transparent); }
 .knowledge-emoji-button { min-width: 74px; height: 74px; padding: 0 16px; border: 0; border-radius: 12px; background: color-mix(in srgb, var(--astrbot-primary) 5%, var(--astrbot-surface)); cursor: pointer; font-size: 50px; transition: background-color .2s ease, transform .2s ease; }
 .knowledge-emoji-button:hover { background: color-mix(in srgb, var(--astrbot-primary) 10%, var(--astrbot-surface)); transform: scale(1.08); }
 .knowledge-form .dialog-actions { margin: 4px -24px -24px; padding: 16px 24px; border-top: 1px solid var(--astrbot-border); }
-.knowledge-form .button--primary-soft { border: 0; background: color-mix(in srgb, var(--astrbot-primary) 12%, var(--astrbot-surface)); color: var(--astrbot-primary); }
+.knowledge-form .dialog-actions > button { min-height: 38px; padding: 0 16px; border: 0; border-radius: 8px; background: transparent; color: var(--astrbot-text); cursor: pointer; font-size: 14px; }
+.knowledge-form .dialog-actions > button:hover { background: var(--astrbot-hover); }
+.knowledge-form .dialog-actions > .button--primary-soft { background: color-mix(in srgb, var(--astrbot-primary) 12%, var(--astrbot-surface)); color: var(--astrbot-primary); }
+.knowledge-form .dialog-actions > .button--primary-soft:hover { background: color-mix(in srgb, var(--astrbot-primary) 18%, var(--astrbot-surface)); }
+.knowledge-form .dialog-actions > button:disabled { cursor: not-allowed; opacity: .55; }
 .knowledge-fab-stack { position: fixed; z-index: 30; right: 52px; bottom: 52px; display: flex; align-items: center; flex-direction: column; gap: 16px; }
 .knowledge-fab { display: grid; width: 56px; height: 56px; place-items: center; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--astrbot-primary) 72%, #17202a); color: #fff; cursor: pointer; font-size: 24px; box-shadow: 0 4px 6px rgb(0 0 0 / 10%); transition: box-shadow .3s ease, transform .3s ease; }
 .knowledge-fab:hover { box-shadow: 0 12px 20px color-mix(in srgb, var(--astrbot-primary) 40%, transparent); transform: translateY(-4px) scale(1.05); }
