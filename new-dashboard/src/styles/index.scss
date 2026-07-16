@@ -1086,6 +1086,7 @@ textarea {
 .platform-card { position: relative; display: flex; min-width: 0; min-height: 220px; height: 100%; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 4px; border: 1px solid var(--astrbot-border); border-radius: 18px; background: var(--astrbot-surface); transition: background-color .16s ease, transform .3s ease; }
 .platform-card:hover { background: color-mix(in srgb, var(--astrbot-text) 4%, var(--astrbot-surface)); transform: translateY(-2px); }
 .platform-card__watermark { position: absolute; right: 16px; bottom: 16px; color: var(--astrbot-text); font-size: 104px; opacity: .2; pointer-events: none; }
+.platform-card__watermark img { display: block; width: 104px; height: 104px; object-fit: contain; }
 .platform-card > header { position: relative; min-width: 0; justify-content: space-between; gap: 12px; padding: 12px 12px 4px; }
 .platform-card h2 { min-width: 0; margin: 0; overflow: hidden; font-size: 24px; text-overflow: ellipsis; white-space: nowrap; }
 .platform-card__badges { position: relative; display: flex; min-height: 44px; flex-wrap: wrap; align-content: flex-start; gap: 6px; padding: 12px; }
@@ -1118,7 +1119,29 @@ textarea {
 .platform-select__menu > button:hover,
 .platform-select__menu > button.is-selected { background: var(--astrbot-hover); }
 .platform-select__menu > button > .mdi:last-child { color: var(--astrbot-primary); }
+.platform-select__menu > button > img { width: 30px; height: 30px; object-fit: contain; }
 .platform-tutorial { width: max-content; gap: 6px; margin-top: 12px; padding: 7px 11px; border-radius: 8px; background: color-mix(in srgb, var(--astrbot-primary) 10%, transparent); color: var(--astrbot-primary); font-size: 13px; text-decoration: none; }
+.platform-creation-mode { display: grid; gap: 11px; margin-top: 18px; }
+.platform-creation-mode > strong { font-size: 14px; }
+.platform-creation-mode > label { display: flex; align-items: center; gap: 9px; font-size: 15px; }
+.platform-creation-mode input[type='radio'] { width: 20px; height: 20px; accent-color: var(--astrbot-text); }
+.platform-registration-inline { display: grid; width: min(340px, 100%); gap: 13px; margin-top: 16px; }
+.platform-registration-inline > label { display: grid; gap: 5px; font-size: 13px; font-weight: 600; }
+.platform-registration-inline > label input { min-height: 42px; padding: 8px 11px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: var(--astrbot-text); }
+.platform-registration-inline > label input.is-invalid { border-color: var(--astrbot-error); }
+.platform-registration { display: grid; justify-items: start; gap: 8px; }
+.platform-registration > strong { color: color-mix(in srgb, var(--astrbot-text) 78%, transparent); font-size: 14px; }
+.platform-registration__qr { position: relative; display: grid; width: 190px; height: 190px; place-items: center; overflow: hidden; border: 1px solid var(--astrbot-border); border-radius: 9px; background: #fff; }
+.platform-registration__qr > img { display: block; width: 190px; height: 190px; object-fit: contain; }
+.platform-registration__qr > .is-spinning { color: var(--astrbot-primary); font-size: 32px; animation: app-bootstrap-spin .85s linear infinite; }
+.platform-registration__qr.is-created > img { filter: blur(2px); opacity: .32; }
+.platform-registration__qr > span { position: absolute; display: grid; width: 76px; height: 76px; place-items: center; border-radius: 50%; background: #2eaf62; color: #fff; font-size: 46px; }
+.platform-registration__status { display: flex; width: 190px; align-items: center; justify-content: center; gap: 5px; color: color-mix(in srgb, var(--astrbot-text) 68%, transparent); font-size: 13px; text-align: center; }
+.platform-registration__status.is-created { color: #25834b; }
+.platform-registration__status.is-error,
+.platform-registration__status.is-denied,
+.platform-registration__status.is-expired { color: var(--astrbot-error); }
+.platform-registration > p { width: 190px; margin: 0; color: var(--astrbot-error); font-size: 12px; text-align: center; word-break: break-word; }
 .platform-editor .dynamic-config > header { display: none; }
 .platform-editor__config { margin: 18px 0 0 40px; }
 .platform-editor__config .dynamic-config { padding: 0; border: 0; }
