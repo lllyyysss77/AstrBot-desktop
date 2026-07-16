@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   createPersona, createPersonaFolder, deletePersona, deletePersonaFolder, getPersonaTree,
-  listPersonaFolders, listPersonas, listSkills, listTools, movePersonaItem, updatePersona,
+  listMcpServers, listPersonaFolders, listPersonas, listSkills, listTools, movePersonaItem, updatePersona,
   updatePersonaFolder,
 } from '@/api/openapi';
 import { Dialog } from '@/components/headless/Dialog';
@@ -45,16 +45,107 @@ function FolderTree({ currentId, nodes, onDelete, onMove, onNavigate, onRename, 
   return <ul className="persona-tree">{render(nodes)}</ul>;
 }
 
-function ChoicePanel({ allLabel, description, items, label, onChange, specificLabel, value }: {
-  allLabel: string; description: string; items: JsonObject[]; label: string; specificLabel: string;
+function choiceName(item: JsonObject) {
+  return recordId(item, 'name', 'tool_name', 'skill_name', 'id');
+}
+
+function choiceDescription(item: JsonObject) {
+  return String(item.description || item.desc || '');
+}
+
+function isBuiltinTool(item: JsonObject) {
+  return item.origin === 'builtin' || item.readonly === true;
+}
+
+function mcpToolNames(server: JsonObject) {
+  if (!Array.isArray(server.tools)) return [];
+  return server.tools.map((item) => typeof item === 'string' ? item : (
+    item && typeof item === 'object' ? choiceName(item as JsonObject) : ''
+  )).filter(Boolean);
+}
+
+function ChoicePanel({ allLabel, description, items, kind, label, loading, mcpServers = [], onChange, specificLabel, value }: {
+  allLabel: string; description: string; items: JsonObject[]; kind: 'tools' | 'skills'; label: string;
+  loading: boolean; mcpServers?: JsonObject[]; specificLabel: string;
   onChange: (value: string[] | null) => void; value: string[] | null;
 }) {
-  const names = items.map((item) => recordId(item, 'name', 'tool_name', 'skill_name', 'id')).filter(Boolean);
-  return <fieldset className="persona-choice"><legend>{label}</legend><p>{description}</p>
-    <label className="persona-choice__mode"><input checked={value === null} onChange={() => onChange(null)} type="radio" />{allLabel}</label>
-    <label className="persona-choice__mode"><input checked={value !== null} onChange={() => onChange(value ?? [])} type="radio" />{specificLabel}</label>
-    {value !== null && <div className="persona-choice__list">{names.map((name) => <label key={name}><input checked={value.includes(name)} onChange={() => onChange(value.includes(name) ? value.filter((item) => item !== name) : [...value, name])} type="checkbox" /><span>{name}</span></label>)}</div>}
-  </fieldset>;
+  const { t } = useTranslation();
+  const k = (key: string) => t(`features.persona.${key}`);
+  const [expanded, setExpanded] = useState(true);
+  const [search, setSearch] = useState('');
+  const selected = value ?? [];
+  const normalizedItems = useMemo(() => items.map((item) => ({ item, name: choiceName(item) })).filter((entry) => entry.name), [items]);
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return normalizedItems;
+    return normalizedItems.filter(({ item, name }) => [name, choiceDescription(item), String(item.mcp_server_name || '')]
+      .some((text) => text.toLowerCase().includes(query)));
+  }, [normalizedItems, search]);
+  const toggle = (name: string, item?: JsonObject) => {
+    if (kind === 'tools' && item && isBuiltinTool(item)) return;
+    onChange(selected.includes(name) ? selected.filter((entry) => entry !== name) : [...selected, name]);
+  };
+  const toggleServer = (server: JsonObject) => {
+    const names = mcpToolNames(server);
+    if (!names.length) return;
+    const allSelected = names.every((name) => selected.includes(name));
+    onChange(allSelected ? selected.filter((name) => !names.includes(name)) : [...new Set([...selected, ...names])]);
+  };
+  const emptyAvailable = kind === 'tools' ? k('form.noToolsAvailable') : k('form.noSkillsAvailable');
+  const emptySearch = kind === 'tools' ? k('form.noToolsFound') : k('form.noSkillsFound');
+  const loadingLabel = kind === 'tools' ? k('form.loadingTools') : k('form.loadingSkills');
+  const selectedLabel = kind === 'tools' ? k('form.selectedTools') : k('form.selectedSkills');
+  const emptySelected = kind === 'tools' ? k('form.noToolsSelected') : k('form.noSkillsSelected');
+
+  return <section className="persona-choice">
+    <button aria-expanded={expanded} className="persona-choice__header" onClick={() => setExpanded((current) => !current)} type="button">
+      <span><MdiIcon name={kind === 'tools' ? 'mdi-tools' : 'mdi-lightning-bolt'} /><strong>{label}</strong>{value !== null && value.length > 0 && <small>{value.length}</small>}</span>
+      <MdiIcon name={expanded ? 'mdi-chevron-up' : 'mdi-chevron-down'} />
+    </button>
+    {expanded && <div className="persona-choice__body">
+      <p>{description}</p>
+      <div className="persona-choice__modes">
+        <label className="persona-choice__mode"><input checked={value === null} onChange={() => onChange(null)} type="radio" />{allLabel}</label>
+        <label className="persona-choice__mode"><input checked={value !== null} onChange={() => onChange(value ?? [])} type="radio" />{specificLabel}</label>
+      </div>
+      {value !== null && <div className="persona-choice__specific">
+        <label className="persona-choice__search"><MdiIcon name="mdi-magnify" /><input aria-label={kind === 'tools' ? k('form.searchTools') : k('form.searchSkills')} onChange={(event) => setSearch(event.target.value)} placeholder={kind === 'tools' ? k('form.searchTools') : k('form.searchSkills')} value={search} /></label>
+        {kind === 'tools' && mcpServers.length > 0 && <div className="persona-choice__servers">
+          <h4>{k('form.mcpServersQuickSelect')}</h4>
+          <div>{mcpServers.map((server, index) => {
+            const name = recordId(server, 'name', 'server_name', 'id') || `mcp-${index}`;
+            const names = mcpToolNames(server);
+            const active = names.length > 0 && names.every((toolName) => selected.includes(toolName));
+            return <button aria-pressed={active} disabled={!names.length} key={name} onClick={() => toggleServer(server)} type="button"><MdiIcon name="mdi-server" />{name}<small>{names.length}</small></button>;
+          })}</div>
+        </div>}
+        <div className={`persona-choice__list persona-choice__list--${kind}`}>
+          {loading && <div className="persona-choice__state"><MdiIcon className="mdi-spin" name="mdi-loading" /><span>{loadingLabel}</span></div>}
+          {!loading && filteredItems.map(({ item, name }) => {
+            const builtin = kind === 'tools' && isBuiltinTool(item);
+            return <label className={builtin ? 'is-readonly' : ''} key={name} title={builtin ? k('form.builtinToolDisabledHint') : undefined}>
+              <span className="persona-choice__checkbox">{!builtin && <input checked={selected.includes(name)} onChange={() => toggle(name, item)} type="checkbox" />}</span>
+              <span className="persona-choice__item">
+                <strong>{name}</strong>
+                {kind === 'tools' && Boolean(item.origin || item.origin_name) && <span className="persona-choice__origins">{Boolean(item.origin) && <small>{String(item.origin)}</small>}{Boolean(item.origin_name) && <small>{String(item.origin_name)}</small>}</span>}
+                {choiceDescription(item) && <span>{choiceDescription(item).length > 100 ? `${choiceDescription(item).slice(0, 100)}…` : choiceDescription(item)}</span>}
+              </span>
+            </label>;
+          })}
+          {!loading && normalizedItems.length === 0 && <div className="persona-choice__state"><MdiIcon name={kind === 'tools' ? 'mdi-tools' : 'mdi-lightning-bolt'} /><span>{emptyAvailable}</span></div>}
+          {!loading && normalizedItems.length > 0 && filteredItems.length === 0 && <div className="persona-choice__state"><MdiIcon name="mdi-magnify" /><span>{emptySearch}</span></div>}
+        </div>
+        <div className="persona-choice__selected">
+          <h4>{selectedLabel} <span>({selected.length})</span></h4>
+          {selected.length > 0 ? <div>{selected.map((name) => {
+            const item = normalizedItems.find((entry) => entry.name === name)?.item;
+            const builtin = kind === 'tools' && item && isBuiltinTool(item);
+            return <span key={name}>{name}{!builtin && <button aria-label={`${k('buttons.delete')} ${name}`} onClick={() => toggle(name, item)} type="button"><MdiIcon name="mdi-close" /></button>}</span>;
+          })}</div> : <p>{emptySelected}</p>}
+        </div>
+      </div>}
+    </div>}
+  </section>;
 }
 
 export default function PersonaPage() {
@@ -76,6 +167,9 @@ export default function PersonaPage() {
   const [moveDialog, setMoveDialog] = useState<MoveDialog>(null);
   const [tools, setTools] = useState<JsonObject[]>([]);
   const [skills, setSkills] = useState<JsonObject[]>([]);
+  const [mcpServers, setMcpServers] = useState<JsonObject[]>([]);
+  const [loadingTools, setLoadingTools] = useState(false);
+  const [loadingSkills, setLoadingSkills] = useState(false);
   const [importing, setImporting] = useState(false);
   const importInput = useRef<HTMLInputElement>(null);
 
@@ -95,11 +189,18 @@ export default function PersonaPage() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    void Promise.all([listTools(), listSkills()]).then(([toolResponse, skillResponse]) => {
-      setTools(objectList(responseData(toolResponse), ['tools', 'items']));
-      setSkills(objectList(responseData(skillResponse), ['skills', 'items']).filter((item) => item.active !== false));
-    }).catch(() => { setTools([]); setSkills([]); });
-  }, []);
+    if (editing === null) return;
+    setLoadingTools(true);
+    setLoadingSkills(true);
+    void Promise.allSettled([listTools(), listSkills(), listMcpServers()]).then(([toolResult, skillResult, mcpResult]) => {
+      setTools(toolResult.status === 'fulfilled' ? objectList(responseData(toolResult.value), ['tools', 'items', 'data']) : []);
+      setSkills(skillResult.status === 'fulfilled' ? objectList(responseData(skillResult.value), ['skills', 'items', 'data']).filter((item) => item.active !== false) : []);
+      setMcpServers(mcpResult.status === 'fulfilled' ? objectList(responseData(mcpResult.value), ['servers', 'items', 'data']) : []);
+    }).finally(() => {
+      setLoadingTools(false);
+      setLoadingSkills(false);
+    });
+  }, [editing]);
 
   const breadcrumbs = useMemo(() => findFolderPath(tree, currentFolderId), [tree, currentFolderId]);
   const currentFolderName = breadcrumbs.at(-1)?.name || k('form.rootFolder');
@@ -224,8 +325,8 @@ export default function PersonaPage() {
             <label>{k('form.customErrorMessage')}<textarea onChange={(event) => setForm({ ...form, custom_error_message: event.target.value })} rows={4} value={form.custom_error_message} /><small>{k('form.customErrorMessageHelp')}</small></label>
           </div>
           <div className="persona-form__options">
-            <ChoicePanel allLabel={k('form.allToolsAvailable')} description={k('form.toolsHelp')} items={tools} label={k('form.tools')} onChange={(value) => setForm({ ...form, tools: value })} specificLabel={l('selectSpecificTools')} value={form.tools} />
-            <ChoicePanel allLabel={k('form.allSkillsAvailable')} description={k('form.skillsHelp')} items={skills} label={k('form.skills')} onChange={(value) => setForm({ ...form, skills: value })} specificLabel={k('form.skillsSelectSpecific')} value={form.skills} />
+            <ChoicePanel allLabel={k('form.allToolsAvailable')} description={k('form.toolsHelp')} items={tools} kind="tools" label={k('form.tools')} loading={loadingTools} mcpServers={mcpServers} onChange={(value) => setForm({ ...form, tools: value })} specificLabel={l('selectSpecificTools')} value={form.tools} />
+            <ChoicePanel allLabel={k('form.allSkillsAvailable')} description={k('form.skillsHelp')} items={skills} kind="skills" label={k('form.skills')} loading={loadingSkills} onChange={(value) => setForm({ ...form, skills: value })} specificLabel={k('form.skillsSelectSpecific')} value={form.skills} />
             <section className="persona-dialog-pairs"><header><div><h3><MdiIcon name="mdi-chat" />{k('form.presetDialogs')}</h3><p>{k('form.presetDialogsHelp')}</p></div><button onClick={() => setForm({ ...form, begin_dialogs: [...form.begin_dialogs, '', ''] })} type="button"><MdiIcon name="mdi-plus" />{k('buttons.addDialogPair')}</button></header>{Array.from({ length: Math.ceil(form.begin_dialogs.length / 2) }, (_, index) => <div className="persona-dialog-pair" key={index}><label>{k('form.userMessage')}<textarea onChange={(event) => { const next = [...form.begin_dialogs]; next[index * 2] = event.target.value; setForm({ ...form, begin_dialogs: next }); }} rows={2} value={form.begin_dialogs[index * 2] || ''} /></label><label>{k('form.assistantMessage')}<textarea onChange={(event) => { const next = [...form.begin_dialogs]; next[index * 2 + 1] = event.target.value; setForm({ ...form, begin_dialogs: next }); }} rows={2} value={form.begin_dialogs[index * 2 + 1] || ''} /></label><button aria-label={k('buttons.delete')} onClick={() => setForm({ ...form, begin_dialogs: form.begin_dialogs.filter((_, itemIndex) => itemIndex !== index * 2 && itemIndex !== index * 2 + 1) })} type="button"><MdiIcon name="mdi-delete-outline" /></button></div>)}</section>
           </div>
         </div>
