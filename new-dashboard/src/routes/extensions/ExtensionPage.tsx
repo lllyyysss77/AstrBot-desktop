@@ -21,7 +21,7 @@ import {
 } from './extensionModel';
 
 type ExtensionTab = 'installed' | 'components' | 'mcp' | 'skills' | 'market';
-const validTabs: ExtensionTab[] = ['installed', 'components', 'mcp', 'skills', 'market'];
+const validTabs: ExtensionTab[] = ['installed', 'market', 'components', 'mcp', 'skills'];
 const PINNED_KEY = 'astrbot-extension-pinned';
 
 export default function ExtensionPage() {
