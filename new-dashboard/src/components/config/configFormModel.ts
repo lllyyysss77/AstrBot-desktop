@@ -56,6 +56,13 @@ export function matchesConfigCondition(root: ConfigRecord, metadata: ConfigItemM
   );
 }
 
+export function configItemsForValue(metadata: ConfigGroupMetadata, value: ConfigRecord) {
+  const inferred = inferConfigMetadata(value).items ?? {};
+  return Object.fromEntries(Object.keys(value)
+    .filter((key) => key !== 'hint')
+    .map((key) => [key, metadata.items?.[key] ?? inferred[key] ?? {}]));
+}
+
 export function inferConfigMetadata(value: ConfigRecord): ConfigGroupMetadata {
   return {
     type: 'object',

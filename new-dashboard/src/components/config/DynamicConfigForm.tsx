@@ -6,6 +6,7 @@ import { MdiIcon } from '@/components/icons/MdiIcon';
 import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 
 import {
+  configItemsForValue,
   getConfigValue,
   inferConfigMetadata,
   isConfigRecord,
@@ -101,7 +102,7 @@ function ConfigControl({ metadata, onChange, value }: { metadata: ConfigItemMeta
 
   if (metadata.options?.length) {
     const selectedIndex = metadata.options.findIndex((option) => Object.is(option, value));
-    return <select disabled={disabled} onChange={(event) => onChange(metadata.options?.[Number(event.target.value)])} value={selectedIndex < 0 ? '' : selectedIndex}><option disabled value="">—</option>{metadata.options.map((option, index) => <option key={String(option)} value={index}>{String(labels[index] ?? option)}</option>)}</select>;
+    return <select disabled={disabled} onChange={(event) => onChange(metadata.options?.[Number(event.target.value)])} value={selectedIndex < 0 ? '' : selectedIndex}><option disabled hidden value="" />{metadata.options.map((option, index) => <option key={String(option)} value={index}>{String(labels[index] ?? option)}</option>)}</select>;
   }
 
   if (type === 'int' || type === 'float') {
@@ -124,6 +125,7 @@ function ConfigControl({ metadata, onChange, value }: { metadata: ConfigItemMeta
 }
 
 type ConfigGroupProps = {
+  fieldsFromValue?: boolean;
   metadata: ConfigGroupMetadata;
   onChange: (value: ConfigRecord) => void;
   resolveText: TextResolver;
@@ -134,7 +136,7 @@ type ConfigGroupProps = {
   variant?: 'default' | 'settings';
 };
 
-export function ConfigGroup({ metadata, onChange, resolveText, search = '', title, translationPath, value, variant = 'default' }: ConfigGroupProps) {
+export function ConfigGroup({ fieldsFromValue = false, metadata, onChange, resolveText, search = '', title, translationPath, value, variant = 'default' }: ConfigGroupProps) {
   const { t } = useTranslation();
   const [showCollapsed, setShowCollapsed] = useState(false);
   const needle = search.trim().toLocaleLowerCase();
@@ -142,7 +144,8 @@ export function ConfigGroup({ metadata, onChange, resolveText, search = '', titl
   const groupHint = resolveText(translationPath, 'hint', metadata.hint);
   const groupMatchesSearch = needle && [metadata.description, metadata.hint, groupTitle, groupHint]
     .some((candidate) => String(candidate ?? '').toLocaleLowerCase().includes(needle));
-  const entries = Object.entries(metadata.items ?? {}).filter(([key, item]) => {
+  const itemMetadata = fieldsFromValue ? configItemsForValue(metadata, value) : metadata.items ?? {};
+  const entries = Object.entries(itemMetadata).filter(([key, item]) => {
     if (item.invisible || !matchesConfigCondition(value, item)) return false;
     if (!needle || groupMatchesSearch) return true;
     const path = `${translationPath}.${key}`;

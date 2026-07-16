@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  configItemsForValue,
   getConfigValue,
   inferConfigMetadata,
   matchesConfigCondition,
@@ -28,5 +29,16 @@ describe('configuration form model', () => {
     expect(metadata.items?.enabled.type).toBe('bool');
     expect(metadata.items?.retries.type).toBe('int');
     expect(metadata.items?.tags.type).toBe('list');
+  });
+
+  it('selects only metadata fields present in the active template', () => {
+    const selected = configItemsForValue({ items: {
+      appid: { type: 'string' },
+      secret: { type: 'string' },
+      satori_api_base: { type: 'string' },
+    } }, { id: 'default', appid: '', secret: '', hint: 'ignored' });
+
+    expect(Object.keys(selected)).toEqual(['id', 'appid', 'secret']);
+    expect(selected).not.toHaveProperty('satori_api_base');
   });
 });
