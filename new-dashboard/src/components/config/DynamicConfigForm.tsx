@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
+import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 
 import {
   getConfigValue,
@@ -164,7 +165,7 @@ export function ConfigGroup({ metadata, onChange, resolveText, search = '', titl
   };
 
   if (!entries.length) return null;
-  const form = <section className={`dynamic-config route-card dynamic-config--${variant}`}>{variant === 'default' && <header><h2>{groupTitle}</h2>{groupHint && <p>{groupHint}</p>}</header>}{visible.map(renderEntry)}{collapsed.length > 0 && <><button className="dynamic-config__more" onClick={() => setShowCollapsed((current) => !current)} type="button">{showCollapsed ? t('core.actions.collapse', 'Collapse') : t('features.config.sections.moreConfig', 'More settings')}</button>{showCollapsed && collapsed.map(renderEntry)}</>}</section>;
+  const form = <section className={`dynamic-config route-card dynamic-config--${variant}`}>{variant === 'default' && <header><h2>{groupTitle}</h2>{groupHint && <p>{groupHint}</p>}</header>}{visible.map(renderEntry)}{collapsed.length > 0 && <><button aria-expanded={showCollapsed} className="dynamic-config__more" onClick={() => setShowCollapsed((current) => !current)} type="button">{showCollapsed ? t('core.actions.collapse', 'Collapse') : t('features.config.sections.moreConfig', 'More settings')}</button><ExpandCollapse className="dynamic-config__collapsed" open={showCollapsed}>{collapsed.map(renderEntry)}</ExpandCollapse></>}</section>;
   if (variant === 'settings') return <div className="system-config-group"><h2 className="system-config-group__title">{groupTitle}</h2>{form}</div>;
   return form;
 }

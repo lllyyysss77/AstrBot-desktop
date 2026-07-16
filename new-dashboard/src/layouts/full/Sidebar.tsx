@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
 
 import { MdiIcon } from '@/components/icons/MdiIcon';
+import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_MAX_WIDTH,
@@ -38,13 +39,13 @@ function NavigationEntry({ item, mini }: { item: NavigationItem; mini: boolean }
         >
           <span className="sidebar-nav__icon"><MdiIcon name={item.icon} /></span>
           {!mini && <span>{t(item.title)}</span>}
-          {!mini && <MdiIcon className="sidebar-nav__chevron" name={open ? 'mdi-chevron-up' : 'mdi-chevron-down'} />}
+          {!mini && <MdiIcon className="sidebar-nav__chevron" name="mdi-chevron-down" />}
         </button>
-        {open && !mini && (
+        {!mini && <ExpandCollapse className="sidebar-nav__children-motion" open={open}>
           <ul className="sidebar-nav__children">
             {item.children.map((child) => <NavigationEntry item={child} key={child.title} mini={false} />)}
           </ul>
-        )}
+        </ExpandCollapse>}
       </li>
     );
   }

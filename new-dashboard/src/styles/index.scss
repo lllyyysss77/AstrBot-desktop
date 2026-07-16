@@ -319,7 +319,10 @@ textarea {
 .sidebar-nav__chevron {
   margin-left: auto;
   font-size: 18px;
+  transition: transform 0.2s ease;
 }
+
+.sidebar-nav__group-button[aria-expanded='true'] .sidebar-nav__chevron { transform: rotate(180deg); }
 
 .sidebar-nav__children {
   padding-left: 24px !important;
@@ -787,7 +790,8 @@ textarea {
   color: var(--astrbot-error);
 }
 
-.trace-record-row td { background: color-mix(in srgb, var(--astrbot-primary) 4%, var(--astrbot-surface)); }
+.trace-record-row td { padding-top: 0; padding-bottom: 0; background: color-mix(in srgb, var(--astrbot-primary) 4%, var(--astrbot-surface)); }
+.trace-record-row[data-state='open'] td { padding-top: 12px; padding-bottom: 12px; transition: padding 0.24s ease; }
 .trace-records { display: grid; gap: 8px; }
 .trace-record { display: grid; grid-template-columns: 190px 140px minmax(300px, 1fr); gap: 10px; }
 .trace-record pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -963,6 +967,8 @@ textarea {
 .subagent-card__actions > button { display: inline-flex; min-height: 34px; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: color-mix(in srgb, var(--astrbot-text) 70%, transparent); }
 .subagent-card__actions > button:hover { background: color-mix(in srgb, var(--astrbot-text) 6%, transparent); }
 .subagent-card__actions > button:last-child { display: grid; width: 34px; padding: 0; place-items: center; color: var(--astrbot-error); }
+.subagent-card__actions > button:first-child .mdi { transition: transform 0.2s ease; }
+.subagent-card__actions > button:first-child[aria-expanded='true'] .mdi { transform: rotate(180deg); }
 .subagent-card__editor { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 17px; padding-top: 17px; border-top: 1px solid var(--astrbot-border); }
 .subagent-card__editor > section { min-width: 0; padding: 16px; border: 1px solid var(--astrbot-border); border-radius: 10px; background: color-mix(in srgb, var(--astrbot-text) 1.5%, var(--astrbot-surface)); }
 .subagent-card__editor h3 { margin: 0 0 13px; font-size: 15px; }
@@ -1613,6 +1619,23 @@ textarea {
 .dynamic-list-dialog__items > div > button { width: 38px; flex: 0 0 auto; justify-content: center; padding: 0; color: var(--astrbot-error); }
 .dynamic-list-dialog__items > p { margin: 18px 0; color: color-mix(in srgb, var(--astrbot-text) 50%, transparent); text-align: center; }
 .dynamic-config__more { margin: 10px 20px; padding: 7px 0; border: 0; background: transparent; color: var(--astrbot-primary); cursor: pointer; }
+
+/* Vue's expand transition equivalent: the content stays mounted so closing animates too. */
+.expand-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.24s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease, visibility 0s linear 0.24s;
+  visibility: hidden;
+}
+.expand-collapse[data-state='open'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition: grid-template-rows 0.24s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease 0.04s, visibility 0s;
+  visibility: visible;
+}
+.expand-collapse__inner { min-height: 0; overflow: hidden; }
+.sidebar-nav__children-motion[data-state='open'] { margin-top: 2px; }
 
 .dynamic-switch { position: relative; display: inline-flex; width: 44px; height: 24px; cursor: pointer; }
 .dynamic-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
@@ -2682,6 +2705,9 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
   background: rgb(0 0 0 / 45%);
 }
 
+.headless-dialog__overlay[data-state='open'] { animation: motion-fade-in 0.2s ease-out both; }
+.headless-dialog__overlay[data-state='closed'] { animation: motion-fade-out 0.16s ease-in both; }
+
 .headless-dialog__content {
   position: fixed;
   top: 50%;
@@ -2696,6 +2722,9 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
   color: var(--astrbot-text);
   transform: translate(-50%, -50%);
 }
+
+.headless-dialog__content[data-state='open'] { animation: motion-dialog-in 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.headless-dialog__content[data-state='closed'] { animation: motion-dialog-out 0.16s ease-in both; }
 
 .headless-dialog__title {
   margin: 0;
@@ -3264,6 +3293,59 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 .onboarding-list select {
   width: min(240px, 100%);
   min-height: 44px;
+}
+
+/* Shared motion language ported from the Vue dashboard transitions. */
+.full-layout__page > :not(.chat-shell) { animation: motion-page-in 0.26s ease-out both; }
+.headless-menu__content,
+.headless-popover__content,
+.provider-source-add[open] > .provider-source-add__menu,
+.cron-action-menu[open] > div,
+.chat-settings-menu[open] > .chat-settings-menu__panel,
+.chat-model-menu[open] > .chat-model-menu__panel,
+.chat-composer-menu[open] > .chat-composer-menu__panel,
+.chat-regenerate-menu[open] > .chat-message-action-panel,
+.chat-message-stats[open] > .chat-stats-card {
+  transform-origin: top right;
+  animation: motion-menu-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.chat-settings-menu[open] > .chat-settings-menu__panel { transform-origin: bottom left; }
+.chat-model-menu[open] > .chat-model-menu__panel { transform-origin: top left; }
+.chat-settings-submenu { animation: motion-slide-left-in 0.18s ease-out both; }
+.onboarding-help[open] > :not(summary),
+.chat-message__body details[open] > :not(summary),
+.auth-version details[open] > :not(summary) { animation: motion-expand-content-in 0.2s ease-out both; }
+.sidebar { animation: motion-slide-right-in 0.22s ease-out both; }
+.sidebar-backdrop,
+.chat-sidebar-backdrop { animation: motion-fade-in 0.18s ease-out both; }
+.extension-section,
+.settings-section,
+.provider-type-panel,
+.extension-detail__info,
+.extension-config-editor--detail,
+.extension-markdown { animation: motion-content-in 0.22s ease-out both; }
+
+@keyframes motion-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes motion-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes motion-page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes motion-content-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes motion-menu-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes motion-slide-left-in { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes motion-slide-right-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes motion-expand-content-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes motion-dialog-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(0.985); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes motion-dialog-out { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(0.985); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
 }
 
 .about-page {

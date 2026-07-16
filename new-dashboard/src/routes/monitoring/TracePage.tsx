@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getTraceSettings, updateTraceSettings } from '@/api/openapi';
+import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 import { toast } from '@/stores/feedback';
 import { formatTimestamp, unwrapData } from './model';
 import { groupTraceEvents } from './traceModel';
@@ -50,7 +51,7 @@ export default function TracePage() {
 
 function FragmentEvent({ event, expanded, locale, toggle }: { event: ReturnType<typeof groupTraceEvents>[number]; expanded: boolean; locale: string; toggle: (span: string) => void }) {
   return <>
-    <tr><td>{formatTimestamp(event.firstTime, locale)}</td><td title={event.spanId}>{event.spanId.slice(0, 8)}</td><td>{event.umo || '—'}</td><td>{event.senderName || '—'}</td><td>{event.messageOutline || '—'}</td><td><button onClick={() => toggle(event.spanId)} type="button">{expanded ? 'Collapse' : 'Expand'}</button></td></tr>
-    {expanded && <tr className="trace-record-row"><td colSpan={6}><div className="trace-records">{event.records.map((record) => <div className="trace-record" key={record.key}><time>{formatTimestamp(record.time, locale)}</time><strong>{record.action}</strong><pre>{record.fields == null ? '' : JSON.stringify(record.fields, null, 2)}</pre></div>)}</div></td></tr>}
+    <tr><td>{formatTimestamp(event.firstTime, locale)}</td><td title={event.spanId}>{event.spanId.slice(0, 8)}</td><td>{event.umo || '—'}</td><td>{event.senderName || '—'}</td><td>{event.messageOutline || '—'}</td><td><button aria-expanded={expanded} onClick={() => toggle(event.spanId)} type="button">{expanded ? 'Collapse' : 'Expand'}</button></td></tr>
+    <tr className="trace-record-row" data-state={expanded ? 'open' : 'closed'}><td colSpan={6}><ExpandCollapse open={expanded}><div className="trace-records">{event.records.map((record) => <div className="trace-record" key={record.key}><time>{formatTimestamp(record.time, locale)}</time><strong>{record.action}</strong><pre>{record.fields == null ? '' : JSON.stringify(record.fields, null, 2)}</pre></div>)}</div></ExpandCollapse></td></tr>
   </>;
 }
