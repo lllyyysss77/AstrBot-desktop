@@ -1710,20 +1710,82 @@ textarea {
 .dynamic-object__preview { display: flex; min-width: 0; flex: 1; flex-wrap: wrap; gap: 5px; }
 .dynamic-object__preview span { max-width: 150px; overflow: hidden; padding: 3px 7px; border-radius: 6px; background: color-mix(in srgb, var(--astrbot-primary) 11%, transparent); color: var(--astrbot-primary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .dynamic-object__preview em { color: color-mix(in srgb, var(--astrbot-text) 48%, transparent); font-size: 12px; font-style: normal; }
-.dynamic-object-dialog { display: grid; gap: 10px; margin-top: 15px; }
-.dynamic-object-dialog textarea { width: 100%; min-height: 260px; resize: vertical; padding: 11px; border: 1px solid var(--astrbot-border); border-radius: 9px; background: var(--astrbot-surface); color: inherit; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.dynamic-object-dialog textarea[aria-invalid='true'] { border-color: var(--astrbot-error); }
-.dynamic-object-dialog > p { margin: 0; color: var(--astrbot-error); font-size: 12px; }
-.dynamic-list-dialog { display: grid; gap: 13px; margin-top: 15px; }
-.dynamic-list-dialog__add { display: flex; gap: 8px; }
-.dynamic-list-dialog__add input,
-.dynamic-list-dialog__items input { min-width: 0; flex: 1; padding: 8px 10px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: inherit; }
-.dynamic-list-dialog button { display: inline-flex; min-height: 36px; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: inherit; cursor: pointer; }
-.dynamic-list-dialog button:disabled { cursor: not-allowed; opacity: .5; }
-.dynamic-list-dialog__items { display: grid; max-height: 340px; gap: 7px; overflow: auto; }
-.dynamic-list-dialog__items > div { display: flex; gap: 6px; }
-.dynamic-list-dialog__items > div > button { width: 38px; flex: 0 0 auto; justify-content: center; padding: 0; color: var(--astrbot-error); }
-.dynamic-list-dialog__items > p { margin: 18px 0; color: color-mix(in srgb, var(--astrbot-text) 50%, transparent); text-align: center; }
+.headless-dialog__content:has(.dynamic-list-dialog),
+.headless-dialog__content:has(.dynamic-object-dialog),
+.headless-dialog__content:has(.dynamic-batch-dialog) { width: min(600px, calc(100vw - 32px)); padding: 22px 24px 18px; }
+.headless-dialog__content:has(.dynamic-list-dialog) > .headless-dialog__title,
+.headless-dialog__content:has(.dynamic-object-dialog) > .headless-dialog__title,
+.headless-dialog__content:has(.dynamic-batch-dialog) > .headless-dialog__title { font-size: 24px; font-weight: 760; }
+.dynamic-object-dialog,
+.dynamic-list-dialog,
+.dynamic-batch-dialog { display: grid; gap: 14px; margin-top: 18px; }
+.dynamic-object-dialog button,
+.dynamic-list-dialog button,
+.dynamic-batch-dialog button { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 5px; padding: 6px 11px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+.dynamic-object-dialog button:disabled,
+.dynamic-list-dialog button:disabled,
+.dynamic-batch-dialog button:disabled { cursor: not-allowed; opacity: .42; }
+.dynamic-editor-button--tonal,
+.dynamic-object-dialog .button--primary,
+.dynamic-list-dialog .button--primary,
+.dynamic-batch-dialog .button--primary { border: 0; background: color-mix(in srgb, var(--astrbot-primary) 12%, var(--astrbot-surface)); color: var(--astrbot-primary); }
+.dynamic-editor-button--tonal:hover,
+.dynamic-object-dialog .button--primary:hover,
+.dynamic-list-dialog .button--primary:hover,
+.dynamic-batch-dialog .button--primary:hover { background: color-mix(in srgb, var(--astrbot-primary) 18%, var(--astrbot-surface)); }
+.dynamic-list-dialog__add { display: flex; align-items: center; gap: 8px; }
+.dynamic-list-dialog__add > input,
+.dynamic-list-dialog__items input,
+.dynamic-object-dialog input,
+.dynamic-object-dialog select,
+.dynamic-batch-dialog textarea { min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid var(--astrbot-border); border-radius: 8px; outline: 0; background: var(--astrbot-surface); color: inherit; }
+.dynamic-list-dialog__add > input { flex: 1; }
+.dynamic-list-dialog__add > input:focus,
+.dynamic-list-dialog__items input:focus,
+.dynamic-object-dialog input:focus,
+.dynamic-object-dialog select:focus,
+.dynamic-batch-dialog textarea:focus { border-color: var(--astrbot-text); box-shadow: 0 0 0 1px var(--astrbot-text); }
+.dynamic-list-dialog__items { display: grid; max-height: 400px; min-height: 180px; gap: 2px; overflow: auto; }
+.dynamic-list-dialog__item { display: flex; min-height: 44px; align-items: center; gap: 6px; padding: 4px 5px 4px 10px; border-radius: 8px; cursor: pointer; transition: background .18s ease; }
+.dynamic-list-dialog__item:hover { background: color-mix(in srgb, var(--astrbot-primary) 8%, transparent); }
+.dynamic-list-dialog__item > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dynamic-list-dialog__item > input { flex: 1; }
+.dynamic-list-dialog__item > button { width: 34px; flex: 0 0 auto; padding: 0; color: var(--astrbot-error); }
+.dynamic-list-dialog__item > button.is-success { color: #209454; }
+.dynamic-editor-empty { display: flex; min-height: 190px; flex-direction: column; align-items: center; justify-content: center; color: color-mix(in srgb, var(--astrbot-text) 52%, transparent); text-align: center; }
+.dynamic-editor-empty .mdi { font-size: 64px; }
+.dynamic-editor-empty p { margin: 12px 0 0; }
+.dynamic-batch-dialog label { display: grid; gap: 7px; }
+.dynamic-batch-dialog label > span { font-size: 13px; font-weight: 650; }
+.dynamic-batch-dialog textarea { min-height: 230px; resize: vertical; }
+.dynamic-object-dialog__body { display: grid; max-height: 400px; gap: 7px; overflow: auto; }
+.dynamic-object-dialog__pair,
+.dynamic-object-dialog__template { display: grid; grid-template-columns: minmax(120px, 4fr) minmax(180px, 7fr) 36px; align-items: center; gap: 8px; }
+.dynamic-object-dialog__pair > button,
+.dynamic-object-dialog__template > button { width: 34px; padding: 0; color: var(--astrbot-error); }
+.dynamic-object-dialog__value { display: grid; min-width: 0; gap: 3px; }
+.dynamic-object-dialog__value > input { width: 100%; }
+.dynamic-object-dialog__value > input[aria-invalid='true'] { border-color: var(--astrbot-error); }
+.dynamic-object-dialog__value > small { color: var(--astrbot-error); font-size: 11px; }
+.dynamic-object-dialog__templates { display: grid; gap: 7px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--astrbot-border); }
+.dynamic-object-dialog__templates > span { color: color-mix(in srgb, var(--astrbot-text) 55%, transparent); font-size: 11px; }
+.dynamic-object-dialog__template.is-inactive { opacity: .78; }
+.dynamic-object-dialog__template > div:first-child { display: grid; gap: 2px; }
+.dynamic-object-dialog__template strong { font-size: 12px; }
+.dynamic-object-dialog__template small { color: color-mix(in srgb, var(--astrbot-text) 52%, transparent); font-size: 10px; }
+.dynamic-object-dialog__add { display: grid; grid-template-columns: minmax(0, 1fr) 125px auto; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--astrbot-border); }
+.dynamic-object-dialog__add > label { position: relative; }
+.dynamic-object-dialog__add > label > span { position: absolute; z-index: 1; top: -7px; left: 10px; padding: 0 4px; background: var(--astrbot-surface); color: color-mix(in srgb, var(--astrbot-text) 58%, transparent); font-size: 10px; }
+.dynamic-object-dialog__add select { width: 100%; }
+@media (max-width: 600px) {
+  .dynamic-list-dialog__add { align-items: stretch; flex-wrap: wrap; }
+  .dynamic-list-dialog__add > input { flex-basis: 100%; }
+  .dynamic-object-dialog__pair,
+  .dynamic-object-dialog__template,
+  .dynamic-object-dialog__add { grid-template-columns: 1fr; }
+  .dynamic-object-dialog__pair > button,
+  .dynamic-object-dialog__template > button { justify-self: end; }
+}
 .dynamic-config__more { margin: 10px 20px; padding: 7px 0; border: 0; background: transparent; color: var(--astrbot-primary); cursor: pointer; }
 
 /* Vue's expand transition equivalent: the content stays mounted so closing animates too. */

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
+import { toast } from '@/stores/feedback';
 
 import {
   configItemsForValue,
@@ -38,36 +39,105 @@ function JsonControl({ disabled, onChange, value }: { disabled?: boolean; onChan
   return <textarea aria-invalid={invalid} className="dynamic-config__json" disabled={disabled} onBlur={apply} onChange={(event) => setSource(event.target.value)} rows={5} value={source} />;
 }
 
-function ObjectControl({ disabled, onChange, value }: { disabled?: boolean; onChange: (value: unknown) => void; value: ConfigRecord }) {
-  const { t } = useTranslation();
-  const serialized = useMemo(() => JSON.stringify(value, null, 2), [value]);
-  const [open, setOpen] = useState(false);
-  const [source, setSource] = useState(serialized);
-  const [invalid, setInvalid] = useState(false);
-  const keys = Object.keys(value);
+type ObjectValueType = 'boolean' | 'json' | 'number' | 'string';
+type ObjectPair = { id: number; jsonError: boolean; key: string; originalKey: string; type: ObjectValueType; value: unknown };
 
-  useEffect(() => {
-    if (!open) {
-      setSource(serialized);
-      setInvalid(false);
-    }
-  }, [open, serialized]);
+const objectValueType = (value: unknown): ObjectValueType => {
+  if (typeof value === 'boolean') return 'boolean';
+  if (typeof value === 'number') return 'number';
+  if (isConfigRecord(value) || Array.isArray(value)) return 'json';
+  return 'string';
+};
+const normalizedObjectType = (type: unknown): ObjectValueType => {
+  if (type === 'bool' || type === 'boolean') return 'boolean';
+  if (type === 'int' || type === 'float' || type === 'number') return 'number';
+  if (type === 'json' || type === 'dict' || type === 'object' || type === 'list') return 'json';
+  return 'string';
+};
+const objectDraftValue = (value: unknown, type = objectValueType(value)) => type === 'json' ? JSON.stringify(value ?? {}, null, 2) : value;
+const defaultObjectValue = (type: ObjectValueType) => type === 'boolean' ? false : type === 'number' ? 0 : type === 'json' ? '{}' : '';
+
+function ObjectControl({ disabled, metadata, onChange, value }: { disabled?: boolean; metadata: ConfigItemMetadata; onChange: (value: unknown) => void; value: ConfigRecord }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [pairs, setPairs] = useState<ObjectPair[]>([]);
+  const [newKey, setNewKey] = useState('');
+  const [newType, setNewType] = useState<ObjectValueType>('string');
+  const keys = Object.keys(value);
+  const templateSchema = isConfigRecord(metadata.template_schema) ? metadata.template_schema : {};
+  const regularPairs = pairs.filter((pair) => !isConfigRecord(templateSchema[pair.key]));
 
   const showDialog = () => {
-    setSource(serialized);
-    setInvalid(false);
+    setPairs(Object.entries(value).map(([key, item], index) => {
+      const template: ConfigRecord | null = isConfigRecord(templateSchema[key]) ? templateSchema[key] as ConfigRecord : null;
+      const type = template ? normalizedObjectType(template.type) : objectValueType(item);
+      return { id: index, jsonError: false, key, originalKey: key, type, value: objectDraftValue(item, type) };
+    }));
+    setNewKey('');
+    setNewType('string');
     setOpen(true);
   };
-  const save = () => {
-    try {
-      const parsed: unknown = JSON.parse(source);
-      if (!isConfigRecord(parsed)) throw new Error('Expected an object.');
-      onChange(parsed);
-      setInvalid(false);
-      setOpen(false);
-    } catch {
-      setInvalid(true);
+  const updatePair = (id: number, patch: Partial<ObjectPair>) => setPairs((current) => current.map((pair) => pair.id === id ? { ...pair, ...patch } : pair));
+  const removePair = (id: number) => setPairs((current) => current.filter((pair) => pair.id !== id));
+  const addPair = () => {
+    const key = newKey.trim();
+    if (!key) return;
+    if (pairs.some((pair) => pair.key === key)) {
+      toast.warning(t('core.common.objectEditor.keyExists'));
+      return;
     }
+    setPairs((current) => [...current, { id: current.reduce((max, pair) => Math.max(max, pair.id), -1) + 1, jsonError: false, key, originalKey: key, type: newType, value: defaultObjectValue(newType) }]);
+    setNewKey('');
+  };
+  const validateKey = (pair: ObjectPair) => {
+    const key = pair.key.trim();
+    if (!key || pairs.some((item) => item.id !== pair.id && item.key === key)) {
+      toast.warning(t('core.common.objectEditor.keyExists'));
+      updatePair(pair.id, { key: pair.originalKey });
+      return;
+    }
+    updatePair(pair.id, { key, originalKey: key });
+  };
+  const save = () => {
+    const next: ConfigRecord = {};
+    let invalid = false;
+    const validated = pairs.map((pair) => {
+      if (!pair.key.trim()) return pair;
+      try {
+        next[pair.key.trim()] = pair.type === 'json'
+          ? JSON.parse(String(pair.value))
+          : pair.type === 'number'
+            ? Number(pair.value)
+            : pair.type === 'boolean'
+              ? Boolean(pair.value)
+              : String(pair.value ?? '');
+        return { ...pair, jsonError: false };
+      } catch {
+        invalid = true;
+        return { ...pair, jsonError: true };
+      }
+    });
+    setPairs(validated);
+    if (invalid) return;
+    onChange(next);
+    setOpen(false);
+  };
+  const renderValue = (pair: ObjectPair) => {
+    if (pair.type === 'boolean') return <label className="dynamic-switch"><input checked={Boolean(pair.value)} onChange={(event) => updatePair(pair.id, { value: event.target.checked })} type="checkbox" /><span className="dynamic-switch__track" /></label>;
+    return <div className="dynamic-object-dialog__value">
+      <input
+        aria-invalid={pair.jsonError}
+        onBlur={() => {
+          if (pair.type !== 'json') return;
+          try { JSON.parse(String(pair.value)); updatePair(pair.id, { jsonError: false }); } catch { updatePair(pair.id, { jsonError: true }); }
+        }}
+        onChange={(event) => updatePair(pair.id, { value: pair.type === 'number' ? event.target.valueAsNumber : event.target.value })}
+        placeholder={t(`core.common.objectEditor.placeholders.${pair.type === 'number' ? 'numberValue' : pair.type === 'json' ? 'jsonValue' : 'stringValue'}`)}
+        type={pair.type === 'number' ? 'number' : 'text'}
+        value={typeof pair.value === 'number' || typeof pair.value === 'string' ? pair.value : ''}
+      />
+      {pair.jsonError && <small>{t('core.common.objectEditor.invalidJson')}</small>}
+    </div>;
   };
 
   return <div className="dynamic-object">
@@ -77,10 +147,41 @@ function ObjectControl({ disabled, onChange, value }: { disabled?: boolean; onCh
         : <em>{t('core.common.objectEditor.noItems')}</em>}
     </div>
     {!disabled && <button className="dynamic-object__manage" onClick={showDialog} type="button">{t('core.common.list.modifyButton')}</button>}
-    <Dialog description={t('core.common.objectEditor.placeholders.jsonValue')} onOpenChange={setOpen} open={open} title={t('core.common.objectEditor.dialogTitle')}>
+    <Dialog onOpenChange={setOpen} open={open} title={t('core.common.objectEditor.dialogTitle')}>
       <div className="dynamic-object-dialog">
-        <textarea aria-invalid={invalid} onChange={(event) => setSource(event.target.value)} rows={12} value={source} />
-        {invalid && <p role="alert">{t('core.common.objectEditor.invalidJson')}</p>}
+        <div className="dynamic-object-dialog__body">
+          {regularPairs.map((pair) => <div className="dynamic-object-dialog__pair" key={pair.id}>
+            <input onBlur={() => validateKey(pair)} onChange={(event) => updatePair(pair.id, { key: event.target.value })} placeholder={t('core.common.objectEditor.placeholders.keyName')} value={pair.key} />
+            {renderValue(pair)}
+            <button aria-label={t('features.config.actions.delete')} onClick={() => removePair(pair.id)} type="button"><MdiIcon name="mdi-delete" /></button>
+          </div>)}
+          {Object.entries(templateSchema).length > 0 && <div className="dynamic-object-dialog__templates">
+            <span>{t('core.common.objectEditor.presets')}</span>
+            {Object.entries(templateSchema).map(([key, rawTemplate]) => {
+              if (!isConfigRecord(rawTemplate)) return null;
+              const pair = pairs.find((item) => item.key === key);
+              const type = normalizedObjectType(rawTemplate.type);
+              const temporary: ObjectPair = pair ?? { id: -1, jsonError: false, key, originalKey: key, type, value: objectDraftValue(rawTemplate.default ?? defaultObjectValue(type), type) };
+              const updateTemplate = (patch: Partial<ObjectPair>) => {
+                if (pair) updatePair(pair.id, patch);
+                else setPairs((current) => [...current, { ...temporary, ...patch, id: current.reduce((max, item) => Math.max(max, item.id), -1) + 1 }]);
+              };
+              return <div className={`dynamic-object-dialog__template${pair ? '' : ' is-inactive'}`} key={key}>
+                <div><strong>{String(rawTemplate.name || rawTemplate.description || key)}</strong>{Boolean(rawTemplate.hint) && <small>{String(rawTemplate.hint)}</small>}</div>
+                <div onChangeCapture={() => undefined}>{pair ? renderValue(pair) : type === 'boolean'
+                  ? <label className="dynamic-switch"><input checked={Boolean(temporary.value)} onChange={(event) => updateTemplate({ value: event.target.checked })} type="checkbox" /><span className="dynamic-switch__track" /></label>
+                  : <input onChange={(event) => updateTemplate({ value: type === 'number' ? event.target.valueAsNumber : event.target.value })} type={type === 'number' ? 'number' : 'text'} value={typeof temporary.value === 'string' || typeof temporary.value === 'number' ? temporary.value : ''} />}</div>
+                {pair ? <button aria-label={t('features.config.actions.delete')} onClick={() => removePair(pair.id)} type="button"><MdiIcon name="mdi-close" /></button> : <span />}
+              </div>;
+            })}
+          </div>}
+          {!regularPairs.length && !Object.keys(templateSchema).length && <div className="dynamic-editor-empty"><MdiIcon name="mdi-code-json" /><p>{t('core.common.objectEditor.noParams')}</p></div>}
+        </div>
+        <div className="dynamic-object-dialog__add">
+          <input onChange={(event) => setNewKey(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addPair(); } }} placeholder={t('core.common.objectEditor.newKeyLabel')} value={newKey} />
+          <label><span>{t('core.common.objectEditor.valueTypeLabel')}</span><select onChange={(event) => setNewType(event.target.value as ObjectValueType)} value={newType}><option value="string">string</option><option value="number">number</option><option value="boolean">boolean</option><option value="json">json</option></select></label>
+          <button className="dynamic-editor-button--tonal" disabled={!newKey.trim()} onClick={addPair} type="button"><MdiIcon name="mdi-plus" />{t('core.common.add')}</button>
+        </div>
         <div className="dialog-actions"><button onClick={() => setOpen(false)} type="button">{t('core.common.cancel')}</button><button className="button--primary" onClick={save} type="button">{t('core.common.confirm')}</button></div>
       </div>
     </Dialog>
@@ -92,6 +193,11 @@ function StringListControl({ disabled, onChange, value }: { disabled?: boolean; 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [newItem, setNewItem] = useState('');
+  const [editIndex, setEditIndex] = useState(-1);
+  const [editItem, setEditItem] = useState('');
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchText, setBatchText] = useState('');
+  const batchCount = batchText.split('\n').map((line) => line.trim()).filter(Boolean).length;
 
   useEffect(() => { if (!open) setDraft(value); }, [open, value]);
 
@@ -104,26 +210,50 @@ function StringListControl({ disabled, onChange, value }: { disabled?: boolean; 
   const showDialog = () => {
     setDraft(value);
     setNewItem('');
+    setEditIndex(-1);
+    setEditItem('');
     setOpen(true);
   };
   const save = () => {
     onChange(draft.filter((item) => item.trim() !== ''));
     setOpen(false);
   };
+  const saveEdit = () => {
+    if (editIndex < 0 || !editItem.trim()) return;
+    setDraft((current) => current.map((item, index) => index === editIndex ? editItem.trim() : item));
+    setEditIndex(-1);
+    setEditItem('');
+  };
+  const importBatch = () => {
+    const items = batchText.split('\n').map((line) => line.trim()).filter(Boolean);
+    setDraft((current) => [...current, ...items]);
+    setBatchText('');
+    setBatchOpen(false);
+  };
 
   return <div className="dynamic-list">
     {value.length <= 1
       ? <input disabled={disabled} onChange={(event) => setSingleValue(event.target.value)} value={value[0] ?? ''} />
-      : <div className="dynamic-list__preview">{value.slice(0, 2).map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}{value.length > 2 && <span>+{value.length - 2}</span>}</div>}
+      : <div className="dynamic-list__preview"><span>{value[0]}</span>{value.length > 1 && <span>+{value.length - 1}</span>}</div>}
     {!disabled && <button className="dynamic-list__manage" onClick={showDialog} type="button">{value.length <= 1 ? t('core.common.list.addMore') : t('core.common.list.modifyButton')}</button>}
-    <Dialog description={t('core.common.list.inputPlaceholder')} onOpenChange={setOpen} open={open} title={t('core.common.list.editTitle')}>
+    <Dialog onOpenChange={setOpen} open={open} title={t('core.common.list.editTitle')}>
       <div className="dynamic-list-dialog">
-        <div className="dynamic-list-dialog__add"><input onChange={(event) => setNewItem(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addItem(); } }} placeholder={t('core.common.list.addItemPlaceholder')} value={newItem} /><button disabled={!newItem.trim()} onClick={addItem} type="button"><MdiIcon name="mdi-plus" />{t('core.common.list.addButton')}</button></div>
+        <div className="dynamic-list-dialog__add"><input onChange={(event) => setNewItem(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addItem(); } }} placeholder={t('core.common.list.addItemPlaceholder')} value={newItem} /><button className="dynamic-editor-button--tonal" disabled={!newItem.trim()} onClick={addItem} type="button">{t('core.common.list.addButton')}</button><button className="dynamic-editor-button--tonal" onClick={() => setBatchOpen(true)} type="button"><MdiIcon name="mdi-import" />{t('core.common.list.batchImport')}</button></div>
         <div className="dynamic-list-dialog__items">
-          {draft.map((item, index) => <div key={index}><input aria-label={`${t('core.common.list.editTitle')} ${index + 1}`} onChange={(event) => setDraft((current) => current.map((entry, itemIndex) => itemIndex === index ? event.target.value : entry))} value={item} /><button aria-label={t('features.config.actions.delete')} onClick={() => setDraft((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button"><MdiIcon name="mdi-delete-outline" /></button></div>)}
-          {!draft.length && <p>{t('core.common.list.noItemsHint')}</p>}
+          {draft.map((item, index) => <div className="dynamic-list-dialog__item" key={index} onClick={() => { if (editIndex !== index) { setEditIndex(index); setEditItem(item); } }}>
+            {editIndex === index ? <input autoFocus onChange={(event) => setEditItem(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveEdit(); if (event.key === 'Escape') setEditIndex(-1); }} value={editItem} /> : <span>{item}</span>}
+            {editIndex === index && <button className="is-success" aria-label={t('core.common.confirm')} onClick={(event) => { event.stopPropagation(); saveEdit(); }} type="button"><MdiIcon name="mdi-check" /></button>}
+            <button aria-label={t('features.config.actions.delete')} onClick={(event) => { event.stopPropagation(); if (editIndex === index) { setEditIndex(-1); setEditItem(''); } else setDraft((current) => current.filter((_, itemIndex) => itemIndex !== index)); }} type="button"><MdiIcon name={editIndex === index ? 'mdi-close' : 'mdi-close'} /></button>
+          </div>)}
+          {!draft.length && <div className="dynamic-editor-empty"><MdiIcon name="mdi-format-list-bulleted" /><p>{t('core.common.list.noItemsHint')}</p></div>}
         </div>
         <div className="dialog-actions"><button onClick={() => setOpen(false)} type="button">{t('core.common.cancel')}</button><button className="button--primary" onClick={save} type="button">{t('core.common.confirm')}</button></div>
+      </div>
+    </Dialog>
+    <Dialog description={t('core.common.list.batchImportHint')} onOpenChange={setBatchOpen} open={batchOpen} title={t('core.common.list.batchImportTitle')}>
+      <div className="dynamic-batch-dialog">
+        <label><span>{t('core.common.list.batchImportLabel')}</span><textarea onChange={(event) => setBatchText(event.target.value)} placeholder={t('core.common.list.batchImportPlaceholder')} rows={10} value={batchText} /></label>
+        <div className="dialog-actions"><button onClick={() => { setBatchText(''); setBatchOpen(false); }} type="button">{t('core.common.cancel')}</button><button className="button--primary" disabled={!batchCount} onClick={importBatch} type="button">{t('core.common.list.batchImportButton', { count: batchCount })}</button></div>
       </div>
     </Dialog>
   </div>;
@@ -167,7 +297,7 @@ function ConfigControl({ metadata, onChange, value }: { metadata: ConfigItemMeta
   }
 
   if (type === 'dict' || type === 'object' || isConfigRecord(value)) {
-    return <ObjectControl disabled={disabled} onChange={onChange} value={isConfigRecord(value) ? value : {}} />;
+    return <ObjectControl disabled={disabled} metadata={metadata} onChange={onChange} value={isConfigRecord(value) ? value : {}} />;
   }
 
   if (type === 'list' || type === 'template_list' || Array.isArray(value)) {
