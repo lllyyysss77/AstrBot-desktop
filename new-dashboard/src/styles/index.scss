@@ -1704,6 +1704,22 @@ textarea {
 .provider-template-editor-dialog .dynamic-config__control > * { width: 100%; max-width: 470px; }
 .provider-template-editor-dialog .dynamic-config__control > .dynamic-switch { width: 44px; margin-left: auto; }
 .provider-template-editor-dialog > footer { flex: 0 0 auto; padding-top: 14px; border-top: 1px solid var(--provider-border); }
+.provider-template-editor-dialog .dynamic-config__value-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 4px 12px;
+  padding: 10px 12px;
+  border-left: 4px solid #22c7d9;
+  border-radius: 4px;
+  background: color-mix(in srgb, #22c7d9 16%, var(--astrbot-surface));
+  color: color-mix(in srgb, #00aebf 86%, var(--astrbot-text));
+  font-size: 12px;
+  line-height: 1.55;
+}
+.provider-template-editor-dialog .dynamic-config__value-hint .mdi-icon { flex: 0 0 auto; margin-top: 1px; font-size: 18px; }
+.provider-template-editor-dialog .dynamic-config__value-hint p { margin: 0; }
+.provider-template-editor-dialog .dynamic-config__value-hint a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 .provider-type-panel {
   min-height: 0;

@@ -73,4 +73,33 @@ describe('DynamicConfigForm', () => {
     expect(markup).toContain('type="number"');
     expect(markup).toContain('768');
   });
+
+  it('renders provider-owned hints as an information alert instead of a field', () => {
+    const markup = renderToStaticMarkup(
+      <I18nextProvider i18n={i18n}>
+        <ConfigGroup
+          fieldsFromValue
+          metadata={{
+            type: 'object',
+            items: {
+              id: { description: 'ID', type: 'string' },
+            },
+          }}
+          onChange={() => undefined}
+          showValueHint
+          translationPath="provider"
+          value={{
+            hint: 'API Key from https://elevenlabs.io/app/settings/api-keys',
+            id: 'elevenlabs_tts',
+          }}
+          variant="inline"
+        />
+      </I18nextProvider>,
+    );
+
+    expect(markup).toContain('dynamic-config__value-hint');
+    expect(markup).toContain('href="https://elevenlabs.io/app/settings/api-keys"');
+    expect(markup).toContain('elevenlabs_tts');
+    expect(markup).not.toContain('config-provider-hint');
+  });
 });

@@ -335,19 +335,46 @@ type ConfigGroupProps = {
   onGetEmbeddingDimension?: () => void;
   resolveText?: TextResolver;
   search?: string;
+  showValueHint?: boolean;
   title?: string;
   translationPath: string;
   value: ConfigRecord;
   variant?: 'default' | 'inline' | 'settings';
 };
 
-export function ConfigGroup({ conditionValue, embeddingDimensionLoading, fieldsFromValue = false, metadata, onChange, onGetEmbeddingDimension, resolveText, search = '', title, translationPath, value, variant = 'default' }: ConfigGroupProps) {
+const hiddenProviderHints = new Set([
+  'provider_group.provider.openai_embedding.hint',
+  'provider_group.provider.gemini_embedding.hint',
+]);
+
+function resolveValueHint(t: ReturnType<typeof useTranslation>['t'], hint: unknown) {
+  if (typeof hint !== 'string' || !hint || hiddenProviderHints.has(hint)) return '';
+  const metadataHint = t(`features.config-metadata.${hint}`, { defaultValue: '' });
+  if (metadataHint) return metadataHint;
+  const directHint = t(hint, { defaultValue: '' });
+  return directHint || hint;
+}
+
+function ValueHint({ children }: { children: string }) {
+  const parts = children.split(/(https?:\/\/[^\s，。；、]+)/g);
+  return (
+    <div className="dynamic-config__value-hint" role="note">
+      <MdiIcon name="mdi-information-outline" />
+      <p>{parts.map((part, index) => part.startsWith('http')
+        ? <a href={part} key={`${part}-${index}`} rel="noreferrer" target="_blank">{part}</a>
+        : part)}</p>
+    </div>
+  );
+}
+
+export function ConfigGroup({ conditionValue, embeddingDimensionLoading, fieldsFromValue = false, metadata, onChange, onGetEmbeddingDimension, resolveText, search = '', showValueHint = false, title, translationPath, value, variant = 'default' }: ConfigGroupProps) {
   const { t } = useTranslation();
   const textResolver = resolveText ?? defaultTextResolver(t);
   const [showCollapsed, setShowCollapsed] = useState(false);
   const needle = search.trim().toLocaleLowerCase();
   const groupTitle = title ?? textResolver(translationPath, 'description', metadata.description);
   const groupHint = textResolver(translationPath, 'hint', metadata.hint);
+  const valueHint = showValueHint ? resolveValueHint(t, value.hint) : '';
   const groupMatchesSearch = needle && [metadata.description, metadata.hint, groupTitle, groupHint]
     .some((candidate) => String(candidate ?? '').toLocaleLowerCase().includes(needle));
   const itemMetadata = fieldsFromValue ? configItemsForValue(metadata, value) : metadata.items ?? {};
@@ -397,7 +424,7 @@ export function ConfigGroup({ conditionValue, embeddingDimensionLoading, fieldsF
   };
 
   if (!entries.length) return null;
-  const form = <section className={`dynamic-config route-card dynamic-config--${variant}`}>{variant === 'default' && <header><h2>{groupTitle}</h2>{groupHint && <p>{groupHint}</p>}</header>}{visible.map(renderEntry)}{collapsed.length > 0 && <><button aria-expanded={showCollapsed} className="dynamic-config__more" onClick={() => setShowCollapsed((current) => !current)} type="button">{showCollapsed ? t('core.actions.collapse', 'Collapse') : t('features.config.sections.moreConfig', 'More settings')}</button><ExpandCollapse className="dynamic-config__collapsed" open={showCollapsed}>{collapsed.map(renderEntry)}</ExpandCollapse></>}</section>;
+  const form = <section className={`dynamic-config route-card dynamic-config--${variant}`}>{variant === 'default' && <header><h2>{groupTitle}</h2>{groupHint && <p>{groupHint}</p>}</header>}{valueHint && <ValueHint>{valueHint}</ValueHint>}{visible.map(renderEntry)}{collapsed.length > 0 && <><button aria-expanded={showCollapsed} className="dynamic-config__more" onClick={() => setShowCollapsed((current) => !current)} type="button">{showCollapsed ? t('core.actions.collapse', 'Collapse') : t('features.config.sections.moreConfig', 'More settings')}</button><ExpandCollapse className="dynamic-config__collapsed" open={showCollapsed}>{collapsed.map(renderEntry)}</ExpandCollapse></>}</section>;
   if (variant === 'settings') return <div className="system-config-group"><h2 className="system-config-group__title">{groupTitle}</h2>{form}</div>;
   return form;
 }

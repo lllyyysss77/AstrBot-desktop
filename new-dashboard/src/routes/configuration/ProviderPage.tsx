@@ -686,6 +686,7 @@ export default function ProviderPage() {
                 metadata={providerSourceSchema as ConfigGroupMetadata}
                 onChange={setEditingProvider}
                 onGetEmbeddingDimension={() => void detectEmbeddingDimension()}
+                showValueHint
                 translationPath="provider"
                 value={editingProvider}
                 variant="inline"
