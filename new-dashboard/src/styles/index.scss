@@ -3231,7 +3231,6 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 .persona-toolbar nav { min-width: 0; flex-wrap: wrap; }
 .persona-toolbar button,
 .persona-empty button,
-.persona-card__actions button,
 .persona-folder-card > div button,
 .persona-dialog-pairs header button,
 .persona-dialog-pair > button,
@@ -3244,20 +3243,35 @@ html[data-theme='dark'] .chat-composer { border-color: rgb(255 255 255 / 12%); b
 .persona-section > h2 { display: flex; align-items: center; gap: 7px; margin: 0 0 12px; font-size: 17px; }
 .persona-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .persona-card,
-.persona-folder-card { min-width: 0; overflow: hidden; border: 1px solid var(--astrbot-border); border-radius: 13px; background: var(--astrbot-surface); transition: border-color 150ms ease, transform 150ms ease; }
-.persona-card:hover,
+.persona-folder-card { min-width: 0; border: 1px solid var(--astrbot-border); border-radius: 13px; background: var(--astrbot-surface); transition: border-color 150ms ease, transform 150ms ease; }
+.persona-folder-card { overflow: hidden; }
 .persona-folder-card:hover { border-color: color-mix(in srgb, var(--astrbot-primary) 55%, var(--astrbot-border)); transform: translateY(-1px); }
-.persona-card__main,
+.persona-card { position: relative; height: 100%; cursor: grab; transition: background-color 160ms ease, opacity 200ms ease, transform 200ms ease; }
+.persona-card:hover,
+.persona-card:focus-within { background: color-mix(in srgb, var(--astrbot-text) 4%, var(--astrbot-surface)); }
+.persona-card:active { cursor: grabbing; }
+.persona-card__header { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 10px 6px 18px; }
+.persona-card__header > strong { min-width: 0; overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.persona-card__menu { position: relative; flex: none; cursor: default; }
+.persona-card__menu summary { display: grid; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; list-style: none; place-items: center; }
+.persona-card__menu summary::-webkit-details-marker { display: none; }
+.persona-card__menu summary:hover,
+.persona-card__menu[open] summary { background: color-mix(in srgb, var(--astrbot-text) 8%, transparent); }
+.persona-card__menu > div { position: absolute; z-index: 30; top: calc(100% + 4px); right: 0; display: grid; min-width: 152px; overflow: hidden; padding: 5px; border: 1px solid var(--astrbot-border); border-radius: 10px; background: var(--astrbot-surface); box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
+.persona-card__menu button { display: flex; min-height: 36px; align-items: center; gap: 9px; padding: 7px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.persona-card__menu button:hover { background: color-mix(in srgb, var(--astrbot-text) 7%, transparent); }
+.persona-card__menu button.button--danger { color: var(--astrbot-danger, #d32f2f); }
+.persona-card__menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--astrbot-border); }
+.persona-card__body { padding: 4px 18px 16px; }
+.persona-card__body > p { min-height: 59px; margin: 0 0 12px; overflow: hidden; color: color-mix(in srgb, var(--astrbot-text) 70%, transparent); display: -webkit-box; font-size: 14px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
+.persona-card__body > small { display: block; margin-top: 12px; color: color-mix(in srgb, var(--astrbot-text) 52%, transparent); font-size: 12px; }
 .persona-folder-card__main { width: 100%; padding: 16px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
-.persona-card__main header { display: flex; align-items: center; gap: 9px; font-size: 18px; }
-.persona-card__main > p { min-height: 44px; margin: 13px 0; overflow: hidden; color: color-mix(in srgb, var(--astrbot-text) 66%, transparent); line-height: 1.5; }
-.persona-card__main > small { color: color-mix(in srgb, var(--astrbot-text) 48%, transparent); }
 .persona-card__chips,
-.persona-view__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 13px; }
+.persona-view__chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .persona-card__chips span,
 .persona-view__chips span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border-radius: 999px; background: color-mix(in srgb, var(--astrbot-primary) 10%, transparent); color: color-mix(in srgb, var(--astrbot-primary) 82%, var(--astrbot-text)); font-size: 12px; }
-.persona-card__actions { display: flex; justify-content: flex-end; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--astrbot-border); }
-.persona-card__actions button { min-height: 31px; padding: 4px 8px; }
+.persona-card__chips span.is-success { background: color-mix(in srgb, #20b85a 13%, transparent); color: color-mix(in srgb, #139347 88%, var(--astrbot-text)); }
+.persona-card__chips span.is-secondary { background: color-mix(in srgb, #7c4dff 12%, transparent); color: color-mix(in srgb, #6740d6 88%, var(--astrbot-text)); }
 .persona-folder-card { display: flex; min-height: 92px; align-items: center; }
 .persona-folder-card__main { display: flex; min-width: 0; flex: 1; align-items: center; gap: 12px; }
 .persona-folder-card__main > .mdi { color: var(--astrbot-primary); font-size: 35px; }

@@ -311,7 +311,49 @@ export default function PersonaPage() {
         {error && <div className="monitor-error" role="alert">{error}</div>}
         {loading && <div className="persona-loading" role="status"><MdiIcon className="mdi-spin" name="mdi-loading" /></div>}
         {!loading && folders.length > 0 && <section className="persona-section"><h2><MdiIcon name="mdi-folder" />{k('folder.foldersTitle')} ({folders.length})</h2><div className="persona-grid">{folders.map((folder) => { const id = recordId(folder, 'folder_id', 'id'); return <article className="persona-folder-card" key={id}><button className="persona-folder-card__main" onClick={() => setCurrentFolderId(id)} type="button"><MdiIcon name="mdi-folder-outline" /><span><strong>{String(folder.name || id)}</strong><small>{String(folder.description || '')}</small></span></button><div><button aria-label={k('folder.contextMenu.rename')} onClick={() => setFolderDialog({ mode: 'rename', folder, name: String(folder.name || ''), description: String(folder.description || '') })} type="button"><MdiIcon name="mdi-pencil-outline" /></button><button aria-label={k('folder.contextMenu.moveTo')} onClick={() => setMoveDialog({ type: 'folder', item: folder })} type="button"><MdiIcon name="mdi-folder-move" /></button><button aria-label={k('folder.contextMenu.delete')} onClick={() => void removeFolder(folder)} type="button"><MdiIcon name="mdi-delete-outline" /></button></div></article>; })}</div></section>}
-        {!loading && personas.length > 0 && <section className="persona-section"><h2><MdiIcon name="mdi-account-heart" />{k('persona.personasTitle')} ({personas.length})</h2><div className="persona-grid">{personas.map((persona) => { const id = recordId(persona, 'persona_id', 'id'); const dialogs = stringList(persona.begin_dialogs); const selectedTools = persona.tools === null ? null : stringList(persona.tools); const selectedSkills = persona.skills === null ? null : stringList(persona.skills); return <article className="persona-card" draggable key={id} onDragStart={(event) => dragPersona(event, id)}><button className="persona-card__main" onClick={() => setViewing(persona)} type="button"><header><MdiIcon name="mdi-account-heart" /><strong>{id}</strong></header><p>{String(persona.system_prompt || '').slice(0, 140)}</p><div className="persona-card__chips">{dialogs.length > 0 && <span><MdiIcon name="mdi-chat" />{k('labels.presetDialogs', { count: dialogs.length / 2 })}</span>}<span><MdiIcon name="mdi-tools" />{selectedTools === null ? k('form.allToolsAvailable') : `${selectedTools.length} ${k('persona.toolsCount')}`}</span><span><MdiIcon name="mdi-lightning-bolt" />{selectedSkills === null ? k('form.allSkillsAvailable') : `${selectedSkills.length} ${k('persona.skillsCount')}`}</span></div><small>{k('labels.createdAt')}: {formatPersonaDate(persona.created_at)}</small></button><div className="persona-card__actions"><button onClick={() => openPersona(persona)} type="button">{k('buttons.edit')}</button><button onClick={() => setMoveDialog({ type: 'persona', item: persona })} type="button">{k('buttons.move')}</button><button className="button--danger" onClick={() => void removePersona(persona)} type="button">{k('buttons.delete')}</button></div></article>; })}</div></section>}
+        {!loading && personas.length > 0 && <section className="persona-section">
+          <h2><MdiIcon name="mdi-account-heart" />{k('persona.personasTitle')} ({personas.length})</h2>
+          <div className="persona-grid">{personas.map((persona) => {
+            const id = recordId(persona, 'persona_id', 'id');
+            const dialogs = stringList(persona.begin_dialogs);
+            const selectedTools = persona.tools === null ? null : stringList(persona.tools);
+            const selectedSkills = persona.skills === null ? null : stringList(persona.skills);
+            const prompt = String(persona.system_prompt || '');
+            return <article
+              className="persona-card"
+              draggable
+              key={id}
+              onClick={() => setViewing(persona)}
+              onDragStart={(event) => dragPersona(event, id)}
+            >
+              <header className="persona-card__header">
+                <strong>{id}</strong>
+                <details className="persona-card__menu" onClick={(event) => event.stopPropagation()}>
+                  <summary aria-label={k('buttons.more')} title={k('buttons.more')}>
+                    <MdiIcon name="mdi-dots-vertical" />
+                  </summary>
+                  <div>
+                    <button onClick={() => openPersona(persona)} type="button"><MdiIcon name="mdi-pencil-outline" />{k('buttons.edit')}</button>
+                    <button onClick={() => setMoveDialog({ type: 'persona', item: persona })} type="button"><MdiIcon name="mdi-folder-move" />{k('persona.contextMenu.moveTo')}</button>
+                    <hr />
+                    <button className="button--danger" onClick={() => void removePersona(persona)} type="button"><MdiIcon name="mdi-delete-outline" />{k('buttons.delete')}</button>
+                  </div>
+                </details>
+              </header>
+              <div className="persona-card__body">
+                <p>{prompt.length > 100 ? `${prompt.slice(0, 100)}...` : prompt}</p>
+                {(dialogs.length > 0 || selectedTools === null || (selectedTools?.length ?? 0) > 0 || selectedSkills === null || (selectedSkills?.length ?? 0) > 0) && <div className="persona-card__chips">
+                  {dialogs.length > 0 && <span className="is-secondary"><MdiIcon name="mdi-chat" />{k('labels.presetDialogs', { count: dialogs.length / 2 })}</span>}
+                  {selectedTools === null && <span className="is-success"><MdiIcon name="mdi-tools" />{k('form.allToolsAvailable')}</span>}
+                  {selectedTools !== null && selectedTools.length > 0 && <span><MdiIcon name="mdi-tools" />{selectedTools.length} {k('persona.toolsCount')}</span>}
+                  {selectedSkills === null && <span className="is-success"><MdiIcon name="mdi-lightning-bolt" />{k('form.allSkillsAvailable')}</span>}
+                  {selectedSkills !== null && selectedSkills.length > 0 && <span><MdiIcon name="mdi-lightning-bolt" />{selectedSkills.length} {k('persona.skillsCount')}</span>}
+                </div>}
+                <small>{k('labels.createdAt')}: {formatPersonaDate(persona.created_at)}</small>
+              </div>
+            </article>;
+          })}</div>
+        </section>}
         {!loading && folders.length === 0 && personas.length === 0 && <div className="persona-empty"><MdiIcon name="mdi-folder-open-outline" /><h2>{k('empty.folderEmpty')}</h2><p>{k('empty.folderEmptyDescription')}</p><div><button onClick={() => importInput.current?.click()} type="button"><MdiIcon name="mdi-file-upload" />{l('import')}</button><button className="button--primary" onClick={() => openPersona()} type="button"><MdiIcon name="mdi-plus" />{k('buttons.create')}</button><button onClick={() => setFolderDialog({ mode: 'create', name: '', description: '' })} type="button"><MdiIcon name="mdi-folder-plus" />{k('folder.createButton')}</button></div></div>}
       </main>
     </div>
