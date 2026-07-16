@@ -349,6 +349,27 @@ export function ConfigGroup({ conditionValue, fieldsFromValue = false, metadata,
     const path = `${translationPath}.${key}`;
     const label = textResolver(path, 'description', item.description) || key;
     const hint = textResolver(path, 'hint', item.hint);
+    const nestedValue = getConfigValue(value, key);
+    if (item.type === 'object' && isConfigRecord(item.items) && isConfigRecord(nestedValue)) {
+      return (
+        <section className="dynamic-config__nested" key={key}>
+          <header>
+            <h3>{label}</h3>
+            {hint && <p>{hint}</p>}
+          </header>
+          <ConfigGroup
+            conditionValue={nestedValue}
+            fieldsFromValue
+            metadata={item as ConfigGroupMetadata}
+            onChange={(next) => onChange(setConfigValue(value, key, next))}
+            resolveText={textResolver}
+            translationPath={path}
+            value={nestedValue}
+            variant="inline"
+          />
+        </section>
+      );
+    }
     return <div className="dynamic-config__row" key={key}><div className="dynamic-config__label"><label htmlFor={`config-${translationPath}-${key}`}><span>{label}</span><small>{key}</small></label>{hint && <p>{hint}</p>}</div><div className="dynamic-config__control" id={`config-${translationPath}-${key}`}><ConfigControl metadata={item} onChange={(next) => onChange(setConfigValue(value, key, next))} value={getConfigValue(value, key)} /></div></div>;
   };
 
