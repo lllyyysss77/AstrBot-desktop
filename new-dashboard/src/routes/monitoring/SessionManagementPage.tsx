@@ -1,27 +1,160 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { deleteSessionRules, listActiveUmos, listSessionGroups, listSessionRules, upsertSessionRule } from '@/api/openapi';
+import {
+  batchUpdateSessionProvider,
+  batchUpdateSessionService,
+  createSessionGroup,
+  deleteSessionGroup,
+  deleteSessionRules,
+  listActiveUmos,
+  listSessionGroups,
+  listSessionRules,
+  updateSessionGroup,
+  upsertSessionRule,
+} from '@/api/openapi';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
-import { MonacoEditor } from '@/components/editor/MonacoEditor';
+import { MdiIcon } from '@/components/icons/MdiIcon';
 import { confirmAction, toast } from '@/stores/feedback';
 import { unwrapData } from './model';
 
-type SessionRule = {
+const FOLLOW_CONFIG_VALUE = '__astrbot_follow_config__';
+
+type ProviderOption = { id: string; model?: string; name?: string };
+type PersonaOption = { id?: string; name: string };
+type PluginOption = { display_name?: string; name: string };
+type KnowledgeOption = { emoji?: string; kb_id: string; kb_name: string };
+type UmoInfo = {
   auto_name?: string;
+  display_name?: string;
   message_type?: string;
   platform?: string;
-  rules?: Record<string, unknown>;
   session_id?: string;
   umo: string;
   user_alias?: string;
 };
-type SessionRulesData = { rules?: SessionRule[]; total?: number };
+type ServiceConfig = {
+  custom_name?: string;
+  llm_enabled: boolean;
+  persona_id?: string | null;
+  session_enabled: boolean;
+  tts_enabled: boolean;
+};
+type PluginConfig = { disabled_plugins: string[]; enabled_plugins: string[] };
+type KnowledgeConfig = { enable_rerank: boolean; kb_ids: string[]; top_k: number };
+type SessionRule = UmoInfo & { rules: Record<string, unknown> };
+type SessionRulesData = {
+  available_chat_providers?: ProviderOption[];
+  available_kbs?: KnowledgeOption[];
+  available_personas?: PersonaOption[];
+  available_plugins?: PluginOption[];
+  available_stt_providers?: ProviderOption[];
+  available_tts_providers?: ProviderOption[];
+  rules?: SessionRule[];
+  total?: number;
+};
 type SessionGroup = { id: string; name?: string; umo_count?: number; umos?: string[] };
+type ActiveUmoData = { umo_infos?: UmoInfo[]; umos?: string[] };
+type BatchScope = 'selected' | 'all' | 'group' | 'private' | `custom_group:${string}`;
+type EditorState = {
+  kb: KnowledgeConfig;
+  plugin: PluginConfig;
+  providers: {
+    chat_completion: string;
+    speech_to_text: string;
+    text_to_speech: string;
+  };
+  service: ServiceConfig;
+};
+
+function recordValue(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function parseUmo(umo: string): UmoInfo {
+  const [platform = '', messageType = '', ...sessionParts] = umo.split(':');
+  return {
+    display_name: umo,
+    message_type: messageType,
+    platform,
+    session_id: sessionParts.join(':') || umo,
+    umo,
+  };
+}
+
+function displayName(item: UmoInfo, customName?: string) {
+  const alias = item.user_alias || customName || '';
+  const automatic = item.auto_name || '';
+  if (alias && automatic && alias !== automatic) return `${alias}（${automatic}）`;
+  return alias || automatic || item.umo;
+}
+
+function initialEditor(item: SessionRule): EditorState {
+  const service = recordValue(item.rules.session_service_config);
+  const plugin = recordValue(item.rules.session_plugin_config);
+  const kb = recordValue(item.rules.kb_config);
+  return {
+    service: {
+      custom_name: typeof service.custom_name === 'string' ? service.custom_name : '',
+      llm_enabled: service.llm_enabled !== false,
+      persona_id: typeof service.persona_id === 'string' ? service.persona_id : null,
+      session_enabled: service.session_enabled !== false,
+      tts_enabled: service.tts_enabled !== false,
+    },
+    providers: {
+      chat_completion: typeof item.rules.provider_perf_chat_completion === 'string'
+        ? item.rules.provider_perf_chat_completion : FOLLOW_CONFIG_VALUE,
+      speech_to_text: typeof item.rules.provider_perf_speech_to_text === 'string'
+        ? item.rules.provider_perf_speech_to_text : FOLLOW_CONFIG_VALUE,
+      text_to_speech: typeof item.rules.provider_perf_text_to_speech === 'string'
+        ? item.rules.provider_perf_text_to_speech : FOLLOW_CONFIG_VALUE,
+    },
+    plugin: {
+      disabled_plugins: stringList(plugin.disabled_plugins),
+      enabled_plugins: stringList(plugin.enabled_plugins),
+    },
+    kb: {
+      enable_rerank: kb.enable_rerank !== false,
+      kb_ids: stringList(kb.kb_ids),
+      top_k: typeof kb.top_k === 'number' ? kb.top_k : 5,
+    },
+  };
+}
+
+function UmoDisplay({
+  compact = false,
+  customName,
+  info,
+  onEdit,
+}: {
+  compact?: boolean;
+  customName?: string;
+  info: UmoInfo;
+  onEdit?: () => void;
+}) {
+  return <div className={`session-umo${compact ? ' session-umo--compact' : ''}`}>
+    <div className="session-umo__title">
+      <strong>{displayName(info, customName)}</strong>
+      {onEdit && <button aria-label="edit" onClick={onEdit} type="button"><MdiIcon name="mdi-pencil-outline" /></button>}
+    </div>
+    {!compact && <div className="session-umo__meta">
+      {info.platform && <span>{info.platform}</span>}
+      {info.message_type && <span>{info.message_type}</span>}
+      <code title={info.umo}>{info.session_id || info.umo}</code>
+    </div>}
+  </div>;
+}
 
 export default function SessionManagementPage() {
   const { t } = useTranslation();
   const prefix = 'features.session-management';
+  const text = useCallback((key: string, options?: Record<string, unknown>) => t(`${prefix}.${key}`, options), [t]);
   const [rules, setRules] = useState<SessionRule[]>([]);
   const [groups, setGroups] = useState<SessionGroup[]>([]);
   const [total, setTotal] = useState(0);
@@ -31,106 +164,522 @@ export default function SessionManagementPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(() => new Set<string>());
-  const [detail, setDetail] = useState<SessionRule | null>(null);
-  const [ruleJson, setRuleJson] = useState('{}');
-  const [saving, setSaving] = useState(false);
+  const [availablePersonas, setAvailablePersonas] = useState<PersonaOption[]>([]);
+  const [chatProviders, setChatProviders] = useState<ProviderOption[]>([]);
+  const [sttProviders, setSttProviders] = useState<ProviderOption[]>([]);
+  const [ttsProviders, setTtsProviders] = useState<ProviderOption[]>([]);
+  const [plugins, setPlugins] = useState<PluginOption[]>([]);
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeOption[]>([]);
+  const [umoInfoMap, setUmoInfoMap] = useState<Record<string, UmoInfo>>({});
+  const [allUmos, setAllUmos] = useState<string[]>([]);
+  const [loadingUmos, setLoadingUmos] = useState(false);
+
   const [addOpen, setAddOpen] = useState(false);
-  const [availableUmos, setAvailableUmos] = useState<string[]>([]);
   const [newUmo, setNewUmo] = useState('');
-  const [newRuleKey, setNewRuleKey] = useState('session_service_config');
-  const [newRuleJson, setNewRuleJson] = useState('{}');
+  const [editorItem, setEditorItem] = useState<SessionRule | null>(null);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [savingSection, setSavingSection] = useState('');
+  const [nameItem, setNameItem] = useState<SessionRule | null>(null);
+  const [nameValue, setNameValue] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true); setError('');
-    try {
-      const [ruleResponse, groupResponse] = await Promise.all([
-        listSessionRules({ query: { page, page_size: pageSize, search: search.trim() || undefined } }),
-        listSessionGroups(),
-      ]);
-      const data = unwrapData<SessionRulesData>(ruleResponse);
-      const groupData = unwrapData<{ groups?: SessionGroup[] } | SessionGroup[]>(groupResponse);
-      setRules(data?.rules ?? []); setTotal(data?.total ?? 0);
-      setGroups(Array.isArray(groupData) ? groupData : groupData?.groups ?? []);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : t(`${prefix}.messages.loadError`)); }
-    finally { setLoading(false); }
-  }, [page, pageSize, search, t]);
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 300); return () => window.clearTimeout(timer); }, [load]);
-  useEffect(() => {
-    if (detail) setRuleJson(JSON.stringify(detail.rules ?? {}, null, 2));
-  }, [detail]);
+  const [batchScope, setBatchScope] = useState<BatchScope>('selected');
+  const [batchLlm, setBatchLlm] = useState('');
+  const [batchTts, setBatchTts] = useState('');
+  const [batchChatProvider, setBatchChatProvider] = useState('');
+  const [batchUpdating, setBatchUpdating] = useState(false);
 
-  const remove = async (umos: string[]) => {
-    if (!umos.length || !await confirmAction({ danger: true, message: t(`${prefix}.batchDeleteConfirm.message`, { count: umos.length }), title: t(`${prefix}.deleteConfirm.title`) })) return;
-    try {
-      await deleteSessionRules({ body: { umos } });
-      toast.success(t(`${prefix}.messages.batchDeleteSuccess`)); setSelected(new Set()); await load();
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.batchDeleteError`)); }
-  };
-  const toggle = (umo: string) => setSelected((current) => { const next = new Set(current); if (next.has(umo)) next.delete(umo); else next.add(umo); return next; });
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const selectedRules = useMemo(() => rules.filter((rule) => selected.has(rule.umo)), [rules, selected]);
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<SessionGroup>({ id: '', name: '', umos: [] });
+  const [groupMode, setGroupMode] = useState<'create' | 'edit'>('create');
+  const [availableSearch, setAvailableSearch] = useState('');
+  const [selectedSearch, setSelectedSearch] = useState('');
+  const [savingGroup, setSavingGroup] = useState(false);
 
-  const saveRules = async () => {
-    if (!detail) return;
-    let next: Record<string, unknown>;
+  const mergeUmoInfos = useCallback((infos: UmoInfo[]) => {
+    setUmoInfoMap((current) => {
+      const next = { ...current };
+      infos.forEach((info) => { if (info?.umo) next[info.umo] = { ...(next[info.umo] ?? {}), ...info }; });
+      return next;
+    });
+  }, []);
+
+  const loadRules = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const parsed: unknown = JSON.parse(ruleJson);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Rules must be a JSON object.');
-      next = parsed as Record<string, unknown>;
+      const data = unwrapData<SessionRulesData>(await listSessionRules({
+        query: { page, page_size: pageSize, search: search.trim() || undefined },
+      })) ?? {};
+      const nextRules = (data.rules ?? []).map((item) => ({ ...item, rules: item.rules ?? {} }));
+      setRules(nextRules);
+      setTotal(data.total ?? 0);
+      setAvailablePersonas(data.available_personas ?? []);
+      setChatProviders(data.available_chat_providers ?? []);
+      setSttProviders(data.available_stt_providers ?? []);
+      setTtsProviders(data.available_tts_providers ?? []);
+      setPlugins(data.available_plugins ?? []);
+      setKnowledgeBases(data.available_kbs ?? []);
+      mergeUmoInfos(nextRules);
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.saveError`));
-      return;
+      setError(cause instanceof Error ? cause.message : text('messages.loadError'));
+    } finally {
+      setLoading(false);
     }
-    setSaving(true);
+  }, [mergeUmoInfos, page, pageSize, search, text]);
+
+  const loadGroups = useCallback(async () => {
     try {
-      await Promise.all(Object.entries(next).map(([ruleKey, ruleValue]) => upsertSessionRule({
-        body: { rule_key: ruleKey, rule_value: ruleValue as Record<string, unknown>, umo: detail.umo },
-      })));
-      const removed = Object.keys(detail.rules ?? {}).filter((key) => !(key in next));
-      await Promise.all(removed.map((ruleKey) => deleteSessionRules({ body: { rule_key: ruleKey, umo: detail.umo } })));
-      toast.success(t(`${prefix}.messages.saveSuccess`));
-      setDetail(null);
-      await load();
+      const data = unwrapData<{ groups?: SessionGroup[] } | SessionGroup[]>(await listSessionGroups());
+      setGroups(Array.isArray(data) ? data : data?.groups ?? []);
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.saveError`));
-    } finally { setSaving(false); }
+      toast.error(cause instanceof Error ? cause.message : text('messages.loadError'));
+    }
+  }, [text]);
+
+  const loadUmos = useCallback(async () => {
+    setLoadingUmos(true);
+    try {
+      const data = unwrapData<ActiveUmoData>(await listActiveUmos()) ?? {};
+      setAllUmos(data.umos ?? []);
+      mergeUmoInfos(data.umo_infos ?? []);
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : text('messages.loadError'));
+    } finally {
+      setLoadingUmos(false);
+    }
+  }, [mergeUmoInfos, text]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadRules(), 300);
+    return () => window.clearTimeout(timer);
+  }, [loadRules]);
+  useEffect(() => { void loadGroups(); }, [loadGroups]);
+
+  const selectedRules = useMemo(() => rules.filter((rule) => selected.has(rule.umo)), [rules, selected]);
+  const allPageSelected = rules.length > 0 && rules.every((rule) => selected.has(rule.umo));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const infoFor = useCallback((umo: string) => umoInfoMap[umo] ?? parseUmo(umo), [umoInfoMap]);
+
+  const availableNewUmos = useMemo(() => {
+    const existing = new Set(rules.map((rule) => rule.umo));
+    return allUmos.filter((umo) => !existing.has(umo));
+  }, [allUmos, rules]);
+  const selectedGroupUmos = editingGroup.umos ?? [];
+  const unselectedGroupUmos = useMemo(() => {
+    const chosen = new Set(selectedGroupUmos);
+    const query = availableSearch.trim().toLowerCase();
+    return allUmos.filter((umo) => !chosen.has(umo) && (!query || displayName(infoFor(umo)).toLowerCase().includes(query) || umo.toLowerCase().includes(query)));
+  }, [allUmos, availableSearch, infoFor, selectedGroupUmos]);
+  const filteredSelectedGroupUmos = useMemo(() => {
+    const query = selectedSearch.trim().toLowerCase();
+    return selectedGroupUmos.filter((umo) => !query || displayName(infoFor(umo)).toLowerCase().includes(query) || umo.toLowerCase().includes(query));
+  }, [infoFor, selectedGroupUmos, selectedSearch]);
+
+  const providerLabel = (provider: ProviderOption) => provider.model
+    ? `${provider.name || provider.id} (${provider.model})`
+    : provider.name || provider.id;
+  const openEditor = (item: SessionRule) => {
+    setEditorItem(item);
+    setEditor(initialEditor(item));
   };
-  const openAddRule = async () => {
-    setAddOpen(true);
-    try {
-      const data = unwrapData<{ umos?: string[] }>(await listActiveUmos());
-      const existing = new Set(rules.map((rule) => rule.umo));
-      setAvailableUmos((data?.umos ?? []).filter((umo) => !existing.has(umo)));
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.loadError`)); }
+  const updateEditor = <K extends keyof EditorState>(key: K, value: EditorState[K]) => {
+    setEditor((current) => current ? { ...current, [key]: value } : current);
   };
-  const addRule = async () => {
-    if (!newUmo || !newRuleKey.trim()) return;
-    let value: Record<string, unknown>;
-    try {
-      const parsed: unknown = JSON.parse(newRuleJson);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Rule value must be a JSON object.');
-      value = parsed as Record<string, unknown>;
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.saveError`)); return; }
-    setSaving(true);
-    try {
-      await upsertSessionRule({ body: { rule_key: newRuleKey.trim(), rule_value: value, umo: newUmo } });
-      toast.success(t(`${prefix}.messages.saveSuccess`)); setAddOpen(false); setNewUmo(''); setNewRuleJson('{}'); await load();
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.saveError`)); }
-    finally { setSaving(false); }
+  const updateLocalRule = (umo: string, key: string, value?: unknown) => {
+    setRules((current) => {
+      const found = current.find((item) => item.umo === umo);
+      if (!found && value !== undefined) return [...current, { ...infoFor(umo), rules: { [key]: value }, umo }];
+      return current.map((item) => {
+        if (item.umo !== umo) return item;
+        const nextRules = { ...item.rules };
+        if (value === undefined) delete nextRules[key];
+        else nextRules[key] = value;
+        return { ...item, rules: nextRules };
+      });
+    });
+    setEditorItem((current) => {
+      if (!current || current.umo !== umo) return current;
+      const nextRules = { ...current.rules };
+      if (value === undefined) delete nextRules[key];
+      else nextRules[key] = value;
+      return { ...current, rules: nextRules };
+    });
+  };
+  const upsert = async (umo: string, ruleKey: string, ruleValue: unknown) => {
+    await upsertSessionRule({ body: { rule_key: ruleKey, rule_value: ruleValue as never, umo } });
+    updateLocalRule(umo, ruleKey, ruleValue);
+  };
+  const removeRuleKey = async (umo: string, ruleKey: string) => {
+    await deleteSessionRules({ body: { rule_key: ruleKey, umo } });
+    updateLocalRule(umo, ruleKey);
   };
 
-  return <div className="monitor-page data-page">
-    <header className="monitor-header"><div><h1>{t(`${prefix}.title`)}</h1><p>{t(`${prefix}.subtitle`)}</p></div><div className="monitor-actions"><a href="https://docs.astrbot.app/use/custom-rules.html" rel="noreferrer" target="_blank">?</a><button onClick={() => void openAddRule()} type="button">{t(`${prefix}.buttons.addRule`)}</button><button disabled={loading} onClick={() => void load()} type="button">{t(`${prefix}.buttons.refresh`)}</button></div></header>
-    <section className="route-card"><div className="monitor-toolbar"><h2>{t(`${prefix}.customRules.title`)} <small>{total} {t(`${prefix}.customRules.rulesCount`)}</small></h2><div className="data-filters"><input onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={t(`${prefix}.search.placeholder`)} value={search} />{selectedRules.length > 0 && <button className="button--danger" onClick={() => void remove(selectedRules.map((rule) => rule.umo))} type="button">{t(`${prefix}.buttons.batchDelete`)} ({selectedRules.length})</button>}</div></div>
+  const removeRules = async (items: SessionRule[]) => {
+    if (!items.length || !await confirmAction({
+      danger: true,
+      message: items.length === 1 ? text('deleteConfirm.message') : text('batchDeleteConfirm.message', { count: items.length }),
+      title: items.length === 1 ? text('deleteConfirm.title') : text('batchDeleteConfirm.title'),
+    })) return;
+    try {
+      await deleteSessionRules({ body: items.length === 1 ? { umo: items[0].umo } : { umos: items.map((item) => item.umo) } });
+      toast.success(text(items.length === 1 ? 'messages.deleteSuccess' : 'messages.batchDeleteSuccess'));
+      setSelected(new Set());
+      await loadRules();
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : text('messages.deleteError'));
+    }
+  };
+
+  const saveService = async () => {
+    if (!editorItem || !editor) return;
+    setSavingSection('service');
+    try {
+      const config: Record<string, unknown> = {
+        llm_enabled: editor.service.llm_enabled,
+        session_enabled: editor.service.session_enabled,
+        tts_enabled: editor.service.tts_enabled,
+      };
+      if (editor.service.custom_name) config.custom_name = editor.service.custom_name;
+      if (editor.service.persona_id) config.persona_id = editor.service.persona_id;
+      await upsert(editorItem.umo, 'session_service_config', config);
+      toast.success(text('messages.saveSuccess'));
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.saveError')); }
+    finally { setSavingSection(''); }
+  };
+  const saveProviders = async () => {
+    if (!editorItem || !editor) return;
+    setSavingSection('providers');
+    try {
+      const types = ['chat_completion', 'speech_to_text', 'text_to_speech'] as const;
+      await Promise.all(types.map(async (type) => {
+        const key = `provider_perf_${type}`;
+        const value = editor.providers[type];
+        if (value && value !== FOLLOW_CONFIG_VALUE) await upsert(editorItem.umo, key, value);
+        else if (editorItem.rules[key] !== undefined) await removeRuleKey(editorItem.umo, key);
+      }));
+      toast.success(text('messages.saveSuccess'));
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.saveError')); }
+    finally { setSavingSection(''); }
+  };
+  const savePlugins = async () => {
+    if (!editorItem || !editor) return;
+    setSavingSection('plugins');
+    try {
+      if (!editor.plugin.enabled_plugins.length && !editor.plugin.disabled_plugins.length) {
+        if (editorItem.rules.session_plugin_config !== undefined) await removeRuleKey(editorItem.umo, 'session_plugin_config');
+      } else await upsert(editorItem.umo, 'session_plugin_config', editor.plugin);
+      toast.success(text('messages.saveSuccess'));
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.saveError')); }
+    finally { setSavingSection(''); }
+  };
+  const saveKnowledge = async () => {
+    if (!editorItem || !editor) return;
+    setSavingSection('knowledge');
+    try {
+      if (!editor.kb.kb_ids.length) {
+        if (editorItem.rules.kb_config !== undefined) await removeRuleKey(editorItem.umo, 'kb_config');
+      } else await upsert(editorItem.umo, 'kb_config', editor.kb);
+      toast.success(text('messages.saveSuccess'));
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.saveError')); }
+    finally { setSavingSection(''); }
+  };
+
+  const saveQuickName = async () => {
+    if (!nameItem) return;
+    setSavingSection('name');
+    try {
+      const current = recordValue(nameItem.rules.session_service_config);
+      const config: Record<string, unknown> = {
+        llm_enabled: current.llm_enabled !== false,
+        session_enabled: current.session_enabled !== false,
+        tts_enabled: current.tts_enabled !== false,
+        ...current,
+      };
+      if (nameValue.trim()) config.custom_name = nameValue.trim();
+      else delete config.custom_name;
+      await upsert(nameItem.umo, 'session_service_config', config);
+      toast.success(text('messages.saveSuccess'));
+      setNameItem(null);
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.saveError')); }
+    finally { setSavingSection(''); }
+  };
+
+  const applyBatch = async () => {
+    const hasChanges = batchLlm !== '' || batchTts !== '' || batchChatProvider !== '';
+    if (!hasChanges) return toast.error(text('messages.selectAtLeastOneConfig'));
+    const umos = batchScope === 'selected' ? [...selected] : [];
+    if (batchScope === 'selected' && !umos.length) return toast.error(text('messages.selectSessionsFirst'));
+    setBatchUpdating(true);
+    try {
+      const isCustom = batchScope.startsWith('custom_group:');
+      let scope: 'all' | 'group' | 'private' | 'custom_group' | undefined;
+      if (isCustom) scope = 'custom_group';
+      else if (batchScope !== 'selected') scope = batchScope as 'all' | 'group' | 'private';
+      const common = {
+        ...(scope ? { scope } : {}),
+        ...(isCustom ? { group_id: batchScope.slice('custom_group:'.length) } : {}),
+        ...(umos.length ? { umos } : {}),
+      };
+      const tasks: Promise<unknown>[] = [];
+      if (batchLlm !== '' || batchTts !== '') tasks.push(batchUpdateSessionService({
+        body: {
+          ...common,
+          ...(batchLlm !== '' ? { llm_enabled: batchLlm === 'true' } : {}),
+          ...(batchTts !== '' ? { tts_enabled: batchTts === 'true' } : {}),
+        },
+      }));
+      if (batchChatProvider) {
+        if (batchChatProvider === FOLLOW_CONFIG_VALUE) {
+          tasks.push(deleteSessionRules({ body: { ...common, rule_key: 'provider_perf_chat_completion' } }));
+        } else {
+          tasks.push(batchUpdateSessionProvider({
+            body: { ...common, provider_id: batchChatProvider, provider_type: 'chat_completion' },
+          }));
+        }
+      }
+      await Promise.all(tasks);
+      toast.success(text('messages.batchUpdateSuccess'));
+      setBatchLlm('');
+      setBatchTts('');
+      setBatchChatProvider('');
+      await loadRules();
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.batchUpdateError')); }
+    finally { setBatchUpdating(false); }
+  };
+
+  const openGroupEditor = async (group?: SessionGroup) => {
+    setGroupMode(group ? 'edit' : 'create');
+    setEditingGroup(group ? { ...group, umos: [...(group.umos ?? [])] } : { id: '', name: '', umos: [] });
+    setAvailableSearch('');
+    setSelectedSearch('');
+    setGroupOpen(true);
+    await loadUmos();
+  };
+  const saveGroup = async () => {
+    if (!editingGroup.name?.trim()) return toast.error(text('messages.groupNameRequired'));
+    setSavingGroup(true);
+    try {
+      if (groupMode === 'create') {
+        await createSessionGroup({ body: { name: editingGroup.name.trim(), umos: editingGroup.umos ?? [] } });
+      } else {
+        await updateSessionGroup({
+          body: { name: editingGroup.name.trim(), umos: editingGroup.umos ?? [] },
+          path: { group_id: editingGroup.id },
+        });
+      }
+      toast.success(text('messages.saveSuccess'));
+      setGroupOpen(false);
+      await loadGroups();
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.saveGroupError')); }
+    finally { setSavingGroup(false); }
+  };
+  const removeGroup = async (group: SessionGroup) => {
+    if (!await confirmAction({ danger: true, message: text('groups.deleteConfirm', { name: group.name }), title: text('deleteConfirm.title') })) return;
+    try {
+      await deleteSessionGroup({ path: { group_id: group.id } });
+      toast.success(text('messages.deleteSuccess'));
+      await loadGroups();
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.deleteGroupError')); }
+  };
+  const addSelectedToGroup = async (groupId: string) => {
+    if (!selected.size) return toast.error(text('messages.selectSessionsToAddFirst'));
+    try {
+      await updateSessionGroup({ body: { add_umos: [...selected] }, path: { group_id: groupId } });
+      toast.success(text('messages.addToGroupSuccess', { count: selected.size }));
+      await loadGroups();
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : text('messages.addToGroupError')); }
+  };
+
+  return <div className="session-rules-page">
+    <section className="session-rules-card session-rules-card--table">
+      <header className="session-rules-toolbar">
+        <div className="session-rules-toolbar__title">
+          <h1>{text('customRules.title')}</h1>
+          <a aria-label={text('title')} href="https://docs.astrbot.app/use/custom-rules.html" rel="noreferrer" target="_blank"><MdiIcon name="mdi-information-outline" /></a>
+          <span>{total} {text('customRules.rulesCount')}</span>
+        </div>
+        <label className="session-rules-search"><MdiIcon name="mdi-magnify" /><input onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder={text('search.placeholder')} value={search} /></label>
+        <div className="session-rules-toolbar__actions">
+          {selectedRules.length > 0 && <button className="is-danger" onClick={() => void removeRules(selectedRules)} type="button"><MdiIcon name="mdi-delete-outline" />{text('buttons.batchDelete')} ({selectedRules.length})</button>}
+          <button className="is-success" onClick={() => { setAddOpen(true); setNewUmo(''); void loadUmos(); }} type="button"><MdiIcon name="mdi-plus" />{text('buttons.addRule')}</button>
+          <button className="is-primary" disabled={loading} onClick={() => void loadRules().then(() => toast.success(text('messages.refreshSuccess')))} type="button"><MdiIcon className={loading ? 'mdi-spin' : ''} name="mdi-refresh" />{text('buttons.refresh')}</button>
+        </div>
+      </header>
       {error && <div className="monitor-error" role="alert">{error}</div>}
-      <div className="monitor-table-wrap"><table className="monitor-table"><thead><tr><th /><th>{t(`${prefix}.table.headers.umoInfo`)}</th><th>{t(`${prefix}.table.headers.rulesOverview`)}</th><th>{t(`${prefix}.table.headers.actions`)}</th></tr></thead><tbody>{rules.map((rule) => <tr key={rule.umo}><td><input checked={selected.has(rule.umo)} onChange={() => toggle(rule.umo)} type="checkbox" /></td><td><strong>{rule.user_alias || rule.auto_name || rule.umo}</strong><small>{rule.platform || ''} {rule.message_type || ''} {rule.session_id || ''}</small></td><td><div className="rule-chips">{Object.keys(rule.rules ?? {}).map((key) => <span key={key}>{key}</span>)}</div></td><td><button onClick={() => setDetail(rule)} type="button">{t(`${prefix}.buttons.editRule`)}</button><button className="button--danger" onClick={() => void remove([rule.umo])} type="button">{t(`${prefix}.buttons.deleteAllRules`)}</button></td></tr>)}</tbody></table>{!loading && rules.length === 0 && <div className="monitor-empty">{t(`${prefix}.customRules.noRules`)}</div>}</div>
-      <div className="pagination"><label><select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 20, 50].map((size) => <option key={size}>{size}</option>)}</select></label><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">‹</button><span>{page}/{totalPages}</span><button disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)} type="button">›</button></div>
+      <div className="session-rules-table-wrap">
+        <table className="session-rules-table">
+          <thead><tr>
+            <th><input aria-label={text('table.headers.umoInfo')} checked={allPageSelected} onChange={() => setSelected((current) => {
+              const next = new Set(current);
+              if (allPageSelected) rules.forEach((rule) => next.delete(rule.umo));
+              else rules.forEach((rule) => next.add(rule.umo));
+              return next;
+            })} type="checkbox" /></th>
+            <th>{text('table.headers.umoInfo')}</th>
+            <th>{text('table.headers.rulesOverview')}</th>
+            <th>{text('table.headers.actions')}</th>
+          </tr></thead>
+          <tbody>{rules.map((rule) => {
+            const service = recordValue(rule.rules.session_service_config);
+            const hasProvider = rule.rules.provider_config !== undefined
+              || ['chat_completion', 'speech_to_text', 'text_to_speech'].some((type) => rule.rules[`provider_perf_${type}`] !== undefined);
+            return <tr key={rule.umo}>
+              <td><input checked={selected.has(rule.umo)} onChange={() => setSelected((current) => {
+                const next = new Set(current);
+                if (next.has(rule.umo)) next.delete(rule.umo); else next.add(rule.umo);
+                return next;
+              })} type="checkbox" /></td>
+              <td><UmoDisplay customName={typeof service.custom_name === 'string' ? service.custom_name : ''} info={rule} onEdit={() => { setNameItem(rule); setNameValue(typeof service.custom_name === 'string' ? service.custom_name : ''); }} /></td>
+              <td><div className="session-rule-chips">
+                {rule.rules.session_service_config !== undefined && <span className="is-primary">{text('customRules.serviceConfig')}</span>}
+                {rule.rules.session_plugin_config !== undefined && <span className="is-secondary">{text('customRules.pluginConfig')}</span>}
+                {rule.rules.kb_config !== undefined && <span className="is-info">{text('customRules.kbConfig')}</span>}
+                {hasProvider && <span className="is-warning">{text('customRules.providerConfig')}</span>}
+              </div></td>
+              <td><div className="session-rule-actions">
+                <button className="is-primary" onClick={() => openEditor(rule)} title={text('buttons.editRule')} type="button"><MdiIcon name="mdi-pencil" /></button>
+                <button className="is-danger" onClick={() => void removeRules([rule])} title={text('buttons.deleteAllRules')} type="button"><MdiIcon name="mdi-delete" /></button>
+              </div></td>
+            </tr>;
+          })}</tbody>
+        </table>
+        {!loading && rules.length === 0 && <div className="session-rules-empty"><MdiIcon name="mdi-file-document-edit-outline" /><strong>{text('customRules.noRules')}</strong><span>{text('customRules.noRulesDesc')}</span><button onClick={() => { setAddOpen(true); void loadUmos(); }} type="button"><MdiIcon name="mdi-plus" />{text('buttons.addRule')}</button></div>}
+      </div>
+      <footer className="session-rules-pagination">
+        <label>Items per page: <select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 20, 50].map((size) => <option key={size}>{size}</option>)}</select></label>
+        <span>{total ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total}` : '0-0 of 0'}</span>
+        <button disabled={page <= 1} onClick={() => setPage(1)} type="button"><MdiIcon name="mdi-page-first" /></button>
+        <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button"><MdiIcon name="mdi-chevron-left" /></button>
+        <button disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)} type="button"><MdiIcon name="mdi-chevron-right" /></button>
+        <button disabled={page >= totalPages} onClick={() => setPage(totalPages)} type="button"><MdiIcon name="mdi-page-last" /></button>
+      </footer>
     </section>
-    <section className="route-card"><h2>{t(`${prefix}.groups.title`)} <small>{t(`${prefix}.groups.count`, { count: groups.length })}</small></h2><div className="group-grid">{groups.map((group) => <article key={group.id}><strong>{group.name || group.id}</strong><span>{t(`${prefix}.groups.sessionsCount`, { count: group.umo_count ?? group.umos?.length ?? 0 })}</span></article>)}</div>{groups.length === 0 && <div className="monitor-empty">{t(`${prefix}.groups.empty`)}</div>}</section>
-    <Dialog onOpenChange={setAddOpen} open={addOpen} title={t(`${prefix}.addRule.title`)}><div className="dialog-form"><label>{t(`${prefix}.addRule.selectUmo`)}<select onChange={(event) => setNewUmo(event.target.value)} value={newUmo}><option value="">—</option>{availableUmos.map((umo) => <option key={umo} value={umo}>{umo}</option>)}</select></label><label>Rule key<input onChange={(event) => setNewRuleKey(event.target.value)} value={newRuleKey} /></label><label>Rule value<textarea onChange={(event) => setNewRuleJson(event.target.value)} rows={8} value={newRuleJson} /></label><div className="dialog-actions"><DialogClose asChild><button type="button">{t(`${prefix}.buttons.cancel`)}</button></DialogClose><button className="button--primary" disabled={saving || !newUmo} onClick={() => void addRule()} type="button">{t(`${prefix}.buttons.save`)}</button></div></div></Dialog>
-    <Dialog onOpenChange={(open) => !open && setDetail(null)} open={Boolean(detail)} title={detail?.user_alias || detail?.auto_name || detail?.umo || ''}>
-      <div className="json-editor"><MonacoEditor language="json" onChange={setRuleJson} value={ruleJson} /></div>
-      <div className="dialog-actions"><DialogClose asChild><button type="button">{t(`${prefix}.buttons.cancel`)}</button></DialogClose><button className="button--primary" disabled={saving} onClick={() => void saveRules()} type="button">{t(`${prefix}.buttons.save`)}</button></div>
+
+    <section className="session-rules-card">
+      <header className="session-rules-section-title"><h2>{text('batchOperations.title')}</h2><span>{text('batchOperations.hint')}</span></header>
+      <div className="session-batch-grid">
+        <label><span>{text('batchOperations.scope')}</span><select onChange={(event) => setBatchScope(event.target.value as BatchScope)} value={batchScope}>
+          <option value="selected">{text('batchOperations.scopeSelected')}</option><option value="all">{text('batchOperations.scopeAll')}</option><option value="group">{text('batchOperations.scopeGroup')}</option><option value="private">{text('batchOperations.scopePrivate')}</option>
+          {groups.map((group) => <option key={group.id} value={`custom_group:${group.id}`}>{text('groups.customGroupOption', { count: group.umo_count ?? group.umos?.length ?? 0, name: group.name })}</option>)}
+        </select></label>
+        <label><span>{text('batchOperations.llmStatus')}</span><select onChange={(event) => setBatchLlm(event.target.value)} value={batchLlm}><option value="">{text('batchOperations.llmStatus')}</option><option value="true">{text('status.enabled')}</option><option value="false">{text('status.disabled')}</option></select></label>
+        <label><span>{text('batchOperations.ttsStatus')}</span><select onChange={(event) => setBatchTts(event.target.value)} value={batchTts}><option value="">{text('batchOperations.ttsStatus')}</option><option value="true">{text('status.enabled')}</option><option value="false">{text('status.disabled')}</option></select></label>
+        <label><span>{text('batchOperations.chatProvider')}</span><select onChange={(event) => setBatchChatProvider(event.target.value)} value={batchChatProvider}><option value="">{text('batchOperations.chatProvider')}</option><option value={FOLLOW_CONFIG_VALUE}>{text('provider.followConfig')}</option>{chatProviders.map((provider) => <option key={provider.id} value={provider.id}>{providerLabel(provider)}</option>)}</select></label>
+      </div>
+      <div className="session-batch-actions"><button disabled={batchUpdating || (batchScope === 'selected' && !selected.size)} onClick={() => void applyBatch()} type="button"><MdiIcon name="mdi-check-all" />{text('batchOperations.apply')}</button></div>
+    </section>
+
+    <section className="session-rules-card">
+      <header className="session-rules-section-title session-rules-section-title--actions">
+        <div><h2>{text('groups.title')}</h2><span>{text('groups.count', { count: groups.length })}</span></div>
+        <div>
+          {selected.size > 0 && groups.length > 0 && <label className="session-group-add"><MdiIcon name="mdi-folder-plus" /><select onChange={(event) => { if (event.target.value) void addSelectedToGroup(event.target.value); event.target.value = ''; }} value=""><option value="">{text('groups.addToGroup')}</option>{groups.map((group) => <option key={group.id} value={group.id}>{text('groups.groupOption', { count: group.umo_count ?? group.umos?.length ?? 0, name: group.name })}</option>)}</select></label>}
+          <button onClick={() => void openGroupEditor()} type="button"><MdiIcon name="mdi-folder-plus" />{text('groups.create')}</button>
+        </div>
+      </header>
+      {groups.length ? <div className="session-group-grid">{groups.map((group) => <article key={group.id}><div><strong>{group.name || group.id}</strong><span>{text('groups.sessionsCount', { count: group.umo_count ?? group.umos?.length ?? 0 })}</span></div><div><button onClick={() => void openGroupEditor(group)} title={text('groups.edit')} type="button"><MdiIcon name="mdi-pencil" /></button><button className="is-danger" onClick={() => void removeGroup(group)} title={text('buttons.delete')} type="button"><MdiIcon name="mdi-delete" /></button></div></article>)}</div> : <div className="session-groups-empty">{text('groups.empty')}</div>}
+    </section>
+
+    <Dialog onOpenChange={setAddOpen} open={addOpen} title={text('addRule.title')}>
+      <div className="session-add-rule">
+        <DialogClose asChild><button className="session-dialog-close" aria-label={text('buttons.cancel')} type="button"><MdiIcon name="mdi-close" /></button></DialogClose>
+        <div className="session-rule-alert"><MdiIcon name="mdi-information-outline" /><span>{text('addRule.description')}</span></div>
+        <label><span>{text('addRule.selectUmo')}</span><select disabled={loadingUmos} onChange={(event) => setNewUmo(event.target.value)} value={newUmo}><option value="">{loadingUmos ? '…' : text('addRule.noUmos')}</option>{availableNewUmos.map((umo) => <option key={umo} value={umo}>{displayName(infoFor(umo))} · {umo}</option>)}</select></label>
+        <div className="dialog-actions"><DialogClose asChild><button type="button">{text('buttons.cancel')}</button></DialogClose><button className="button--primary" disabled={!newUmo} onClick={() => {
+          const item = { ...infoFor(newUmo), rules: {}, umo: newUmo };
+          setAddOpen(false); openEditor(item);
+        }} type="button">{text('buttons.next')}</button></div>
+      </div>
+    </Dialog>
+
+    <Dialog onOpenChange={(open) => { if (!open) { setEditorItem(null); setEditor(null); } }} open={Boolean(editorItem && editor)} title={text('ruleEditor.title')}>
+      {editorItem && editor && <div className="session-rule-editor">
+        <DialogClose asChild><button className="session-dialog-close" aria-label={text('buttons.cancel')} type="button"><MdiIcon name="mdi-close" /></button></DialogClose>
+        <code className="session-rule-editor__umo">{editorItem.umo}</code>
+        <EditorSection onSave={saveService} saving={savingSection === 'service'} title={text('ruleEditor.serviceConfig.title')} saveText={text('buttons.save')}>
+          <label className="session-check"><input checked={editor.service.session_enabled} onChange={(event) => updateEditor('service', { ...editor.service, session_enabled: event.target.checked })} type="checkbox" />{text('ruleEditor.serviceConfig.sessionEnabled')}</label>
+          <div className="session-editor-columns"><label className="session-check"><input checked={editor.service.llm_enabled} onChange={(event) => updateEditor('service', { ...editor.service, llm_enabled: event.target.checked })} type="checkbox" />{text('ruleEditor.serviceConfig.llmEnabled')}</label><label className="session-check"><input checked={editor.service.tts_enabled} onChange={(event) => updateEditor('service', { ...editor.service, tts_enabled: event.target.checked })} type="checkbox" />{text('ruleEditor.serviceConfig.ttsEnabled')}</label></div>
+          <label><span>{text('ruleEditor.serviceConfig.customName')}</span><input onChange={(event) => updateEditor('service', { ...editor.service, custom_name: event.target.value })} value={editor.service.custom_name ?? ''} /></label>
+        </EditorSection>
+        <EditorSection onSave={saveProviders} saving={savingSection === 'providers'} title={text('ruleEditor.providerConfig.title')} saveText={text('buttons.save')}>
+          <ProviderSelect label={text('ruleEditor.providerConfig.chatProvider')} onChange={(value) => updateEditor('providers', { ...editor.providers, chat_completion: value })} options={chatProviders} value={editor.providers.chat_completion} followText={text('provider.followConfig')} />
+          <ProviderSelect disabled={!sttProviders.length} label={text('ruleEditor.providerConfig.sttProvider')} onChange={(value) => updateEditor('providers', { ...editor.providers, speech_to_text: value })} options={sttProviders} value={editor.providers.speech_to_text} followText={text('provider.followConfig')} />
+          <ProviderSelect disabled={!ttsProviders.length} label={text('ruleEditor.providerConfig.ttsProvider')} onChange={(value) => updateEditor('providers', { ...editor.providers, text_to_speech: value })} options={ttsProviders} value={editor.providers.text_to_speech} followText={text('provider.followConfig')} />
+        </EditorSection>
+        <EditorSection onSave={saveService} saving={savingSection === 'service'} title={text('ruleEditor.personaConfig.title')} saveText={text('buttons.save')}>
+          <label><span>{text('ruleEditor.personaConfig.selectPersona')}</span><select onChange={(event) => updateEditor('service', { ...editor.service, persona_id: event.target.value || null })} value={editor.service.persona_id ?? ''}><option value="">{text('persona.none')}</option>{availablePersonas.map((persona) => <option key={persona.id || persona.name} value={persona.name}>{persona.name}</option>)}</select></label>
+          <div className="session-rule-alert"><MdiIcon name="mdi-information-outline" />{text('ruleEditor.personaConfig.hint')}</div>
+        </EditorSection>
+        <EditorSection onSave={savePlugins} saving={savingSection === 'plugins'} title={text('ruleEditor.pluginConfig.title')} saveText={text('buttons.save')}>
+          <MultiSelect label={text('ruleEditor.pluginConfig.disabledPlugins')} onChange={(value) => updateEditor('plugin', { ...editor.plugin, disabled_plugins: value })} options={plugins.map((plugin) => ({ label: plugin.display_name || plugin.name, value: plugin.name }))} value={editor.plugin.disabled_plugins} />
+          <div className="session-rule-alert"><MdiIcon name="mdi-information-outline" />{text('ruleEditor.pluginConfig.hint')}</div>
+        </EditorSection>
+        <EditorSection onSave={saveKnowledge} saving={savingSection === 'knowledge'} title={text('ruleEditor.kbConfig.title')} saveText={text('buttons.save')}>
+          <MultiSelect disabled={!knowledgeBases.length} label={text('ruleEditor.kbConfig.selectKbs')} onChange={(value) => updateEditor('kb', { ...editor.kb, kb_ids: value })} options={knowledgeBases.map((kb) => ({ label: `${kb.emoji || '📚'} ${kb.kb_name}`, value: kb.kb_id }))} value={editor.kb.kb_ids} />
+          <div className="session-editor-columns"><label><span>{text('ruleEditor.kbConfig.topK')}</span><input max={20} min={1} onChange={(event) => updateEditor('kb', { ...editor.kb, top_k: Number(event.target.value) || 1 })} type="number" value={editor.kb.top_k} /></label><label className="session-check session-check--bottom"><input checked={editor.kb.enable_rerank} onChange={(event) => updateEditor('kb', { ...editor.kb, enable_rerank: event.target.checked })} type="checkbox" />{text('ruleEditor.kbConfig.enableRerank')}</label></div>
+        </EditorSection>
+      </div>}
+    </Dialog>
+
+    <Dialog onOpenChange={(open) => !open && setNameItem(null)} open={Boolean(nameItem)} title={text('quickEditName.title')}>
+      <div className="session-quick-name"><label><span>{text('ruleEditor.serviceConfig.customName')}</span><input autoFocus onChange={(event) => setNameValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void saveQuickName(); }} value={nameValue} /></label><div className="dialog-actions"><DialogClose asChild><button type="button">{text('buttons.cancel')}</button></DialogClose><button className="button--primary" disabled={savingSection === 'name'} onClick={() => void saveQuickName()} type="button">{text('buttons.save')}</button></div></div>
+    </Dialog>
+
+    <Dialog onOpenChange={setGroupOpen} open={groupOpen} title={text(groupMode === 'create' ? 'groups.create' : 'groups.edit')}>
+      <div className="session-group-editor">
+        <label><span>{text('groups.name')}</span><input onChange={(event) => setEditingGroup((current) => ({ ...current, name: event.target.value }))} value={editingGroup.name ?? ''} /></label>
+        <div className="session-transfer">
+          <TransferList emptyText={text('groups.noMatch')} items={unselectedGroupUmos} label={text('groups.availableSessions', { count: allUmos.length - selectedGroupUmos.length })} onItem={(umo) => setEditingGroup((current) => ({ ...current, umos: [...(current.umos ?? []), umo] }))} onSearch={setAvailableSearch} search={availableSearch} infoFor={infoFor} icon="mdi-plus" />
+          <div className="session-transfer__actions"><button disabled={!unselectedGroupUmos.length} onClick={() => setEditingGroup((current) => ({ ...current, umos: [...new Set([...(current.umos ?? []), ...unselectedGroupUmos])] }))} type="button"><MdiIcon name="mdi-chevron-double-right" /></button><button disabled={!selectedGroupUmos.length} onClick={() => setEditingGroup((current) => ({ ...current, umos: [] }))} type="button"><MdiIcon name="mdi-chevron-double-left" /></button></div>
+          <TransferList danger emptyText={text('groups.noMembers')} items={filteredSelectedGroupUmos} label={text('groups.selectedSessions', { count: selectedGroupUmos.length })} onItem={(umo) => setEditingGroup((current) => ({ ...current, umos: (current.umos ?? []).filter((item) => item !== umo) }))} onSearch={setSelectedSearch} search={selectedSearch} infoFor={infoFor} icon="mdi-minus" />
+        </div>
+        <div className="dialog-actions"><DialogClose asChild><button type="button">{text('buttons.cancel')}</button></DialogClose><button className="button--primary" disabled={savingGroup} onClick={() => void saveGroup()} type="button">{text('buttons.save')}</button></div>
+      </div>
     </Dialog>
   </div>;
+}
+
+function EditorSection({ children, onSave, saveText, saving, title }: {
+  children: React.ReactNode;
+  onSave: () => Promise<void>;
+  saveText: string;
+  saving: boolean;
+  title: string;
+}) {
+  return <section className="session-editor-section"><h3>{title}</h3><div className="session-editor-section__fields">{children}</div><div className="session-editor-section__actions"><button disabled={saving} onClick={() => void onSave()} type="button"><MdiIcon className={saving ? 'mdi-spin' : ''} name={saving ? 'mdi-loading' : 'mdi-content-save'} />{saveText}</button></div></section>;
+}
+
+function ProviderSelect({ disabled, followText, label, onChange, options, value }: {
+  disabled?: boolean;
+  followText: string;
+  label: string;
+  onChange: (value: string) => void;
+  options: ProviderOption[];
+  value: string;
+}) {
+  return <label><span>{label}</span><select disabled={disabled} onChange={(event) => onChange(event.target.value)} value={value}><option value={FOLLOW_CONFIG_VALUE}>{followText}</option>{options.map((provider) => <option key={provider.id} value={provider.id}>{provider.model ? `${provider.name || provider.id} (${provider.model})` : provider.name || provider.id}</option>)}</select></label>;
+}
+
+function MultiSelect({ disabled, label, onChange, options, value }: {
+  disabled?: boolean;
+  label: string;
+  onChange: (value: string[]) => void;
+  options: { label: string; value: string }[];
+  value: string[];
+}) {
+  return <label className="session-multi-select"><span>{label}</span><select disabled={disabled} multiple onChange={(event) => onChange([...event.currentTarget.selectedOptions].map((option) => option.value))} value={value}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{value.length > 0 && <div>{value.map((item) => <button key={item} onClick={() => onChange(value.filter((valueItem) => valueItem !== item))} type="button">{options.find((option) => option.value === item)?.label || item}<MdiIcon name="mdi-close" /></button>)}</div>}</label>;
+}
+
+function TransferList({ danger, emptyText, icon, infoFor, items, label, onItem, onSearch, search }: {
+  danger?: boolean;
+  emptyText: string;
+  icon: `mdi-${string}`;
+  infoFor: (umo: string) => UmoInfo;
+  items: string[];
+  label: string;
+  onItem: (umo: string) => void;
+  onSearch: (value: string) => void;
+  search: string;
+}) {
+  return <div className="session-transfer-list"><strong>{label}</strong><label className="session-transfer-list__search"><MdiIcon name="mdi-magnify" /><input onChange={(event) => onSearch(event.target.value)} placeholder="..." value={search} /></label><div className="session-transfer-list__items">{items.map((umo) => <button className={danger ? 'is-danger' : ''} key={umo} onClick={() => onItem(umo)} type="button"><MdiIcon name={icon} /><UmoDisplay compact info={infoFor(umo)} /><span>{infoFor(umo).platform}</span></button>)}{!items.length && <div>{emptyText}</div>}</div></div>;
 }
