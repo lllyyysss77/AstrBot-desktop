@@ -6,7 +6,7 @@ type DialogProps = {
   description?: string;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
-  title: string;
+  title: ReactNode;
   trigger?: ReactElement;
 };
 
