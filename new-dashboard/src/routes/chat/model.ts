@@ -1,7 +1,7 @@
 import type { JsonObject } from '@/routes/configuration/model';
 
 export type ChatPart = JsonObject & { type: string; text?: string; think?: string; attachment_id?: string; filename?: string; stored_filename?: string };
-export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean; agentStats?: JsonObject } };
+export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean; agentStats?: JsonObject; refs?: unknown } };
 export type ChatSession = JsonObject & { session_id: string; display_name?: string; updated_at?: string };
 export type StagedAttachmentType = 'image' | 'record' | 'file';
 
@@ -35,7 +35,7 @@ export function normalizeRecord(value: unknown): ChatRecord {
   const record = value && typeof value === 'object' ? value as JsonObject : {};
   const rawContent = record.content && typeof record.content === 'object' ? record.content as JsonObject : {};
   const rawStats = rawContent.agentStats || rawContent.agent_stats;
-  return { ...record, content: { type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')), message: normalizeParts(rawContent.message), reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined, agentStats: rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? rawStats as JsonObject : undefined } } as ChatRecord;
+  return { ...record, content: { type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')), message: normalizeParts(rawContent.message), reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined, agentStats: rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? rawStats as JsonObject : undefined, refs: rawContent.refs } } as ChatRecord;
 }
 
 export function appendStreamPayload(record: ChatRecord, payload: unknown) {
@@ -43,12 +43,18 @@ export function appendStreamPayload(record: ChatRecord, payload: unknown) {
   const raw = payload as JsonObject; const normalized = raw.ct === 'chat' ? { ...raw, type: raw.type || raw.t } : raw;
   const type = String(normalized.type || normalized.t || ''); const chain = String(normalized.chain_type || ''); const data = normalized.data;
   if (['session_id', 'session_bound', 'user_message_saved'].includes(type)) return false;
-  if (type === 'message_saved' && data && typeof data === 'object') { const saved = data as JsonObject; record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id; record.created_at = saved.created_at || record.created_at; record.llm_checkpoint_id = saved.llm_checkpoint_id || record.llm_checkpoint_id; record.content.isLoading = false; return true; }
+  if (type === 'message_saved' && data && typeof data === 'object') { const saved = data as JsonObject; record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id; record.created_at = saved.created_at || record.created_at; record.llm_checkpoint_id = saved.llm_checkpoint_id || record.llm_checkpoint_id; if (saved.refs) record.content.refs = saved.refs; record.content.isLoading = false; return true; }
   if ((type === 'agent_stats' || chain === 'agent_stats') && data && typeof data === 'object' && !Array.isArray(data)) { record.content.agentStats = data as JsonObject; record.content.isLoading = false; return true; }
   if (type === 'error') { appendPlain(record, `\n\n${String(data ?? 'Unknown error')}`); return true; }
   if (['complete', 'break'].includes(type)) { if (!plainText(record)) appendPlain(record, payloadText(data), false); record.content.isLoading = false; return true; }
   if (type === 'end') { record.content.isLoading = false; return true; }
-  if (type === 'plain') { if (chain === 'reasoning') { appendReasoning(record, payloadText(data)); } else if (chain !== 'tool_call' && chain !== 'tool_call_result') appendPlain(record, payloadText(data), normalized.streaming !== false); return true; }
+  if (type === 'plain') {
+    if (chain === 'reasoning') appendReasoning(record, payloadText(data));
+    else if (chain === 'tool_call') upsertToolCall(record, parsePayloadObject(data));
+    else if (chain === 'tool_call_result') finishToolCall(record, parsePayloadObject(data));
+    else appendPlain(record, payloadText(data), normalized.streaming !== false);
+    return true;
+  }
   if (['image', 'record', 'file', 'video'].includes(type)) { const rawName = String(data ?? '').replace(/^\[(IMAGE|RECORD|FILE|VIDEO)\]/, ''); const split = rawName.indexOf('|'); const stored = split >= 0 ? rawName.slice(0, split) : rawName; const filename = split >= 0 ? rawName.slice(split + 1) : stored; record.content.message.push({ type, filename, ...(stored !== filename ? { stored_filename: stored } : {}) }); return true; }
   return false;
 }
@@ -70,6 +76,49 @@ function appendReasoning(record: ChatRecord, text: string) {
   const last = record.content.message.at(-1);
   if (last?.type === 'think') last.think = `${last.think || ''}${text}`;
   else if (text) record.content.message.push({ type: 'think', think: text });
+}
+
+function parsePayloadObject(value: unknown): JsonObject {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as JsonObject;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as JsonObject : { result: value };
+    } catch {
+      return { result: value };
+    }
+  }
+  return { result: value };
+}
+
+function upsertToolCall(record: ChatRecord, toolCall: JsonObject) {
+  const id = String(toolCall.id || toolCall.tool_call_id || toolCall.name || '');
+  for (const part of record.content.message) {
+    if (part.type !== 'tool_call' || !Array.isArray(part.tool_calls)) continue;
+    const index = part.tool_calls.findIndex((item) => item && typeof item === 'object' && String((item as JsonObject).id || (item as JsonObject).tool_call_id || (item as JsonObject).name || '') === id);
+    if (index >= 0) {
+      part.tool_calls[index] = { ...(part.tool_calls[index] as JsonObject), ...toolCall };
+      return;
+    }
+  }
+  record.content.message.push({ type: 'tool_call', tool_calls: [{ ...toolCall }] });
+}
+
+function finishToolCall(record: ChatRecord, result: JsonObject) {
+  const id = String(result.id || result.tool_call_id || result.name || '');
+  for (const part of record.content.message) {
+    if (part.type !== 'tool_call' || !Array.isArray(part.tool_calls)) continue;
+    const matched = part.tool_calls.find((item) => item && typeof item === 'object' && String((item as JsonObject).id || (item as JsonObject).tool_call_id || (item as JsonObject).name || '') === id);
+    if (matched && typeof matched === 'object') {
+      Object.assign(matched, {
+        result: result.result ?? result.output ?? result.content ?? result,
+        status: result.status || 'completed',
+        finished_ts: result.finished_ts || Date.now(),
+      });
+      return;
+    }
+  }
+  record.content.message.push({ type: 'tool_call', tool_calls: [{ ...result, status: result.status || 'completed' }] });
 }
 
 export function parseSseEvents(buffer: string, flush = false) {

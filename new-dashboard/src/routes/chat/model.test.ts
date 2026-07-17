@@ -44,6 +44,35 @@ describe('chat model', () => {
     expect(record.content.agentStats).toEqual({ duration: 1.2 });
   });
 
+  it('merges tool calls with their streamed results', () => {
+    const record = normalizeRecord({ sender_id: 'bot', content: { message: [] } });
+    appendStreamPayload(record, {
+      type: 'plain',
+      chain_type: 'tool_call',
+      data: { id: 'call-1', name: 'search', arguments: { query: 'AstrBot' } },
+    });
+    appendStreamPayload(record, {
+      type: 'plain',
+      chain_type: 'tool_call_result',
+      data: { id: 'call-1', result: { count: 2 } },
+    });
+    expect(record.content.message).toHaveLength(1);
+    expect(record.content.message[0].tool_calls).toEqual([
+      expect.objectContaining({ id: 'call-1', name: 'search', result: { count: 2 }, status: 'completed' }),
+    ]);
+  });
+
+  it('retains saved checkpoint and reference metadata', () => {
+    const record = normalizeRecord({ sender_id: 'bot', content: { message: [] } });
+    appendStreamPayload(record, {
+      type: 'message_saved',
+      data: { id: 9, llm_checkpoint_id: 'checkpoint-1', refs: { used: [{ title: 'Docs' }] } },
+    });
+    expect(record.id).toBe(9);
+    expect(record.llm_checkpoint_id).toBe('checkpoint-1');
+    expect(record.content.refs).toEqual({ used: [{ title: 'Docs' }] });
+  });
+
   it('parses complete SSE events and preserves an incomplete event', () => {
     const result = parseSseEvents('data: {"type":"plain","data":"A"}\n\ndata: {"type"');
     expect(result.payloads).toEqual([{ type: 'plain', data: 'A' }]);

@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -6,28 +6,52 @@ import {
   addChatProjectSession,
   createChatProject,
   createChatSession,
+  createChatThread,
+  deleteChatThread,
   deleteChatProject,
   deleteChatSession,
+  getChatThread,
   getChatSession,
   listChatConfigs,
+  listCommands,
+  listConfigRoutes,
   listChatProjectSessions,
   listChatProjects,
   listChatSessions,
   listProviders,
   stopChatSession,
   testProviderById,
+  updateChatMessage,
   updateChatSession,
   updateChatProject,
+  upsertConfigRoute,
   uploadFile,
 } from '@/api/openapi';
 import { readAuthToken } from '@/auth/storage';
-import { Markdown } from '@/components/content/Markdown';
+import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { errorMessage, isObject, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
 import { confirmAction, toast } from '@/stores/feedback';
 import { useLayoutStore } from '@/stores/layout';
+import ProviderPage from '@/routes/configuration/ProviderPage';
 import { AudioRecorder } from './audioRecorder';
+import {
+  ChatComposer,
+  type ChatComposerAttachment,
+  type ChatComposerCommand,
+  type ChatComposerConfig,
+  type ChatComposerHandle,
+} from './ChatComposer';
+import { ChatMessageList } from './ChatMessageList';
 import { ChatProjectDialog, type ChatProjectForm } from './ChatProjectDialog';
+import {
+  buildWebchatUmo,
+  configRouteEntries,
+  resolveChatConfigId,
+  storeChatConfigId,
+  storedChatConfigId,
+  type ConfigRouteEntry,
+} from './configBinding';
 import { createStreamRenderScheduler } from './streamRenderScheduler';
 import {
   appendStreamPayload,
@@ -43,9 +67,22 @@ import {
 } from './model';
 
 type ChatPageProps = { chatbox?: boolean };
-type StagedFile = { attachment_id: string; filename: string; type: StagedAttachmentType };
+type StagedFile = { attachment_id: string; filename: string; preview_url?: string; type: StagedAttachmentType };
 type ProviderConfig = JsonObject & { id: string; model: string };
 type TransportMode = 'sse' | 'websocket';
+type ChatThread = JsonObject & {
+  thread_id: string;
+  parent_message_id?: string | number;
+  selected_text?: string;
+  messages?: ChatRecord[];
+};
+type CommandSuggestion = JsonObject & {
+  effective_command: string;
+  description?: string;
+  plugin_display_name?: string;
+  enabled?: boolean;
+  reserved?: boolean;
+};
 
 const chatLanguageOptions = [
   { code: 'zh-CN', flag: 'CN', label: '简体中文' },
@@ -86,24 +123,48 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState<StagedFile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [pendingSessionSending, setPendingSessionSending] = useState(false);
+  const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingBusy, setRecordingBusy] = useState(false);
   const [error, setError] = useState('');
   const [chatboxSidebarOpen, setChatboxSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [configId, setConfigId] = useState('default');
+  const [configId, setConfigId] = useState(storedChatConfigId);
+  const [configRoutes, setConfigRoutes] = useState<ConfigRouteEntry[]>([]);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [commands, setCommands] = useState<CommandSuggestion[]>([]);
+  const [wakePrefixes, setWakePrefixes] = useState<string[]>(['/']);
   const [provider, setProvider] = useState(() => localStorage.getItem('selectedProvider') || '');
   const [model, setModel] = useState(() => localStorage.getItem('selectedProviderModel') || '');
   const [streaming, setStreaming] = useState(true);
   const [transportMode, setTransportMode] = useState<TransportMode>(() => localStorage.getItem('chat.transportMode') === 'websocket' ? 'websocket' : 'sse');
   const [settingsSubmenu, setSettingsSubmenu] = useState<'transport' | 'language' | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ChatRecord | null>(null);
+  const [editingMessage, setEditingMessage] = useState<ChatRecord | null>(null);
+  const [editingDraft, setEditingDraft] = useState('');
+  const [savingMessageEdit, setSavingMessageEdit] = useState(false);
+  const [selectedRefs, setSelectedRefs] = useState<JsonObject | null>(null);
+  const [imagePreview, setImagePreview] = useState<{ name: string; url: string } | null>(null);
+  const [reasoningTarget, setReasoningTarget] = useState<ChatRecord | null>(null);
+  const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
+  const [threadDeleting, setThreadDeleting] = useState(false);
+  const [threadDraft, setThreadDraft] = useState('');
+  const [threadSending, setThreadSending] = useState(false);
+  const [threadSelection, setThreadSelection] = useState<{ message: ChatRecord; text: string; left: number; top: number } | null>(null);
+  const [renamingSession, setRenamingSession] = useState<ChatSession | null>(null);
+  const [sessionTitleDraft, setSessionTitleDraft] = useState('');
+  const [sessionTitleSaving, setSessionTitleSaving] = useState(false);
+  const [, setMediaVersion] = useState(0);
   const layoutChatSidebarOpen = useLayoutStore((state) => state.chatSidebarOpen);
   const setLayoutChatSidebarOpen = useLayoutStore((state) => state.setChatSidebarOpen);
   const themeMode = useLayoutStore((state) => state.themeMode);
   const setThemeMode = useLayoutStore((state) => state.setThemeMode);
   const abortRef = useRef<AbortController | null>(null);
+  const activeStreamsRef = useRef<Map<string, AbortController>>(new Map());
+  const messageCacheRef = useRef<Record<string, ChatRecord[]>>({});
+  const activeConversationRef = useRef(conversationId);
   const audioRecorderRef = useRef(new AudioRecorder());
   const activeSessionRef = useRef('');
   const pendingLocalSessionRef = useRef<string | null>(null);
@@ -113,17 +174,21 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const messageScrollFrame = useRef<number | null>(null);
   const messageLoadRequestRef = useRef(0);
   const messageEnd = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesRef = useRef<HTMLElement>(null);
+  const threadMessagesRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<ChatComposerHandle>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const mediaUrlsRef = useRef<Record<string, string>>({});
   const current = useMemo(
     () => sessions.find((item) => item.session_id === conversationId)
       || Object.values(projectSessions).flat().find((item) => item.session_id === conversationId),
     [conversationId, projectSessions, sessions],
   );
+  const isProviderWorkspace = conversationId === 'models';
   const selectedProject = useMemo(
     () => projects.find((project) => recordId(project, 'project_id', 'id') === selectedProjectId),
     [projects, selectedProjectId],
   );
-  const currentConfig = useMemo(() => configs.find((config) => recordId(config, 'id', 'conf_id') === configId), [configId, configs]);
   const currentProvider = useMemo(() => providers.find((item) => item.id === provider) || providers[0], [provider, providers]);
   const currentLanguage = chatLanguageOptions.find((item) => item.code === i18n.language) || chatLanguageOptions[0];
   const editingProjectForm = useMemo<ChatProjectForm | null>(() => editingProject ? {
@@ -157,12 +222,53 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       }),
     };
   }, [currentProvider, messages, model, providerMetadata, t]);
+  const sending = pendingSessionSending || Boolean(conversationId && runningSessionIds.has(conversationId));
   const sidebarOpen = chatbox ? chatboxSidebarOpen : layoutChatSidebarOpen;
   const setSidebarOpen = useCallback((open: boolean) => {
     if (chatbox) setChatboxSidebarOpen(open);
     else setLayoutChatSidebarOpen(open);
   }, [chatbox, setLayoutChatSidebarOpen]);
   const unwrap = <T,>(response: unknown) => responseData<T>(response);
+  const sessionUmo = useCallback((sessionId: string, session?: ChatSession) => buildWebchatUmo(
+    sessionId,
+    String(session?.platform_id || 'webchat'),
+    Boolean(session?.is_group),
+  ), []);
+
+  const applyConfig = useCallback(async (nextConfigId: string, sessionId = conversationId) => {
+    const normalized = nextConfigId || 'default';
+    const previous = configId;
+    setConfigId(normalized);
+    storeChatConfigId(normalized);
+    if (!sessionId) return true;
+    setConfigSaving(true);
+    try {
+      const session = sessions.find((item) => item.session_id === sessionId)
+        || Object.values(projectSessions).flat().find((item) => item.session_id === sessionId);
+      const umo = sessionUmo(sessionId, session);
+      await upsertConfigRoute({ path: { umo }, body: { config_id: normalized } });
+      setConfigRoutes((entries) => [
+        ...entries.filter((entry) => entry.pattern !== umo),
+        ...(normalized === 'default' ? [] : [{ pattern: umo, configId: normalized }]),
+      ]);
+      return true;
+    } catch (cause) {
+      setConfigId(previous);
+      storeChatConfigId(previous);
+      toast.error(errorMessage(cause, t('features.chat.config.applyFailed', 'Failed to apply configuration.')));
+      return false;
+    } finally {
+      setConfigSaving(false);
+    }
+  }, [configId, conversationId, projectSessions, sessionUmo, sessions, t]);
+  const markSessionRunning = useCallback((sessionId: string, running: boolean) => {
+    setRunningSessionIds((currentIds) => {
+      const next = new Set(currentIds);
+      if (running) next.add(sessionId);
+      else next.delete(sessionId);
+      return next;
+    });
+  }, []);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -221,17 +327,29 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const loadMessages = useCallback(async () => {
     const requestId = ++messageLoadRequestRef.current;
-    if (!conversationId) {
+    if (!conversationId || conversationId === 'models') {
       setMessages([]);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError('');
+    const cached = messageCacheRef.current[conversationId];
+    if (cached && activeStreamsRef.current.has(conversationId)) {
+      setMessages([...cached]);
+      setLoading(false);
+      return;
+    }
     try {
       const data = unwrap<JsonObject>(await getChatSession({ path: { session_id: conversationId } }));
       const history = Array.isArray(data?.history) ? data.history : Array.isArray(data?.messages) ? data.messages : [];
-      if (requestId === messageLoadRequestRef.current) setMessages(history.map(normalizeRecord));
+      const normalized = history.map(normalizeRecord);
+      const threads = Array.isArray(data?.threads) ? data.threads.filter(isObject) : [];
+      normalized.forEach((message) => {
+        message.threads = threads.filter((thread) => String(thread.parent_message_id) === String(message.id));
+      });
+      messageCacheRef.current[conversationId] = normalized;
+      if (requestId === messageLoadRequestRef.current) setMessages(normalized);
     } catch (cause) {
       if (requestId === messageLoadRequestRef.current) {
         setError(errorMessage(cause, 'Failed to load conversation.'));
@@ -247,8 +365,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     void loadProjects();
     void loadProviders();
     void listChatConfigs()
-      .then((response) => setConfigs(objectList(unwrap(response), ['configs', 'items'])))
+      .then((response) => setConfigs(objectList(unwrap(response), ['info_list', 'configs', 'items'])))
       .catch(() => undefined);
+    void listConfigRoutes()
+      .then((response) => setConfigRoutes(configRouteEntries(unwrap<JsonObject>(response))))
+      .catch(() => setConfigRoutes([]));
   }, [loadProjects, loadProviders, loadSessions]);
   useEffect(() => {
     const validIds = new Set(projects.map((project) => recordId(project, 'project_id', 'id')).filter(Boolean));
@@ -258,38 +379,101 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       }
     });
   }, [expandedProjectIds, loadProjectSessions, loadingProjectIds, projectSessions, projects]);
+  useEffect(() => {
+    if (!conversationId) return;
+    const session = sessions.find((item) => item.session_id === conversationId)
+      || Object.values(projectSessions).flat().find((item) => item.session_id === conversationId);
+    const resolved = resolveChatConfigId(configRoutes, sessionUmo(conversationId, session));
+    setConfigId(resolved);
+    storeChatConfigId(resolved);
+  }, [configRoutes, conversationId, projectSessions, sessionUmo, sessions]);
+  useEffect(() => {
+    void listCommands({ query: { config_id: configId === 'default' ? undefined : configId } })
+      .then((response) => {
+        const payload = unwrap<JsonObject>(response);
+        setWakePrefixes(Array.isArray(payload.wake_prefix) && payload.wake_prefix.length
+          ? payload.wake_prefix.map(String)
+          : ['/']);
+        setCommands(flattenCommandSuggestions(objectList(payload, ['items', 'commands', 'data'])));
+      })
+      .catch(() => {
+        setCommands([]);
+        setWakePrefixes(['/']);
+      });
+  }, [configId]);
 
   useEffect(() => {
+    activeConversationRef.current = conversationId;
+    setEditingMessage(null);
+    setReasoningTarget(null);
+    setSelectedRefs(null);
+    setActiveThread(null);
+    setThreadSelection(null);
     if (conversationId) setSelectedProjectId('');
     if (pendingLocalSessionRef.current === conversationId) {
       pendingLocalSessionRef.current = null;
       setLoading(false);
       return;
     }
-    abortRef.current?.abort();
-    activeSessionRef.current = '';
     void loadMessages();
   }, [conversationId, loadMessages]);
 
   useEffect(() => () => {
-    abortRef.current?.abort();
+    activeStreamsRef.current.forEach((controller) => controller.abort());
+    activeStreamsRef.current.clear();
     audioRecorderRef.current.cancel();
     if (settingsSubmenuTimer.current != null) window.clearTimeout(settingsSubmenuTimer.current);
     if (messageScrollFrame.current != null) window.cancelAnimationFrame(messageScrollFrame.current);
+    Object.values(mediaUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    mediaUrlsRef.current = {};
   }, []);
   useEffect(() => {
+    const token = readAuthToken(localStorage);
+    const records = activeThread?.messages ? [...messages, ...activeThread.messages] : messages;
+    records.flatMap((message) => message.content.message).forEach((part) => {
+      if (!['image', 'record', 'audio', 'video', 'file'].includes(part.type)) return;
+      const key = mediaPartKey(part);
+      if (!key || mediaUrlsRef.current[key]) return;
+      const url = part.attachment_id
+        ? `/api/v1/files/${encodeURIComponent(part.attachment_id)}/content`
+        : part.stored_filename
+          ? `/api/v1/files/content?filename=${encodeURIComponent(part.stored_filename)}`
+          : '';
+      if (!url) return;
+      mediaUrlsRef.current[key] = '';
+      void fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+        .then((response) => {
+          if (!response.ok) throw new Error(String(response.status));
+          return response.blob();
+        })
+        .then((blob) => {
+          mediaUrlsRef.current[key] = URL.createObjectURL(blob);
+          setMediaVersion((version) => version + 1);
+        })
+        .catch(() => {
+          delete mediaUrlsRef.current[key];
+        });
+    });
+  }, [activeThread?.messages, messages]);
+  useEffect(() => {
+    if (!shouldStickToBottomRef.current) return;
     if (messageScrollFrame.current != null) return;
     messageScrollFrame.current = window.requestAnimationFrame(() => {
       messageScrollFrame.current = null;
       messageEnd.current?.scrollIntoView({ behavior: sending ? 'auto' : 'smooth', block: 'end' });
     });
   }, [messages, sending]);
+  useEffect(() => {
+    const container = threadMessagesRef.current;
+    if (!container) return;
+    const frame = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeThread?.messages, threadSending]);
   useEffect(() => { localStorage.setItem('selectedProvider', provider); }, [provider]);
   useEffect(() => { localStorage.setItem('selectedProviderModel', model); }, [model]);
   useEffect(() => { localStorage.setItem('chat.transportMode', transportMode); }, [transportMode]);
-  useEffect(() => {
-    if (!draft && inputRef.current) inputRef.current.style.height = 'auto';
-  }, [draft]);
   useEffect(() => {
     const closeSettings = (event: PointerEvent) => {
       if (!settingsMenuRef.current?.contains(event.target as Node)) {
@@ -305,6 +489,15 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     const data = unwrap<JsonObject>(await createChatSession());
     const id = recordId(data, 'session_id', 'id');
     if (!id) throw new Error('The server did not return a session ID.');
+    const selectedConfig = storedChatConfigId();
+    if (selectedConfig !== 'default') {
+      const umo = sessionUmo(id);
+      await upsertConfigRoute({ path: { umo }, body: { config_id: selectedConfig } });
+      setConfigRoutes((entries) => [
+        ...entries.filter((entry) => entry.pattern !== umo),
+        { pattern: umo, configId: selectedConfig },
+      ]);
+    }
     if (projectId) {
       await addChatProjectSession({ path: { project_id: projectId, session_id: id } });
       await loadProjectSessions(projectId);
@@ -317,16 +510,16 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   };
 
   const newChat = () => {
-    abortRef.current?.abort();
     audioRecorderRef.current.cancel();
-    activeSessionRef.current = '';
     pendingLocalSessionRef.current = null;
     messageLoadRequestRef.current += 1;
     setSelectedProjectId('');
     setMessages([]);
+    files.forEach((file) => file.preview_url && URL.revokeObjectURL(file.preview_url));
     setFiles([]);
     setRecording(false);
-    setSending(false);
+    setPendingSessionSending(false);
+    setReplyTarget(null);
     navigate(basePath);
     setSidebarOpen(false);
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -366,15 +559,24 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   };
 
-  const renameSession = async (session: ChatSession) => {
-    const title = window.prompt('Conversation title', session.display_name || '');
-    if (title == null) return;
+  const renameSession = (session: ChatSession) => {
+    setRenamingSession(session);
+    setSessionTitleDraft(session.display_name || '');
+  };
+
+  const saveSessionTitle = async () => {
+    if (!renamingSession || sessionTitleSaving) return;
+    const title = sessionTitleDraft.trim();
+    setSessionTitleSaving(true);
     try {
-      await updateChatSession({ path: { session_id: session.session_id }, body: { display_name: title.trim() } });
+      await updateChatSession({ path: { session_id: renamingSession.session_id }, body: { display_name: title } });
       await loadSessions();
       await Promise.all(Object.keys(projectSessions).map((projectId) => loadProjectSessions(projectId)));
+      setRenamingSession(null);
     } catch (cause) {
-      toast.error(errorMessage(cause, 'Failed to rename conversation.'));
+      toast.error(errorMessage(cause, t('features.chat.conversation.renameFailed', 'Failed to rename conversation.')));
+    } finally {
+      setSessionTitleSaving(false);
     }
   };
 
@@ -462,17 +664,17 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const selectProject = (projectId: string) => {
     if (!projectId) return;
-    abortRef.current?.abort();
     audioRecorderRef.current.cancel();
-    activeSessionRef.current = '';
     pendingLocalSessionRef.current = null;
     messageLoadRequestRef.current += 1;
     setSelectedProjectId(projectId);
     setMessages([]);
     setLoading(false);
+    files.forEach((file) => file.preview_url && URL.revokeObjectURL(file.preview_url));
     setFiles([]);
     setRecording(false);
-    setSending(false);
+    setPendingSessionSending(false);
+    setReplyTarget(null);
     navigate(basePath);
     if (!projectSessions[projectId] && !loadingProjectIds.has(projectId)) void loadProjectSessions(projectId);
     setSidebarOpen(false);
@@ -521,6 +723,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       setFiles((currentFiles) => [...currentFiles, {
         attachment_id: id,
         filename: String(data.filename || data.original_name || file.name),
+        preview_url: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
         type: stagedAttachmentType(data.type, file.type),
       }]);
     } catch (cause) {
@@ -528,6 +731,9 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     } finally {
       setUploading(false);
     }
+  };
+  const uploadFiles = async (selectedFiles: File[]) => {
+    for (const file of selectedFiles) await upload(file);
   };
 
   const toggleRecording = async () => {
@@ -554,7 +760,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const send = async () => {
     const text = draft.trim();
     if ((!text && !files.length) || sending || recording) return;
-    setSending(true);
+    setPendingSessionSending(true);
     setError('');
     let sessionId = conversationId;
     const targetProjectId = selectedProjectId;
@@ -564,6 +770,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     try {
       if (!sessionId) sessionId = await createSession(targetProjectId);
       const outgoing: ChatPart[] = [
+        ...(replyTarget?.id != null ? [{ type: 'reply', message_id: replyTarget.id, selected_text: '' }] : []),
         ...(text ? [{ type: 'plain', text }] : []),
         ...files.map((file) => ({ type: file.type, attachment_id: file.attachment_id, filename: file.filename })),
       ];
@@ -571,9 +778,18 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       const createdAt = new Date().toISOString();
       const user: ChatRecord = { id: `local-user-${messageId}`, created_at: createdAt, content: { type: 'user', message: outgoing } };
       bot = { id: `local-bot-${messageId}`, created_at: createdAt, content: { type: 'bot', message: [], isLoading: true } };
-      setMessages((items) => [...items, user, bot!]);
+      shouldStickToBottomRef.current = true;
+      setMessages((items) => {
+        const next = [...items, user, bot!];
+        messageCacheRef.current[sessionId] = next;
+        return next;
+      });
       setDraft('');
+      files.forEach((file) => file.preview_url && URL.revokeObjectURL(file.preview_url));
       setFiles([]);
+      setReplyTarget(null);
+      markSessionRunning(sessionId, true);
+      setPendingSessionSending(false);
 
       if (!current?.display_name && text) {
         void updateChatSession({ path: { session_id: sessionId }, body: { display_name: text.slice(0, 40) } })
@@ -586,6 +802,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
       abort = new AbortController();
       abortRef.current = abort;
+      activeStreamsRef.current.set(sessionId, abort);
       activeSessionRef.current = sessionId;
       const token = readAuthToken(localStorage);
       const locale = localStorage.getItem('astrbot-locale');
@@ -602,7 +819,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         if (changed) streamRender?.schedule();
       };
       streamRender = createStreamRenderScheduler(() => {
-        setMessages((items) => bot && items.includes(bot) ? [...items] : items);
+        const cached = messageCacheRef.current[sessionId];
+        if (activeConversationRef.current === sessionId && cached?.includes(bot!)) setMessages([...cached]);
       });
 
       if (transportMode === 'websocket') {
@@ -659,6 +877,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         const message = errorMessage(cause, 'Failed to send message.');
         setError(message);
         toast.error(message);
+        if (bot && !bot.content.message.length) bot.content.message.push({ type: 'plain', text: message });
       }
     } finally {
       if (bot) {
@@ -667,13 +886,16 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           streamRender.schedule();
           streamRender.flush();
         } else {
-          setMessages((items) => items.includes(bot!) ? [...items] : items);
+          const cached = messageCacheRef.current[sessionId];
+          if (activeConversationRef.current === sessionId && cached?.includes(bot)) setMessages([...cached]);
         }
       }
       if (!abort || abortRef.current === abort) abortRef.current = null;
+      if (sessionId) activeStreamsRef.current.delete(sessionId);
       if (!sessionId || activeSessionRef.current === sessionId) activeSessionRef.current = '';
-      setSending(false);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      if (sessionId) markSessionRunning(sessionId, false);
+      setPendingSessionSending(false);
+      if (!sessionId || activeConversationRef.current === sessionId) requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -688,14 +910,20 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       created_at: new Date().toISOString(),
       content: { type: 'bot', message: [], reasoning: '', isLoading: true },
     };
-    setMessages((items) => items.map((item, itemIndex) => itemIndex === index ? regenerated : item));
-    setSending(true);
+    setMessages((items) => {
+      const next = items.map((item, itemIndex) => itemIndex === index ? regenerated : item);
+      messageCacheRef.current[conversationId] = next;
+      return next;
+    });
+    markSessionRunning(conversationId, true);
     setError('');
     const abort = new AbortController();
     const streamRender = createStreamRenderScheduler(() => {
-      setMessages((items) => items.includes(regenerated) ? [...items] : items);
+      const cached = messageCacheRef.current[conversationId];
+      if (activeConversationRef.current === conversationId && cached?.includes(regenerated)) setMessages([...cached]);
     });
     abortRef.current = abort;
+    activeStreamsRef.current.set(conversationId, abort);
     activeSessionRef.current = conversationId;
     try {
       const token = readAuthToken(localStorage);
@@ -739,29 +967,317 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         const message = errorMessage(cause, 'Failed to regenerate message.');
         setError(message);
         toast.error(message);
+        if (!regenerated.content.message.length) regenerated.content.message.push({ type: 'plain', text: message });
       }
     } finally {
       regenerated.content.isLoading = false;
       streamRender.schedule();
       streamRender.flush();
       if (abortRef.current === abort) abortRef.current = null;
+      activeStreamsRef.current.delete(conversationId);
       if (activeSessionRef.current === conversationId) activeSessionRef.current = '';
-      setSending(false);
+      markSessionRunning(conversationId, false);
     }
+  };
+
+  const openMessageEdit = (message: ChatRecord) => {
+    setEditingMessage(message);
+    setEditingDraft(message.content.message.filter((part) => part.type === 'plain').map((part) => part.text || '').join('\n'));
+  };
+
+  const continueAfterEdit = async (source: ChatRecord, baseMessages: ChatRecord[]) => {
+    if (!conversationId) return;
+    const messageId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+    const bot: ChatRecord = {
+      id: `local-edited-bot-${messageId}`,
+      created_at: new Date().toISOString(),
+      content: { type: 'bot', message: [], reasoning: '', isLoading: true },
+    };
+    const nextMessages = [...baseMessages, bot];
+    messageCacheRef.current[conversationId] = nextMessages;
+    setMessages(nextMessages);
+    markSessionRunning(conversationId, true);
+    const abort = new AbortController();
+    activeStreamsRef.current.set(conversationId, abort);
+    const scheduler = createStreamRenderScheduler(() => {
+      if (activeConversationRef.current === conversationId) setMessages([...messageCacheRef.current[conversationId]]);
+    });
+    try {
+      const token = readAuthToken(localStorage);
+      const response = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          session_id: conversationId,
+          message: source.content.message.map((part) => ({
+            type: part.type,
+            text: part.text,
+            attachment_id: part.attachment_id,
+            filename: part.filename,
+            message_id: part.message_id,
+          })),
+          config_id: configId || undefined,
+          selected_provider: provider || undefined,
+          selected_model: model || undefined,
+          enable_streaming: streaming,
+          _skip_user_history: true,
+          _llm_checkpoint_id: source.llm_checkpoint_id || undefined,
+        }),
+        signal: abort.signal,
+      });
+      if (!response.ok || !response.body) throw new Error(`Chat request failed: ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parsed = parseSseEvents(buffer);
+        buffer = parsed.remainder;
+        if (parsed.payloads.some((payload) => appendStreamPayload(bot, payload))) scheduler.schedule();
+      }
+      buffer += decoder.decode();
+      if (parseSseEvents(buffer, true).payloads.some((payload) => appendStreamPayload(bot, payload))) scheduler.schedule();
+    } catch (cause) {
+      if ((cause as Error)?.name !== 'AbortError') {
+        const message = errorMessage(cause, 'Failed to continue edited message.');
+        bot.content.message.push({ type: 'plain', text: message });
+        toast.error(message);
+      }
+    } finally {
+      bot.content.isLoading = false;
+      scheduler.schedule();
+      scheduler.flush();
+      activeStreamsRef.current.delete(conversationId);
+      markSessionRunning(conversationId, false);
+    }
+  };
+
+  const saveMessageEdit = async () => {
+    if (!conversationId || !editingMessage?.id || savingMessageEdit) return;
+    const target = editingMessage;
+    const originalIndex = messages.findIndex((message) => String(message.id) === String(target.id));
+    if (originalIndex < 0) return;
+    const content = {
+      ...target.content,
+      message: target.content.message.map((part) => part.type === 'plain' ? { ...part, text: editingDraft.trim() } : part),
+    };
+    setSavingMessageEdit(true);
+    try {
+      const payload = unwrap<JsonObject>(await updateChatMessage({
+        path: { session_id: conversationId, message_id: String(target.id) },
+        body: { content },
+      }));
+      const updated = payload.message ? normalizeRecord(payload.message) : { ...target, content };
+      const truncated = Boolean(payload.truncated_after_message);
+      const next = truncated
+        ? [...messages.slice(0, originalIndex), updated]
+        : messages.map((message, index) => index === originalIndex ? updated : message);
+      messageCacheRef.current[conversationId] = next;
+      setMessages(next);
+      setEditingMessage(null);
+      if (payload.needs_regenerate) {
+        if (truncated) void continueAfterEdit(updated, next);
+        else {
+          const nextBot = messages.slice(originalIndex + 1).find((message) => message.content.type !== 'user');
+          if (nextBot) void regenerate(nextBot);
+        }
+      }
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('features.chat.message.editFailed', 'Failed to edit message.')));
+    } finally {
+      setSavingMessageEdit(false);
+    }
+  };
+
+  const selectMessageText = (text: string, message: ChatRecord, event: ReactMouseEvent<HTMLDivElement>) => {
+    if (message.id == null || String(message.id).startsWith('local-')) return;
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    const rect = selection.getRangeAt(0).getBoundingClientRect();
+    setThreadSelection({
+      message,
+      text,
+      left: Math.min(window.innerWidth - 180, Math.max(12, rect.left + rect.width / 2 - 70)),
+      top: Math.max(12, rect.top - 42),
+    });
+    event.stopPropagation();
+  };
+
+  const createThreadFromSelection = async () => {
+    if (!conversationId || !threadSelection?.message.id) return;
+    try {
+      const thread = unwrap<ChatThread>(await createChatThread({
+        body: {
+          session_id: conversationId,
+          parent_message_id: threadSelection.message.id,
+          selected_text: threadSelection.text,
+        },
+      }));
+      const existing = Array.isArray(threadSelection.message.threads) ? threadSelection.message.threads : [];
+      threadSelection.message.threads = [...existing, thread];
+      messageCacheRef.current[conversationId] = [...messages];
+      setMessages([...messages]);
+      setReasoningTarget(null);
+      setSelectedRefs(null);
+      setActiveThread(thread);
+      window.getSelection()?.removeAllRanges();
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('features.chat.thread.createFailed', 'Failed to create thread.')));
+    } finally {
+      setThreadSelection(null);
+    }
+  };
+
+  const openThread = async (thread: ChatThread) => {
+    setReasoningTarget(null);
+    setSelectedRefs(null);
+    setActiveThread(thread);
+    setThreadDraft('');
+    try {
+      const payload = unwrap<JsonObject>(await getChatThread({ path: { thread_id: thread.thread_id } }));
+      const history = Array.isArray(payload.history) ? payload.history.map(normalizeRecord) : [];
+      setActiveThread((currentThread) => currentThread?.thread_id === thread.thread_id
+        ? { ...currentThread, ...payload, messages: history }
+        : currentThread);
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('features.chat.thread.loadFailed', 'Failed to load thread.')));
+    }
+  };
+
+  const sendThreadMessage = async () => {
+    const text = threadDraft.trim();
+    if (!activeThread || !text || threadSending) return;
+    const threadId = activeThread.thread_id;
+    const user: ChatRecord = {
+      id: `local-thread-user-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      content: { type: 'user', message: [{ type: 'plain', text }] },
+    };
+    const bot: ChatRecord = {
+      id: `local-thread-bot-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      content: { type: 'bot', message: [], isLoading: true },
+    };
+    setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || []), user, bot] } : thread);
+    setThreadDraft('');
+    setThreadSending(true);
+    try {
+      const token = readAuthToken(localStorage);
+      const response = await fetch(`/api/v1/chat/threads/${encodeURIComponent(threadId)}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: [{ type: 'plain', text }],
+          selected_provider: provider || undefined,
+          selected_model: model || undefined,
+          enable_streaming: streaming,
+        }),
+      });
+      if (!response.ok || !response.body) throw new Error(`Thread request failed: ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const render = (payloads: unknown[]) => {
+        if (payloads.some((payload) => appendStreamPayload(bot, payload))) {
+          setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
+        }
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parsed = parseSseEvents(buffer);
+        buffer = parsed.remainder;
+        render(parsed.payloads);
+      }
+      buffer += decoder.decode();
+      render(parseSseEvents(buffer, true).payloads);
+    } catch (cause) {
+      const message = errorMessage(cause, t('features.chat.thread.sendFailed', 'Failed to send thread message.'));
+      bot.content.message.push({ type: 'plain', text: message });
+      toast.error(message);
+    } finally {
+      bot.content.isLoading = false;
+      setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
+      setThreadSending(false);
+    }
+  };
+
+  const removeThread = async () => {
+    if (!activeThread || threadDeleting) return;
+    if (!await confirmAction({
+      confirmLabel: t('core.common.delete'),
+      danger: true,
+      message: t('features.chat.thread.confirmDelete'),
+      title: t('features.chat.thread.delete'),
+    })) return;
+    setThreadDeleting(true);
+    try {
+      await deleteChatThread({ path: { thread_id: activeThread.thread_id } });
+      messages.forEach((message) => {
+        if (Array.isArray(message.threads)) {
+          message.threads = message.threads.filter((thread) => String((thread as JsonObject).thread_id) !== activeThread.thread_id);
+        }
+      });
+      if (conversationId) messageCacheRef.current[conversationId] = [...messages];
+      setMessages([...messages]);
+      setActiveThread(null);
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('features.chat.thread.deleteFailed', 'Failed to delete thread.')));
+    } finally {
+      setThreadDeleting(false);
+    }
+  };
+
+  const scrollToMessage = (messageId: string | number) => {
+    document.getElementById(`chat-message-${messageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const downloadMessagePart = async (part: ChatPart) => {
+    let url = mediaUrlsRef.current[mediaPartKey(part)];
+    let temporaryUrl = false;
+    if (!url) {
+      const endpoint = part.attachment_id
+        ? `/api/v1/files/${encodeURIComponent(String(part.attachment_id))}/content`
+        : part.stored_filename
+          ? `/api/v1/files/content?filename=${encodeURIComponent(String(part.stored_filename))}`
+          : '';
+      if (!endpoint) return;
+      const token = readAuthToken(localStorage);
+      const response = await fetch(endpoint, { headers: token ? { Authorization: `Bearer ${token}` } : undefined }).catch(() => null);
+      if (!response?.ok) {
+        toast.error(t('features.chat.attachment.downloadFailed', 'Failed to download attachment.'));
+        return;
+      }
+      url = URL.createObjectURL(await response.blob());
+      temporaryUrl = true;
+    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = String(part.filename || part.stored_filename || 'attachment');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    if (temporaryUrl) window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const stop = async () => {
-    abortRef.current?.abort();
-    const sessionId = activeSessionRef.current || conversationId;
+    const sessionId = conversationId || activeSessionRef.current;
+    activeStreamsRef.current.get(sessionId)?.abort();
     if (sessionId) await stopChatSession({ path: { session_id: sessionId } }).catch(() => undefined);
-    setSending(false);
-  };
-
-  const keyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      void send();
+    if (sessionId) {
+      activeStreamsRef.current.delete(sessionId);
+      markSessionRunning(sessionId, false);
     }
+    setPendingSessionSending(false);
   };
 
   const selectedProjectWorkspace = useMemo(() => {
@@ -775,11 +1291,79 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     return path ? `${label} · ${path}` : label;
   }, [selectedProject, t]);
   const selectedProjectSessions = selectedProjectId ? projectSessions[selectedProjectId] || [] : [];
+  const composerAttachments: ChatComposerAttachment[] = files.map((file) => ({
+    id: file.attachment_id,
+    name: file.filename,
+    kind: file.type === 'record' ? 'audio' : file.type,
+    previewUrl: file.preview_url,
+  }));
+  const composerConfigs: ChatComposerConfig[] = [
+    { id: 'default', name: 'Default' },
+    ...configs.flatMap((config, index) => {
+      const id = recordId(config, 'id', 'conf_id') || `config-${index}`;
+      return id === 'default' ? [] : [{ id, name: String(config.name || id), description: String(config.description || '') }];
+    }),
+  ];
+  const composerCommands: ChatComposerCommand[] = commands.map((command) => ({
+    aliases: Array.isArray(command.aliases) ? command.aliases.map(String) : undefined,
+    command: command.effective_command,
+    description: command.description,
+    disabled: command.enabled === false,
+    pluginName: command.plugin_display_name ? String(command.plugin_display_name) : undefined,
+    reserved: Boolean(command.reserved),
+  }));
   const sessionTitle = current?.display_name || (selectedProject ? String(selectedProject.title || t('features.chat.project.title')) : t('features.chat.conversation.newConversation'));
   const modelTitle = provider || 'Default model';
   const modelMeta = currentProvider?.model || model;
-  const configTitle = String(currentConfig?.name || configId || 'default');
   const emptyChat = !selectedProject && !loading && !messages.length;
+  const selectedReferenceItems: unknown[] = selectedRefs && Array.isArray(selectedRefs.used) ? selectedRefs.used : [];
+  const composerNode = <ChatComposer
+    attachments={composerAttachments}
+    commands={composerCommands}
+    configs={composerConfigs}
+    configId={configId}
+    disabled={uploading || configSaving}
+    isRecording={recording}
+    isRunning={sending}
+    labels={{
+      clear: t('features.chat.input.clear'),
+      config: t('features.chat.config.title'),
+      dropToUpload: t('features.chat.input.dropToUpload'),
+      recording: t('features.chat.voice.recording'),
+      send: t('features.chat.input.send'),
+      startRecording: t('features.chat.voice.startRecording'),
+      stopGenerating: t('features.chat.input.stopGenerating'),
+      stopRecording: t('features.chat.voice.stop'),
+      streamingDisabled: t('features.chat.streaming.disabled'),
+      streamingEnabled: t('features.chat.streaming.enabled'),
+      upload: t('features.chat.input.upload'),
+    }}
+    onChange={setDraft}
+    onClearReply={() => setReplyTarget(null)}
+    onConfigChange={(nextConfigId) => void applyConfig(nextConfigId)}
+    onFiles={(selectedFiles) => void uploadFiles(selectedFiles)}
+    onRemoveAttachment={(attachment) => setFiles((items) => {
+      const removed = items.find((item) => item.attachment_id === attachment.id);
+      if (removed?.preview_url) URL.revokeObjectURL(removed.preview_url);
+      return items.filter((item) => item.attachment_id !== attachment.id);
+    })}
+    onSend={() => void send()}
+    onStartRecording={() => void toggleRecording()}
+    onStop={() => void stop()}
+    onStopRecording={() => void toggleRecording()}
+    onToggleStreaming={() => setStreaming((value) => !value)}
+    placeholder={t('features.chat.input.placeholder')}
+    ref={inputRef}
+    replyTo={replyTarget?.id == null ? null : {
+      messageId: replyTarget.id,
+      selectedText: plainMessageText(replyTarget).slice(0, 80),
+    }}
+    sendShortcut="enter"
+    streaming={streaming}
+    tokenUsage={tokenUsage}
+    value={draft}
+    wakePrefixes={wakePrefixes}
+  />;
 
   return <div className={`chat-shell ${chatbox ? 'chat-shell--box' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
     <aside className={`chat-sessions ${sidebarOpen ? 'is-open' : ''}`}>
@@ -789,7 +1373,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         <button aria-label="Close conversations" className="chat-sessions__close" onClick={() => setSidebarOpen(false)} type="button"><MdiIcon name="mdi-close" /></button>
       </div>
       <nav className="chat-sessions__actions">
-        <Link title={t('features.chat.actions.providerConfig')} to="/providers"><BoxIcon /><span>{t('features.chat.actions.providerConfig')}</span></Link>
+        <Link title={t('features.chat.actions.providerConfig')} to={`${basePath}/models`}><BoxIcon /><span>{t('features.chat.actions.providerConfig')}</span></Link>
         <button onClick={newChat} title={t('features.chat.actions.newChat')} type="button"><SquarePenIcon /><span>{t('features.chat.actions.newChat')}</span></button>
       </nav>
       <div className="chat-sessions__content">
@@ -835,7 +1419,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
                           <button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} title={t('features.chat.conversation.editDisplayName')} type="button"><PencilIcon /></button>
                           <button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} title={t('features.chat.actions.deleteChat')} type="button"><TrashIcon /></button>
                         </span>
-                        {sending && session.session_id === conversationId && <MdiIcon className="chat-project-session-progress" name="mdi-loading" />}
+                        {runningSessionIds.has(session.session_id) && <MdiIcon className="chat-project-session-progress" name="mdi-loading" />}
                       </div>)
                     : <div className="chat-project-session-empty">{t('features.chat.project.noSessions')}</div>}
               </div>}
@@ -845,7 +1429,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         <div className="chat-session-list">
           <div className="chat-session-list__label">{t('features.chat.conversation.title')}</div>
           {sessions.map((session) => <div className={session.session_id === conversationId ? 'is-active' : ''} key={session.session_id}>
-            <button onClick={() => selectSession(session.session_id)} type="button"><span>{session.display_name || session.session_id}</span></button>
+            <button onClick={() => selectSession(session.session_id)} type="button"><span>{session.display_name || session.session_id}</span>{runningSessionIds.has(session.session_id) && <MdiIcon className="chat-session-progress" name="mdi-loading" />}</button>
             <div><button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} title={t('features.chat.conversation.editDisplayName')} type="button"><PencilIcon /></button><button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} title={t('features.chat.actions.deleteChat')} type="button"><TrashIcon /></button></div>
           </div>)}
         </div>
@@ -872,7 +1456,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       </div>
     </aside>
     {sidebarOpen && <button aria-label="Close conversations" className="chat-sidebar-backdrop" onClick={() => setSidebarOpen(false)} type="button" />}
-    <main className={`chat-main ${emptyChat ? 'is-empty-chat' : ''} ${selectedProject ? 'is-project-workspace' : ''}`}>
+    <main className={`chat-main ${emptyChat && !isProviderWorkspace ? 'is-empty-chat' : ''} ${selectedProject ? 'is-project-workspace' : ''} ${isProviderWorkspace ? 'is-provider-workspace' : ''} ${reasoningTarget || selectedRefs || activeThread ? 'has-detail-panel' : ''}`}>
       <header className="chat-toolbar">
         <button aria-label="Open conversations" className="chat-toolbar__sidebar-open" onClick={() => setSidebarOpen(true)} type="button"><MdiIcon name="mdi-menu" /></button>
         <details className="chat-model-menu" onToggle={(event) => { if (event.currentTarget.open) void loadProviders(); }} ref={modelMenuRef}>
@@ -894,14 +1478,24 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           </div>
         </details>
       </header>
-      <section aria-live="polite" className="chat-messages">
-        {loading && <div className="monitor-loading">Loading…</div>}
+      {isProviderWorkspace ? <section className="chat-provider-workspace"><ProviderPage /></section> : <><section
+        aria-live="polite"
+        className="chat-messages"
+        onScroll={(event) => {
+          const target = event.currentTarget;
+          shouldStickToBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
+          setThreadSelection(null);
+        }}
+        ref={messagesRef}
+      >
+        {loading && <div className="monitor-loading">{t('core.common.loading')}</div>}
         {selectedProject && <div className="chat-project-workspace">
           <header className="chat-project-workspace__header">
             <h1><span>{String(selectedProject.emoji || '📁')}</span>{String(selectedProject.title || t('features.chat.project.title'))}</h1>
             {Boolean(selectedProject.description) && <p>{String(selectedProject.description)}</p>}
             <small><MdiIcon name="mdi-folder-cog-outline" />{selectedProjectWorkspace}</small>
           </header>
+          <div className="chat-project-composer">{composerNode}</div>
           <div className="chat-project-workspace__sessions">
             {loadingProjectIds.has(selectedProjectId)
               ? <div className="chat-project-workspace__empty">{t('features.chat.project.loadingSessions')}</div>
@@ -919,28 +1513,177 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
                 : <div className="chat-project-workspace__empty"><MdiIcon name="mdi-message-outline" /><span>{t('features.chat.project.noSessions')}</span></div>}
           </div>
         </div>}
-        {emptyChat && <div className="chat-empty"><h1>{t('features.chat.welcome.title')}</h1></div>}
-        {messages.map((message, index) => <Message canRegenerate={!sending && message.content.type !== 'user' && index === messages.length - 1 && message.id != null && !String(message.id).startsWith('local-') && Boolean(message.llm_checkpoint_id)} isStreaming={sending && message.content.type !== 'user' && index === messages.length - 1} key={String(message.id || index)} message={message} onRegenerate={(selectedProvider, selectedModel) => void regenerate(message, selectedProvider, selectedModel)} providerMetadata={providerMetadata} providers={providers} selectedModel={model} selectedProvider={provider} />)}
+        {emptyChat && !error && <div className="chat-empty"><h1>{t('features.chat.welcome.title')}</h1></div>}
+        <ChatMessageList
+          enableEdit={!sending}
+          enableRetry={!sending}
+          editingMessageId={editingMessage?.id ?? null}
+          editingValue={editingDraft}
+          editSaving={savingMessageEdit}
+          messages={messages}
+          labels={{
+            assistant: t('features.chat.message.assistant'),
+            cachedTokens: t('features.chat.stats.cachedTokens'),
+            cancel: t('core.common.cancel'),
+            completed: t('core.status.completed'),
+            copy: t('features.chat.actions.copy'),
+            download: t('features.chat.input.download', 'Download'),
+            duration: t('features.chat.stats.duration'),
+            edit: t('core.common.edit'),
+            inputTokens: t('features.chat.stats.inputTokens'),
+            outputTokens: t('features.chat.stats.outputTokens'),
+            reasoning: t('features.chat.reasoning.thinking'),
+            references: t('features.chat.refs.title'),
+            replyTo: t('features.chat.reply.replyTo'),
+            retry: t('features.chat.actions.retry'),
+            running: t('features.chat.toolStatus.running'),
+            save: t('core.common.save'),
+            threads: t('features.chat.thread.title'),
+            ttft: t('features.chat.stats.ttft'),
+          }}
+          onEdit={openMessageEdit}
+          onEditValueChange={setEditingDraft}
+          onCancelEdit={() => setEditingMessage(null)}
+          onDownload={(part) => downloadMessagePart(part)}
+          onOpenImage={(url, part) => url && setImagePreview({
+            name: String(part.filename || part.stored_filename || t('features.chat.attachment.image', 'Image')),
+            url,
+          })}
+          onOpenReasoning={(message) => {
+            setSelectedRefs(null);
+            setActiveThread(null);
+            setReasoningTarget(message);
+          }}
+          onOpenRefs={(refs) => {
+            setReasoningTarget(null);
+            setActiveThread(null);
+            setSelectedRefs({ used: refs });
+          }}
+          onOpenThread={(thread) => void openThread(thread as ChatThread)}
+          onReplyClick={(messageId) => scrollToMessage(messageId)}
+          onRetry={(message) => void regenerate(message)}
+          onRetryWithModel={(message, providerId, modelName) => void regenerate(message, providerId, modelName)}
+          onSaveEdit={() => void saveMessageEdit()}
+          onSelectText={selectMessageText}
+          resolvePartUrl={(part) => mediaUrlsRef.current[mediaPartKey(part)] || ''}
+          retryModels={providers.map((item) => ({ providerId: item.id, model: item.model }))}
+          streaming={sending}
+        />
         {error && <div className="monitor-error">{error}</div>}
         <div ref={messageEnd} />
       </section>
-      <footer className="chat-composer">
-        {files.length > 0 && <div className="chat-files">{files.map((file) => <span key={file.attachment_id}>{file.type === 'record' && <MdiIcon name="mdi-microphone" />}{file.type === 'record' ? t('features.chat.voice.recording') : file.filename}<button aria-label={t('features.chat.input.clear')} onClick={() => setFiles((items) => items.filter((item) => item.attachment_id !== file.attachment_id))} type="button">×</button></span>)}</div>}
-        <div className="chat-input-row">
-          <details className="chat-composer-menu">
-            <summary aria-label={t('features.chat.input.upload')}><MdiIcon name="mdi-plus" /></summary>
-            <div className="chat-composer-menu__panel">
-              <label className="chat-composer-menu__upload"><MdiIcon name="mdi-file-upload" /><span>{t('features.chat.input.upload')}</span><input disabled={uploading || sending} onChange={(event) => { void upload(event.target.files?.[0]); event.target.value = ''; }} type="file" /></label>
-              <label className="chat-composer-menu__config"><span>{t('features.chat.config.title')}</span><select aria-label={t('features.chat.config.title')} onChange={(event) => setConfigId(event.target.value)} value={configId}><option value="default">Default</option>{configs.map((config, index) => { const id = recordId(config, 'id', 'conf_id') || `config-${index}`; return id === 'default' ? null : <option key={id} value={id}>{String(config.name || id)}</option>; })}</select><small>{configTitle}</small></label>
-              <button aria-pressed={streaming} onClick={() => setStreaming((value) => !value)} type="button"><MdiIcon name="mdi-lightning-bolt" /><span>{t(`features.chat.streaming.${streaming ? 'enabled' : 'disabled'}`)}</span></button>
-            </div>
-          </details>
-          <textarea aria-label={t('features.chat.input.placeholder')} disabled={sending} onChange={(event) => setDraft(event.target.value)} onInput={(event) => { const target = event.currentTarget; target.style.height = 'auto'; target.style.height = `${Math.min(target.scrollHeight, 160)}px`; }} onKeyDown={keyDown} placeholder={t('features.chat.input.placeholder')} ref={inputRef} rows={1} value={draft} />
-          {tokenUsage && <span aria-label={tokenUsage.tooltip} className="chat-token-usage" data-tooltip={tokenUsage.tooltip} role="img" style={{ '--chat-token-percent': `${tokenUsage.percent * 3.6}deg` } as CSSProperties} tabIndex={0} />}
-          <button aria-label={recording ? t('features.chat.voice.stop') : t('features.chat.voice.startRecording')} aria-pressed={recording} className={`chat-record ${recording ? 'is-recording' : ''}`} disabled={recordingBusy || uploading || sending} onClick={() => void toggleRecording()} title={recording ? t('features.chat.voice.stop') : t('features.chat.voice.startRecording')} type="button"><MdiIcon name={recording ? 'mdi-stop-circle' : 'mdi-microphone'} /></button>
-          {sending ? <button aria-label={t('features.chat.input.stopGenerating')} className="chat-send" onClick={() => void stop()} type="button"><MdiIcon name="mdi-stop" /></button> : <button aria-label={t('features.chat.input.send')} className="chat-send" disabled={recording || (!draft.trim() && !files.length)} onClick={() => void send()} type="button"><MdiIcon name="mdi-arrow-up" /></button>}
+      {!selectedProject && <footer className="chat-composer chat-composer--v2">{composerNode}</footer>}</>}
+      {threadSelection && <button
+        className="chat-thread-selection"
+        onClick={() => void createThreadFromSelection()}
+        style={{ left: threadSelection.left, top: threadSelection.top }}
+        type="button"
+      >{t('features.chat.thread.askInThread', 'Ask in thread')}</button>}
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open && !sessionTitleSaving) {
+            setRenamingSession(null);
+            setSessionTitleDraft('');
+          }
+        }}
+        open={renamingSession !== null}
+        title={t('features.chat.conversation.editDisplayName')}
+      >
+        <div className="chat-session-rename-dialog">
+          <input
+            autoFocus
+            onChange={(event) => setSessionTitleDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void saveSessionTitle();
+              }
+            }}
+            placeholder={t('features.chat.conversation.displayName')}
+            value={sessionTitleDraft}
+          />
+          <div className="dialog-actions">
+            <button
+              disabled={sessionTitleSaving}
+              onClick={() => {
+                setRenamingSession(null);
+                setSessionTitleDraft('');
+              }}
+              type="button"
+            >{t('core.common.cancel')}</button>
+            <button
+              className="button--primary"
+              disabled={sessionTitleSaving || !sessionTitleDraft.trim()}
+              onClick={() => void saveSessionTitle()}
+              type="button"
+            >{t('core.common.save')}</button>
+          </div>
         </div>
-      </footer>
+      </Dialog>
+      {reasoningTarget && <aside className="chat-detail-panel">
+        <header><strong>{t('features.chat.reasoning.thinking')}</strong><button aria-label={t('core.common.close')} onClick={() => setReasoningTarget(null)} type="button"><MdiIcon name="mdi-close" /></button></header>
+        <div className="chat-detail-panel__body chat-side-dialog-content">
+          <pre>{reasoningTarget.content.reasoning || reasoningTarget.content.message.filter((part) => ['think', 'reasoning'].includes(part.type)).map((part) => part.think || part.text || '').join('\n')}</pre>
+        </div>
+      </aside>}
+      {selectedRefs && <aside className="chat-detail-panel">
+        <header><strong>{t('features.chat.refs.title')}</strong><button aria-label={t('core.common.close')} onClick={() => setSelectedRefs(null)} type="button"><MdiIcon name="mdi-close" /></button></header>
+        <div className="chat-detail-panel__body chat-reference-list">
+          {selectedReferenceItems.map((reference, index) => {
+            const item = isObject(reference) ? reference : {};
+            return <article key={String(item.id || item.url || index)} onClick={() => item.url && window.open(String(item.url), '_blank')}>
+              <strong>{Boolean(item.favicon) && <img alt="" src={String(item.favicon)} />}{String(item.title || item.url || t('features.chat.refs.title'))}</strong>
+              {Boolean(item.snippet || item.text || item.content) && <p>{String(item.snippet || item.text || item.content)}</p>}
+              {Boolean(item.url) && <small>{referenceHost(String(item.url))}</small>}
+            </article>;
+          })}
+        </div>
+      </aside>}
+      <Dialog onOpenChange={(open) => !open && setImagePreview(null)} open={imagePreview !== null} title={imagePreview?.name || t('features.chat.attachment.image', 'Image')}>
+        {imagePreview && <div className="chat-image-preview"><img alt={imagePreview.name} src={imagePreview.url} /></div>}
+      </Dialog>
+      {activeThread && <aside className="chat-detail-panel chat-thread-panel">
+        <header>
+          <strong>{t('features.chat.thread.title')}</strong>
+          <span>
+            <button aria-label={t('features.chat.thread.delete')} disabled={threadDeleting || threadSending} onClick={() => void removeThread()} type="button"><MdiIcon name="mdi-delete-outline" /></button>
+            <button aria-label={t('core.common.close')} onClick={() => setActiveThread(null)} type="button"><MdiIcon name="mdi-close" /></button>
+          </span>
+        </header>
+        <div className="chat-thread-dialog">
+          {activeThread?.selected_text && <blockquote>{activeThread.selected_text}</blockquote>}
+          <div className="chat-thread-messages" ref={threadMessagesRef}>
+            <ChatMessageList
+              enableEdit={false}
+              enableRetry={false}
+              messages={activeThread?.messages || []}
+              onDownload={(part) => downloadMessagePart(part)}
+              onOpenImage={(url, part) => url && setImagePreview({
+                name: String(part.filename || part.stored_filename || t('features.chat.attachment.image', 'Image')),
+                url,
+              })}
+              resolvePartUrl={(part) => mediaUrlsRef.current[mediaPartKey(part)] || ''}
+              streaming={threadSending}
+            />
+          </div>
+          <div className="chat-thread-composer">
+            <textarea
+              disabled={threadSending}
+              onChange={(event) => setThreadDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void sendThreadMessage();
+                }
+              }}
+              placeholder={t('features.chat.thread.placeholder')}
+              rows={2}
+              value={threadDraft}
+            />
+            <button className="button--primary" disabled={threadSending || !threadDraft.trim()} onClick={() => void sendThreadMessage()} type="button">{t('features.chat.input.send')}</button>
+          </div>
+        </div>
+      </aside>}
       <ChatProjectDialog
         error={projectError}
         onOpenChange={(open) => {
@@ -1023,70 +1766,23 @@ function readWebSocketChat(options: WebSocketChatOptions) {
   });
 }
 
-type MessageProps = {
-  canRegenerate: boolean;
-  isStreaming: boolean;
-  message: ChatRecord;
-  onRegenerate: (provider: string, model: string) => void;
-  providerMetadata: Record<string, JsonObject>;
-  providers: ProviderConfig[];
-  selectedModel: string;
-  selectedProvider: string;
-};
-
-function Message({ canRegenerate, isStreaming, message, onRegenerate, providerMetadata, providers, selectedModel, selectedProvider }: MessageProps) {
-  const { t } = useTranslation();
-  const user = message.content.type === 'user';
-  const time = messageTime(message.created_at);
-  const stats = message.content.agentStats;
-  const copy = () => navigator.clipboard?.writeText(message.content.message.map((part) => part.text || '').join('\n'));
-  return <article className={`chat-message ${user ? 'chat-message--user' : 'chat-message--bot'}`}>
-    {!user && <div className="chat-message__avatar"><ChatLogo /></div>}
-    <div className="chat-message__stack">
-      <div className="chat-message__body">{message.content.reasoning && <details><summary>{t('features.chat.reasoning.thinking')}</summary><pre>{message.content.reasoning}</pre></details>}{message.content.message.map((part, index) => <MessagePart key={`${part.type}-${index}`} part={part} streaming={isStreaming} user={user} />)}{message.content.isLoading && !message.content.message.length && <span className="chat-typing">{t('features.chat.message.loading')}</span>}</div>
-      {!isStreaming && !message.content.isLoading && <div className="chat-message__meta">
-        {time && <span>{time}</span>}
-        {canRegenerate && <details className="chat-regenerate-menu">
-          <summary aria-label={t('features.chat.actions.retry')} title={t('features.chat.actions.retry')}><MdiIcon name="mdi-refresh" /></summary>
-          <div className="chat-message-action-panel">
-            <button onClick={() => onRegenerate(selectedProvider, selectedModel)} type="button"><MdiIcon name="mdi-refresh" /><span>{t('features.chat.actions.retry')}</span></button>
-            <div className="chat-regenerate-submenu">
-              <button type="button"><MdiIcon name="mdi-creation" /><span>{t('features.chat.actions.retryWithModel')}</span><MdiIcon name="mdi-chevron-right" /></button>
-              <div className="chat-regenerate-models">{providers.map((item) => <button key={item.id} onClick={() => onRegenerate(item.id, item.model)} type="button"><span><strong>{item.id}</strong><small>{item.model}</small></span><span className="chat-model-badges">{providerCapabilityBadges(item, providerMetadata[item.model]).map((badge) => <MdiIcon className={badge.enabled ? '' : 'is-disabled'} key={badge.key} name={badge.icon} />)}{formatContextLimit(item, providerMetadata[item.model]) && <b>{formatContextLimit(item, providerMetadata[item.model])}</b>}</span></button>)}{!providers.length && <div>{t('features.chat.actions.noAvailableModels')}</div>}</div>
-            </div>
-          </div>
-        </details>}
-        {!user && <button aria-label={t('features.chat.actions.copy')} onClick={() => void copy()} title={t('features.chat.actions.copy')} type="button"><MdiIcon name="mdi-content-copy" /></button>}
-        {!user && stats && <details className="chat-message-stats">
-          <summary aria-label={t('features.chat.stats.tokens')} title={t('features.chat.stats.tokens')}><MdiIcon name="mdi-information-outline" /></summary>
-          <div className="chat-stats-card">
-            {cachedInputTokens(stats) > 0 && <div><span>{t('features.chat.stats.cachedTokens')}</span><strong>{cachedInputTokens(stats)}</strong></div>}
-            <div><span>{t('features.chat.stats.inputTokens')}</span><strong>{inputTokens(stats)}</strong></div>
-            <div><span>{t('features.chat.stats.outputTokens')}</span><strong>{outputTokens(stats)}</strong></div>
-            {agentTtft(stats) && <div><span>{t('features.chat.stats.ttft')}</span><strong>{agentTtft(stats)}</strong></div>}
-            <div><span>{t('features.chat.stats.duration')}</span><strong>{agentDuration(stats)}</strong></div>
-          </div>
-        </details>}
-      </div>}
-    </div>
-  </article>;
+function plainMessageText(message: ChatRecord) {
+  return message.content.message
+    .filter((part) => part.type === 'plain' || part.type === 'text')
+    .map((part) => part.text || '')
+    .join('\n');
 }
 
-function MessagePart({ part, streaming, user }: { part: ChatPart; streaming: boolean; user: boolean }) {
-  if (part.type === 'think') return null;
-  if (part.type === 'plain' || part.type === 'text') return user ? <p className="chat-user-text">{part.text}</p> : <Markdown content={part.text || ''} streaming={streaming} />;
-  const id = part.attachment_id;
-  const filename = part.filename || part.stored_filename || 'attachment';
-  const url = id ? `/api/v1/files/${encodeURIComponent(id)}/content` : part.stored_filename ? `/api/v1/files/content?filename=${encodeURIComponent(part.stored_filename)}` : '';
-  if (part.type === 'image' && url) return <a href={url} rel="noreferrer" target="_blank"><img alt={filename} className="chat-image" src={url} /></a>;
-  if (part.type === 'record' && url) return <audio className="chat-audio" controls preload="metadata" src={url} />;
-  return <a className="chat-file" href={url || undefined} rel="noreferrer" target="_blank">📎 {filename}</a>;
+function mediaPartKey(part: ChatPart) {
+  return String(part.attachment_id || part.stored_filename || part.filename || '');
 }
 
-function messageTime(value: unknown) {
-  if (typeof value !== 'string' && typeof value !== 'number') return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function referenceHost(value: string) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return value;
+  }
 }
 
 function formatProjectSessionDate(value: unknown, locale: string) {
@@ -1097,18 +1793,6 @@ function formatProjectSessionDate(value: unknown, locale: string) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
-}
-
-function inputTokens(stats: JsonObject) {
-  return isObject(stats.token_usage) ? readTokenCount(stats.token_usage.input_other) : 0;
-}
-
-function outputTokens(stats: JsonObject) {
-  return isObject(stats.token_usage) ? readTokenCount(stats.token_usage.output) : 0;
-}
-
-function cachedInputTokens(stats: JsonObject) {
-  return isObject(stats.token_usage) ? readTokenCount(stats.token_usage.input_cached) : 0;
 }
 
 function readTokenCount(value: unknown) {
@@ -1138,33 +1822,6 @@ function formatUsagePercent(value: number) {
   return String(Math.round(value * 100) / 100);
 }
 
-function agentDuration(stats: JsonObject) {
-  const direct = positiveNumber(stats, ['duration', 'total_duration']);
-  if (direct !== null) return formatDuration(direct);
-  const start = positiveNumber(stats, ['start_time']);
-  const end = positiveNumber(stats, ['end_time']);
-  return start === null || end === null || end < start ? '—' : formatDuration(end - start);
-}
-
-function agentTtft(stats: JsonObject) {
-  const value = positiveNumber(stats, ['time_to_first_token', 'ttft', 'first_token_latency']);
-  return value === null ? '' : formatDuration(value);
-}
-
-function positiveNumber(source: JsonObject, keys: string[]) {
-  for (const key of keys) {
-    const value = Number(source[key]);
-    if (Number.isFinite(value) && value > 0) return value;
-  }
-  return null;
-}
-
-function formatDuration(seconds: number) {
-  if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-}
-
 function providerCapabilityBadges(provider: ProviderConfig, metadata?: JsonObject) {
   const modalities = metadata?.modalities;
   const metadataModalities = isObject(modalities) && Array.isArray(modalities.input) ? modalities.input.map(String) : [];
@@ -1190,6 +1847,35 @@ function formatContextLimit(provider: ProviderConfig, metadata?: JsonObject) {
 
 function compactNumber(value: number) {
   return String(Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10).replace(/\.0$/, '');
+}
+
+function flattenCommandSuggestions(items: JsonObject[]) {
+  const result: CommandSuggestion[] = [];
+  const seen = new Set<string>();
+  const append = (item: JsonObject, parent = '') => {
+    const children = Array.isArray(item.sub_commands) ? item.sub_commands.filter(isObject) : [];
+    const effective = String(item.effective_command || item.command || item.name || '').trim();
+    if (children.length) {
+      children.forEach((child) => append(child, effective || parent));
+      return;
+    }
+    if (item.enabled === false || !effective) return;
+    const command = parent && !effective.startsWith(parent) ? `${parent} ${effective}` : effective;
+    if (!seen.has(command)) {
+      seen.add(command);
+      result.push({ ...item, effective_command: command } as CommandSuggestion);
+    }
+    const aliases = Array.isArray(item.aliases) ? item.aliases : item.alias ? [item.alias] : [];
+    aliases.map(String).filter(Boolean).forEach((alias) => {
+      const aliasCommand = parent ? `${parent} ${alias}` : alias;
+      if (!seen.has(aliasCommand)) {
+        seen.add(aliasCommand);
+        result.push({ ...item, effective_command: aliasCommand } as CommandSuggestion);
+      }
+    });
+  };
+  items.forEach((item) => append(item));
+  return result.sort((left, right) => Number(Boolean(right.reserved)) - Number(Boolean(left.reserved)));
 }
 
 function ChatLogo() {
