@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useBlocker } from 'react-router-dom';
 
-import { createConfigProfile, deleteConfigProfile, getConfigProfile, listConfigProfiles, updateConfigProfileContent } from '@/api/openapi';
+import { createConfigProfile, deleteConfigProfile, getConfigProfile, listConfigProfiles, renameConfigProfile, updateConfigProfileContent } from '@/api/openapi';
 import { MetadataConfigEditor } from '@/components/config/DynamicConfigForm';
 import { isConfigRecord, type ConfigRecord } from '@/components/config/configFormModel';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { confirmAction, toast } from '@/stores/feedback';
 import { JsonConfigDialog, LoadingState } from './ConfigurationUi';
+import { copiedConfigPayload, hasDuplicateConfigProfileName, normalizeConfigProfileName } from './configProfileModel';
 import { errorMessage, JsonObject, objectList, parseJsonObject, prettyJson, recordId, responseData } from './model';
 
 type Profile = JsonObject & { conf_id?: string; id?: string; name?: string };
+type ProfileOperation = { mode: 'copy' | 'rename'; profile: { id: string; name: string } };
 
 export default function ConfigPage() {
   const { t } = useTranslation();
@@ -28,6 +31,11 @@ export default function ConfigPage() {
   const [manageOpen, setManageOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorSource, setEditorSource] = useState('{}');
+  const [profileOperation, setProfileOperation] = useState<ProfileOperation | null>(null);
+  const [operationName, setOperationName] = useState('');
+  const [operationSaving, setOperationSaving] = useState(false);
+  const [pendingProfile, setPendingProfile] = useState<string | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
 
   const loadProfiles = useCallback(async () => {
     const data = responseData(await listConfigProfiles());
@@ -62,24 +70,45 @@ export default function ConfigPage() {
   }, [profiles]);
 
   const dirty = JSON.stringify(config) !== saved;
+  const blocker = useBlocker(dirty);
 
-  const save = async () => {
+  useEffect(() => {
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirty]);
+  useEffect(() => {
+    if (blocker.state === 'blocked') setLeaveOpen(true);
+  }, [blocker.state]);
+
+  const save = async (): Promise<boolean> => {
     setSaving(true);
     try {
       await updateConfigProfileContent({ path: { config_id: selected }, body: config });
       setSaved(JSON.stringify(config));
       toast.success(t('features.config.messages.saveSuccess'));
+      return true;
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.config.messages.saveError')));
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const create = async () => {
-    if (!newName.trim()) return;
+    const name = normalizeConfigProfileName(newName);
+    if (!name) return;
+    if (hasDuplicateConfigProfileName(profileOptions, name)) {
+      toast.error(t('features.config.configManagement.nameExists'));
+      return;
+    }
     try {
-      const data = responseData<JsonObject>(await createConfigProfile({ body: { name: newName.trim(), config: {} } }));
+      const data = responseData<JsonObject>(await createConfigProfile({ body: { name, config: {} } }));
       await loadProfiles();
       setNewName('');
       setSelected(recordId(data, 'conf_id', 'id') || 'default');
@@ -107,11 +136,69 @@ export default function ConfigPage() {
       return;
     }
     if (id === selected) return;
-    if (dirty && !await confirmAction({
-      title: t('features.config.unsavedChangesWarning.dialogTitle'),
-      message: t('features.config.unsavedChangesWarning.switchConfig'),
-    })) return;
+    if (dirty) {
+      setPendingProfile(id);
+      setLeaveOpen(true);
+      return;
+    }
     setSelected(id);
+  };
+
+  const beginProfileOperation = (mode: ProfileOperation['mode'], profile: { id: string; name: string }) => {
+    setProfileOperation({ mode, profile });
+    setOperationName(mode === 'copy' ? `${profile.name}-copy` : profile.name);
+  };
+
+  const submitProfileOperation = async () => {
+    if (!profileOperation) return;
+    const name = normalizeConfigProfileName(operationName);
+    if (!name) {
+      toast.error(t('features.config.configManagement.pleaseEnterName'));
+      return;
+    }
+    const duplicate = hasDuplicateConfigProfileName(profileOptions, name, profileOperation.mode === 'rename' ? profileOperation.profile.id : undefined);
+    if (duplicate) {
+      toast.error(t('features.config.configManagement.nameExists'));
+      return;
+    }
+    setOperationSaving(true);
+    try {
+      if (profileOperation.mode === 'rename') {
+        await renameConfigProfile({ path: { config_id: profileOperation.profile.id }, body: { name } });
+      } else {
+        const source = responseData<JsonObject>(await getConfigProfile({ path: { config_id: profileOperation.profile.id } })) ?? {};
+        const sourceConfig = copiedConfigPayload(source);
+        const created = responseData<JsonObject>(await createConfigProfile({ body: { name, config: sourceConfig } }));
+        const createdId = recordId(created, 'conf_id', 'id');
+        if (createdId) setSelected(createdId);
+      }
+      await loadProfiles();
+      setProfileOperation(null);
+      toast.success(t('features.config.messages.saveSuccess'));
+    } catch (cause) {
+      toast.error(errorMessage(cause, t(`features.config.configManagement.${profileOperation.mode === 'copy' ? 'copyFailed' : 'updateFailed'}`)));
+    } finally {
+      setOperationSaving(false);
+    }
+  };
+
+  const closeLeaveDialog = () => {
+    setLeaveOpen(false);
+    setPendingProfile(null);
+    if (blocker.state === 'blocked') blocker.reset();
+  };
+  const completeLeave = () => {
+    setLeaveOpen(false);
+    if (pendingProfile) {
+      const next = pendingProfile;
+      setPendingProfile(null);
+      setSelected(next);
+    } else if (blocker.state === 'blocked') {
+      blocker.proceed();
+    }
+  };
+  const saveAndLeave = async () => {
+    if (await save()) completeLeave();
   };
 
   const openEditor = () => {
@@ -158,8 +245,21 @@ export default function ConfigPage() {
 
     <Dialog description={t('features.config.configManagement.description')} onOpenChange={setManageOpen} open={manageOpen} title={t('features.config.configManagement.title')}>
       <div className="config-manager-create"><input onChange={(event) => setNewName(event.target.value)} placeholder={t('features.config.configManagement.fillConfigName')} value={newName} /><button className="button--primary" disabled={!newName.trim()} onClick={() => void create()} type="button"><MdiIcon name="mdi-plus" />{t('features.config.configManagement.newConfig')}</button></div>
-      <div className="config-manager-list">{profileOptions.map((profile) => <div key={profile.id}><button className={selected === profile.id ? 'is-active' : ''} onClick={() => { void chooseProfile(profile.id); setManageOpen(false); }} type="button">{profile.name}</button>{profile.id !== 'default' && <button aria-label={t('features.config.actions.delete')} className="button--danger" onClick={() => void remove(profile.id)} title={t('features.config.actions.delete')} type="button"><MdiIcon name="mdi-delete" /></button>}</div>)}</div>
+      <div className="config-manager-list">{profileOptions.map((profile) => <div key={profile.id}><button className={selected === profile.id ? 'is-active' : ''} onClick={() => { void chooseProfile(profile.id); setManageOpen(false); }} type="button">{profile.name}</button><button aria-label={t('features.config.configManagement.copyConfig')} onClick={() => beginProfileOperation('copy', profile)} title={t('features.config.configManagement.copyConfig')} type="button"><MdiIcon name="mdi-content-copy" /></button>{profile.id !== 'default' && <><button aria-label={t('features.config.configManagement.editConfig')} onClick={() => beginProfileOperation('rename', profile)} title={t('features.config.configManagement.editConfig')} type="button"><MdiIcon name="mdi-pencil" /></button><button aria-label={t('features.config.actions.delete')} className="button--danger" onClick={() => void remove(profile.id)} title={t('features.config.actions.delete')} type="button"><MdiIcon name="mdi-delete" /></button></>}</div>)}</div>
       <div className="dialog-actions"><DialogClose asChild><button type="button">{t('features.config.buttons.cancel')}</button></DialogClose></div>
+    </Dialog>
+
+    <Dialog onOpenChange={(open) => { if (!open) setProfileOperation(null); }} open={Boolean(profileOperation)} title={profileOperation?.mode === 'copy' ? t('features.config.configManagement.copyConfig') : t('features.config.configManagement.editConfig')}>
+      <label className="config-operation-name"><span>{t('features.config.configManagement.configName')}</span><input autoFocus onChange={(event) => setOperationName(event.target.value)} value={operationName} /></label>
+      <div className="dialog-actions"><button onClick={() => setProfileOperation(null)} type="button">{t('features.config.buttons.cancel')}</button><button className="button--primary" disabled={operationSaving || !operationName.trim()} onClick={() => void submitProfileOperation()} type="button">{profileOperation?.mode === 'rename' ? t('features.config.buttons.update') : t('features.config.buttons.create')}</button></div>
+    </Dialog>
+
+    <Dialog description={pendingProfile ? t('features.config.unsavedChangesWarning.switchConfig') : t('features.config.unsavedChangesWarning.leavePage')} onOpenChange={(open) => { if (!open) closeLeaveDialog(); }} open={leaveOpen} title={t('features.config.unsavedChangesWarning.dialogTitle')}>
+      <div className="dialog-actions">
+        <button onClick={closeLeaveDialog} type="button">{t('features.config.unsavedChangesWarning.options.cancel')}</button>
+        <button onClick={completeLeave} type="button">{t('features.config.unsavedChangesWarning.options.discardAndSwitch')}</button>
+        <button className="button--primary" disabled={saving} onClick={() => void saveAndLeave()} type="button">{pendingProfile ? t('features.config.unsavedChangesWarning.options.saveAndSwitch') : t('features.config.unsavedChangesWarning.options.save')}</button>
+      </div>
     </Dialog>
 
     <JsonConfigDialog jsonOnly onChange={setEditorSource} onOpenChange={setEditorOpen} onSave={applyEditor} open={editorOpen} title={t('features.config.codeEditor.title')} value={editorSource} />

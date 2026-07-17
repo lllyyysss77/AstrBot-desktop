@@ -4,6 +4,7 @@ import {
   hasChatProvider,
   isComputerAccessRuntimeConfigured,
   normalizeComputerAccessRuntime,
+  pickDefaultProviderId,
   resolveWelcomeAnnouncement,
 } from './welcomeModel';
 
@@ -14,6 +15,16 @@ describe('welcome page model', () => {
       provider_sources: [{ id: 'source', provider_type: 'chat_completion' }],
       providers: [{ provider_source_id: 'source' }],
     })).toBe(true);
+  });
+
+  it('selects the first enabled chat provider for the default config', () => {
+    expect(pickDefaultProviderId({
+      providers: [
+        { id: 'disabled', provider_type: 'chat_completion', enable: false },
+        { id: 'enabled', provider_type: 'chat_completion', enable: true },
+      ],
+    })).toBe('enabled');
+    expect(pickDefaultProviderId({ providers: [{ id: 'embedding', provider_type: 'embedding' }] })).toBe('');
   });
 
   it('keeps the legacy sandbox-to-local compatibility mapping', () => {

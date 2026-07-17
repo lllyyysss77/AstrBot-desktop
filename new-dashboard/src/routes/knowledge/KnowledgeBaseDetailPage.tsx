@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
-import { deleteKnowledgeDocument, getKnowledgeBase, getKnowledgeBaseStats, getKnowledgeTask, importKnowledgeDocumentFromUrl, listKnowledgeDocuments, listProviders, retrieveKnowledgeBase, updateKnowledgeBase, uploadKnowledgeDocument } from '@/api/openapi';
+import { deleteKnowledgeDocument, getConfigProfile, getKnowledgeBase, getKnowledgeBaseStats, getKnowledgeTask, importKnowledgeDocumentFromUrl, listKnowledgeDocuments, listProviders, retrieveKnowledgeBase, updateConfigProfileContent, updateKnowledgeBase, uploadKnowledgeDocument } from '@/api/openapi';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { confirmAction, toast } from '@/stores/feedback';
 import { errorMessage, isObject, JsonObject, objectList, responseData } from '@/routes/configuration/model';
-import { chunkCount, documentCount, documentId, documentName, formatFileSize, formatKnowledgeDate, retrievalPayload, scoreTone, taskIds } from './knowledgeModel';
+import { chunkCount, documentCount, documentId, documentName, formatFileSize, formatKnowledgeDate, knowledgeFileUploadBody, knowledgeUrlImportBody, retrievalPayload, scoreTone, taskIds, validKnowledgeImportSettings, type KnowledgeImportSettings } from './knowledgeModel';
 
 type DetailTab = 'overview' | 'documents' | 'retrieval' | 'settings';
 type Settings = { chunk_size: number; chunk_overlap: number; top_k_dense: number; top_k_sparse: number; top_m_final: number; rerank_provider_id: string };
@@ -76,6 +76,31 @@ function Documents({ kb, kbId, onBaseRefresh, t }: { kb: JsonObject; kbId: strin
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [uploadSettings, setUploadSettings] = useState<KnowledgeImportSettings>({ batch_size: 32, chunk_overlap: Number(kb.chunk_overlap || 50), chunk_size: Number(kb.chunk_size || 512), cleaning_provider_id: '', enable_cleaning: false, max_retries: 3, tasks_limit: 3 });
+  const [llmProviders, setLlmProviders] = useState<JsonObject[]>([]);
+  const [tavilyStatus, setTavilyStatus] = useState<'configured' | 'error' | 'loading' | 'not_configured'>('loading');
+  const [tavilyOpen, setTavilyOpen] = useState(false);
+  const [tavilyKey, setTavilyKey] = useState('');
+
+  const checkTavily = useCallback(async () => {
+    setTavilyStatus('loading');
+    try {
+      const data = responseData<JsonObject>(await getConfigProfile({ path: { config_id: 'default' } })) ?? {};
+      const config = isObject(data.config) ? data.config : data;
+      const settings = isObject(config.provider_settings) ? config.provider_settings : {};
+      const keys = settings.websearch_tavily_key;
+      setTavilyStatus(Array.isArray(keys) && keys.some((key) => typeof key === 'string' && key.trim()) ? 'configured' : 'not_configured');
+    } catch {
+      setTavilyStatus('error');
+    }
+  }, []);
+  useEffect(() => {
+    void listProviders({ query: { capability: 'chat', enabled: true } }).then((response) => setLlmProviders(objectList(responseData(response), ['providers', 'items', 'data']))).catch(() => undefined);
+    void checkTavily();
+  }, [checkTavily]);
+  useEffect(() => {
+    setUploadSettings((current) => ({ ...current, chunk_overlap: Number(kb.chunk_overlap || 50), chunk_size: Number(kb.chunk_size || 512) }));
+  }, [kb.chunk_overlap, kb.chunk_size]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,17 +135,29 @@ function Documents({ kb, kbId, onBaseRefresh, t }: { kb: JsonObject; kbId: strin
   const upload = async () => {
     if (mode === 'file' && !files.length) { toast.warning(t('upload.fileRequired')); return; }
     if (mode === 'url' && !url.trim()) { toast.warning(t('upload.urlRequired')); return; }
+    if (!validKnowledgeImportSettings(uploadSettings)) { toast.warning(t('upload.invalidSettings')); return; }
+    if (mode === 'url' && uploadSettings.enable_cleaning && !uploadSettings.cleaning_provider_id) { toast.warning(t('upload.cleaningProviderRequired')); return; }
     setUploading(true); setProgress(t('documents.uploading'));
     try {
       const responses = mode === 'file'
-        ? await Promise.all(files.map((file) => uploadKnowledgeDocument({ path: { kb_id: kbId }, body: { file } })))
-        : [await importKnowledgeDocumentFromUrl({ path: { kb_id: kbId }, body: { url: url.trim() } })];
+        ? [await uploadKnowledgeDocument({ path: { kb_id: kbId }, body: knowledgeFileUploadBody(files, uploadSettings) as never })]
+        : [await importKnowledgeDocumentFromUrl({ path: { kb_id: kbId }, body: knowledgeUrlImportBody(url, uploadSettings) as never })];
       const ids = responses.flatMap((response) => taskIds(responseData(response)));
       setUploadOpen(false); setFiles([]); setUrl('');
       await waitForTasks(ids); await Promise.all([load(), onBaseRefresh()]);
       toast.success(t('documents.uploadSuccess'));
     } catch (cause) { toast.error(errorMessage(cause, t('documents.uploadFailed'))); }
     finally { setUploading(false); setProgress(''); }
+  };
+  const saveTavily = async () => {
+    if (!tavilyKey.trim()) return;
+    try {
+      const data = responseData<JsonObject>(await getConfigProfile({ path: { config_id: 'default' } })) ?? {};
+      const config = isObject(data.config) ? data.config : data;
+      const providerSettings = { ...(isObject(config.provider_settings) ? config.provider_settings : {}), websearch_tavily_key: [tavilyKey.trim()] };
+      await updateConfigProfileContent({ path: { config_id: 'default' }, body: { ...config, provider_settings: providerSettings } });
+      setTavilyOpen(false); setTavilyKey(''); setTavilyStatus('configured'); toast.success(t('upload.tavilySaved'));
+    } catch (cause) { toast.error(errorMessage(cause, t('upload.tavilySaveFailed'))); }
   };
   const remove = async (item: JsonObject) => {
     const id = documentId(item); const name = documentName(item);
@@ -134,8 +171,13 @@ function Documents({ kb, kbId, onBaseRefresh, t }: { kb: JsonObject; kbId: strin
     {progress && <div className="knowledge-upload-progress"><MdiIcon className="mdi-spin" name="mdi-loading" /><span>{progress}</span></div>}
     <div className="knowledge-table"><table><thead><tr><th>{t('documents.name')}</th><th>{t('documents.type')}</th><th>{t('documents.size')}</th><th>{t('documents.chunks')}</th><th>{t('documents.createdAt')}</th><th /></tr></thead><tbody>{items.map((item) => { const id = documentId(item); return <tr key={id}><td><Link to={`/knowledge-base/${encodeURIComponent(kbId)}/document/${encodeURIComponent(id)}`}><MdiIcon name={fileIcon(String(item.file_type || documentName(item)))} /><span>{documentName(item)}</span></Link></td><td>{String(item.file_type || t('documents.unknownType'))}</td><td>{formatFileSize(item.file_size ?? item.size, t('overview.notSet'))}</td><td>{chunkCount(item)}</td><td>{formatKnowledgeDate(item.created_at, undefined, t('overview.notSet'))}</td><td><button aria-label={t('documents.delete')} className="button--danger" onClick={() => void remove(item)} title={t('documents.delete')} type="button"><MdiIcon name="mdi-delete-outline" /></button></td></tr>; })}</tbody></table>{loading && <div className="knowledge-table__state"><MdiIcon className="mdi-spin" name="mdi-loading" /></div>}{!loading && !items.length && <div className="knowledge-table__state"><MdiIcon name="mdi-file-document-outline" /><span>{t('documents.empty')}</span></div>}</div>
     {total > pageSize && <div className="pagination"><select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 20, 50].map((size) => <option key={size}>{size}</option>)}</select><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">‹</button><span>{page}/{Math.ceil(total / pageSize)}</span><button disabled={page * pageSize >= total} onClick={() => setPage((value) => value + 1)} type="button">›</button></div>}
-    <Dialog onOpenChange={setUploadOpen} open={uploadOpen} title={t('upload.title')}><div className="knowledge-upload"><nav><button aria-pressed={mode === 'file'} onClick={() => setMode('file')} type="button">{t('upload.fileUpload')}</button><button aria-pressed={mode === 'url'} onClick={() => setMode('url')} type="button">{t('upload.fromUrl')} <small>{t('upload.beta')}</small></button></nav>{mode === 'file' ? <><button className={`knowledge-dropzone${dragging ? ' is-dragging' : ''}`} onClick={() => document.getElementById('knowledge-file-input')?.click()} onDragLeave={() => setDragging(false)} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(Array.from(event.dataTransfer.files)); }} type="button"><MdiIcon name="mdi-cloud-upload" /><strong>{t('upload.dropzone')}</strong><span>{t('upload.supportedFormats')}</span><span>{t('upload.maxSize')}</span></button><input hidden id="knowledge-file-input" multiple onChange={(event) => addFiles(Array.from(event.target.files ?? []))} type="file" /><div className="knowledge-selected-files">{files.map((file, index) => <div key={`${file.name}-${index}`}><MdiIcon name={fileIcon(file.name)} /><span><strong>{file.name}</strong><small>{formatFileSize(file.size)}</small></span><button onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button"><MdiIcon name="mdi-close" /></button></div>)}</div></> : <label className="knowledge-url-field">{t('upload.urlPlaceholder')}<input onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/article" type="url" value={url} /><small>{t('upload.urlHint', { supported: 'HTML' })}</small></label>}<div className="knowledge-upload__settings"><h3>{t('upload.chunkSettings')}</h3><span>{t('upload.chunkSize')}: {String(kb.chunk_size || 512)}</span><span>{t('upload.chunkOverlap')}: {String(kb.chunk_overlap || 50)}</span></div><div className="dialog-actions"><DialogClose asChild><button disabled={uploading} type="button">{t('upload.cancel')}</button></DialogClose><button className="button--primary" disabled={uploading || (mode === 'file' ? !files.length : !url.trim())} onClick={() => void upload()} type="button">{uploading ? t('documents.uploading') : t('upload.submit')}</button></div></div></Dialog>
+    <Dialog onOpenChange={setUploadOpen} open={uploadOpen} title={t('upload.title')}><div className="knowledge-upload"><nav><button aria-pressed={mode === 'file'} onClick={() => setMode('file')} type="button">{t('upload.fileUpload')}</button><button aria-pressed={mode === 'url'} onClick={() => setMode('url')} type="button">{t('upload.fromUrl')} <small>{t('upload.beta')}</small></button></nav>{mode === 'file' ? <><button className={`knowledge-dropzone${dragging ? ' is-dragging' : ''}`} onClick={() => document.getElementById('knowledge-file-input')?.click()} onDragLeave={() => setDragging(false)} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(Array.from(event.dataTransfer.files)); }} type="button"><MdiIcon name="mdi-cloud-upload" /><strong>{t('upload.dropzone')}</strong><span>{t('upload.supportedFormats')}</span><span>{t('upload.maxSize')}</span></button><input hidden id="knowledge-file-input" multiple onChange={(event) => addFiles(Array.from(event.target.files ?? []))} type="file" /><div className="knowledge-selected-files">{files.map((file, index) => <div key={`${file.name}-${index}`}><MdiIcon name={fileIcon(file.name)} /><span><strong>{file.name}</strong><small>{formatFileSize(file.size)}</small></span><button onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button"><MdiIcon name="mdi-close" /></button></div>)}</div></> : <><div className={`knowledge-tavily is-${tavilyStatus}`}><MdiIcon name={tavilyStatus === 'configured' ? 'mdi-check-circle-outline' : 'mdi-information-outline'} /><span>{t(`upload.tavily.${tavilyStatus}`)}</span>{tavilyStatus !== 'configured' && <button onClick={() => setTavilyOpen(true)} type="button">{t('upload.tavily.configure')}</button>}</div><label className="knowledge-url-field">{t('upload.urlPlaceholder')}<input disabled={tavilyStatus === 'not_configured'} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/article" type="url" value={url} /><small>{t('upload.urlHint', { supported: 'HTML' })}</small></label><div className="knowledge-upload__cleaning"><h3>{t('upload.cleaningSettings')}</h3><label><input checked={uploadSettings.enable_cleaning} onChange={(event) => setUploadSettings({ ...uploadSettings, enable_cleaning: event.target.checked })} type="checkbox" />{t('upload.enableCleaning')}</label><label>{t('upload.cleaningProvider')}<select disabled={!uploadSettings.enable_cleaning} onChange={(event) => setUploadSettings({ ...uploadSettings, cleaning_provider_id: event.target.value })} value={uploadSettings.cleaning_provider_id}><option value="">{t('overview.notSet')}</option>{llmProviders.map((provider) => <option key={String(provider.id)} value={String(provider.id)}>{String(provider.id)}</option>)}</select><small>{t('upload.cleaningProviderHint')}</small></label></div></>}<div className="knowledge-upload__settings"><h3>{t('upload.chunkSettings')}</h3><UploadNumber label={t('upload.chunkSize')} onChange={(value) => setUploadSettings({ ...uploadSettings, chunk_size: value })} value={uploadSettings.chunk_size} /><UploadNumber label={t('upload.chunkOverlap')} onChange={(value) => setUploadSettings({ ...uploadSettings, chunk_overlap: value })} value={uploadSettings.chunk_overlap} /><h3>{t('upload.batchSettings')}</h3><UploadNumber label={t('upload.batchSize')} onChange={(value) => setUploadSettings({ ...uploadSettings, batch_size: value })} value={uploadSettings.batch_size} /><UploadNumber label={t('upload.tasksLimit')} onChange={(value) => setUploadSettings({ ...uploadSettings, tasks_limit: value })} value={uploadSettings.tasks_limit} /><UploadNumber label={t('upload.maxRetries')} onChange={(value) => setUploadSettings({ ...uploadSettings, max_retries: value })} value={uploadSettings.max_retries} /></div><div className="dialog-actions"><DialogClose asChild><button disabled={uploading} type="button">{t('upload.cancel')}</button></DialogClose><button className="button--primary" disabled={uploading || (mode === 'file' ? !files.length : !url.trim())} onClick={() => void upload()} type="button">{uploading ? t('documents.uploading') : t('upload.submit')}</button></div></div></Dialog>
+    <Dialog onOpenChange={setTavilyOpen} open={tavilyOpen} title={t('upload.tavily.configure')}><label className="knowledge-url-field">{t('upload.tavily.keyLabel')}<input onChange={(event) => setTavilyKey(event.target.value)} type="password" value={tavilyKey} /></label><div className="dialog-actions"><button onClick={() => setTavilyOpen(false)} type="button">{t('upload.cancel')}</button><button className="button--primary" disabled={!tavilyKey.trim()} onClick={() => void saveTavily()} type="button">{t('settings.save')}</button></div></Dialog>
   </section>;
+}
+
+function UploadNumber({ label, onChange, value }: { label: string; onChange: (value: number) => void; value: number }) {
+  return <label>{label}<input min={0} onChange={(event) => onChange(Number(event.target.value))} type="number" value={value} /></label>;
 }
 
 function Retrieval({ kbId, t }: { kbId: string; t: (key: string, options?: Record<string, unknown>) => string }) {

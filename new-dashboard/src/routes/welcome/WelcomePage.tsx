@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
 import { getConfigProfile, getProviderSchema, getSystemConfig, updateConfigProfileContent } from '@/api/openapi';
 import { Markdown } from '@/components/content/Markdown';
+import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { toast } from '@/stores/feedback';
+import PlatformPage from '@/routes/configuration/PlatformPage';
+import ProviderPage from '@/routes/configuration/ProviderPage';
 import {
   greetingPeriod,
   hasChatProvider,
   isComputerAccessRuntimeConfigured,
   normalizeComputerAccessRuntime,
+  pickDefaultProviderId,
   resolveWelcomeAnnouncement,
   unwrapApiData,
   type ComputerAccessRuntime,
@@ -26,34 +29,47 @@ export default function WelcomePage() {
   const [hasConfiguredRuntime, setHasConfiguredRuntime] = useState(false);
   const [savingRuntime, setSavingRuntime] = useState(false);
   const [announcementRaw, setAnnouncementRaw] = useState<unknown>(null);
+  const [providerOpen, setProviderOpen] = useState(false);
+  const [platformOpen, setPlatformOpen] = useState(false);
   const announcement = useMemo(() => resolveWelcomeAnnouncement(announcementRaw, i18n.language), [announcementRaw, i18n.language]);
   const prefix = 'features.welcome';
 
-  useEffect(() => {
-    let active = true;
-    void Promise.allSettled([getSystemConfig(), getProviderSchema(), getConfigProfile({ path: { config_id: 'default' } })])
+  const refreshOnboarding = useCallback(async () => {
+    await Promise.allSettled([getSystemConfig(), getProviderSchema(), getConfigProfile({ path: { config_id: 'default' } })])
       .then(([system, providers, profile]) => {
-        if (!active) return;
         if (system.status === 'fulfilled') {
           const data = unwrapApiData<ConfigPayload>(system.value);
           const platforms = data?.config?.platform;
           setHasPlatform(Array.isArray(platforms) && platforms.length > 0);
         }
-        if (providers.status === 'fulfilled') setHasProvider(hasChatProvider(unwrapApiData(providers.value)));
+        const providerPayload = providers.status === 'fulfilled' ? unwrapApiData(providers.value) : undefined;
+        if (providerPayload) setHasProvider(hasChatProvider(providerPayload));
         if (profile.status === 'fulfilled') {
           const data = unwrapApiData<ConfigPayload>(profile.value)?.config ?? unwrapApiData<Record<string, unknown>>(profile.value) ?? {};
           const settings = data.provider_settings as Record<string, unknown> | undefined;
           const configuredRuntime = settings?.computer_use_runtime;
           setRuntime(normalizeComputerAccessRuntime(configuredRuntime));
           setHasConfiguredRuntime(isComputerAccessRuntimeConfigured(configuredRuntime));
+          const providerId = pickDefaultProviderId(providerPayload);
+          if (providerId && settings?.default_provider_id !== providerId) {
+            const providerSettings = { ...settings, default_provider_id: providerId };
+            void updateConfigProfileContent({ body: { ...data, provider_settings: providerSettings }, path: { config_id: 'default' } })
+              .then(() => toast.success(t(`${prefix}.onboard.providerDefaultUpdated`, { id: providerId })))
+              .catch((cause) => toast.error(cause instanceof Error ? cause.message : t(`${prefix}.onboard.providerUpdateFailed`)));
+          }
         }
       });
+  }, [t]);
+
+  useEffect(() => {
+    let active = true;
+    void refreshOnboarding();
     void fetch('https://cloud.astrbot.app/api/v1/announcement')
       .then((response) => response.ok ? response.json() : null)
       .then((payload) => active && setAnnouncementRaw(payload?.data?.notice?.welcome_page ?? null))
       .catch(() => undefined);
     return () => { active = false; };
-  }, []);
+  }, [refreshOnboarding]);
 
   const saveRuntime = async (next: ComputerAccessRuntime) => {
     const previous = runtime;
@@ -89,14 +105,14 @@ export default function WelcomePage() {
           <li className={hasProvider ? 'is-complete' : ''}>
             <span className="onboarding-list__marker"><MdiIcon name="mdi-numeric-1" /></span>
             <div className="onboarding-list__content"><h3>{t(`${prefix}.onboard.step1Title`)}</h3><p>{t(`${prefix}.onboard.step1Desc`)}</p>
-              <Link className="button--primary" to="/providers">{t(`${prefix}.onboard.configure`)}</Link>
+              <button className="button--primary" onClick={() => setProviderOpen(true)} type="button">{t(`${prefix}.onboard.configure`)}</button>
               {hasProvider && <span className="onboarding-complete">{t(`${prefix}.onboard.completed`)}</span>}
             </div>
           </li>
           <li className={hasPlatform ? 'is-complete' : ''}>
             <span className="onboarding-list__marker"><MdiIcon name="mdi-numeric-2" /></span>
             <div className="onboarding-list__content"><h3>{t(`${prefix}.onboard.step2Title`)}</h3><p>{t(`${prefix}.onboard.step2Desc`)}</p>
-              <Link className="button--primary" to="/platforms">{t(`${prefix}.onboard.configure`)}</Link>
+              <button className="button--primary" onClick={() => setPlatformOpen(true)} type="button">{t(`${prefix}.onboard.configure`)}</button>
               {hasPlatform && <span className="onboarding-complete">{t(`${prefix}.onboard.completed`)}</span>}
             </div>
           </li>
@@ -120,6 +136,8 @@ export default function WelcomePage() {
         </ol>
       </section>
       {announcement && <section className="route-card"><h2>{t(`${prefix}.announcement.title`)}</h2><Markdown content={announcement} /></section>}
+      <Dialog onOpenChange={(open) => { setProviderOpen(open); if (!open) void refreshOnboarding(); }} open={providerOpen} title={t(`${prefix}.onboard.step1Title`)}><div className="welcome-onboarding-dialog"><ProviderPage /></div></Dialog>
+      <Dialog onOpenChange={(open) => { setPlatformOpen(open); if (!open) void refreshOnboarding(); }} open={platformOpen} title={t(`${prefix}.onboard.step2Title`)}><div className="welcome-onboarding-dialog"><PlatformPage /></div></Dialog>
     </div>
   );
 }

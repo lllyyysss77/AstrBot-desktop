@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import { createBot, createConfigProfile, deleteBotById, getConfigProfileSchema, getSystemConfigRuntime, listBotStats, listConfigProfiles, setBotEnabledById, updateBotById, upsertConfigRoute } from '@/api/openapi';
 import { ConfigGroup } from '@/components/config/DynamicConfigForm';
@@ -157,7 +158,7 @@ export default function PlatformPage() {
         <button className="platform-primary-button" onClick={openCreate} type="button"><MdiIcon name="mdi-plus" />{tm('addAdapter')}</button>
       </header>
 
-      {loading && <div className="monitor-loading" role="status">Loading…</div>}
+      {loading && <div className="monitor-loading" role="status">{t('core.common.loading')}</div>}
       {error && <div className="monitor-error" role="alert">{error}</div>}
       {!loading && !items.length && <div className="platform-empty"><MdiIcon name="mdi-connection" size={58} /><p>{tm('emptyText')}</p></div>}
       <section className="platform-grid">
@@ -232,7 +233,7 @@ function PlatformEditor({ configMode, configProfiles, creationMode, editor, form
         {showManualConfig && (isObject(formMetadata) && Object.keys(formMetadata).length > 0
           ? <div className="platform-editor__config"><ConfigGroup fieldsFromValue metadata={formMetadata as ConfigGroupMetadata} onChange={(next: ConfigRecord) => onChange(next)} resolveText={resolveText} title={t('adapters')} translationPath="platform_group.platform" value={editor.config} /></div>
           : <FallbackPlatformForm config={editor.config} onChange={onChange} />)}
-        {!editing && <section className="platform-editor__step platform-editor__step--config"><MdiIcon name="mdi-numeric-2-circle" /><div><div className="platform-editor__step-heading"><div><h3>{t('createDialog.configFileTitle')} <small>{t('createDialog.optional')}</small></h3><p>{t('createDialog.configHint')} {t('createDialog.configDefaultHint')}</p></div><button aria-expanded={showConfigSection} onClick={() => setShowConfigSection((current) => !current)} type="button"><MdiIcon name={showConfigSection ? 'mdi-chevron-up' : 'mdi-chevron-down'} /></button></div>{showConfigSection && <div className="platform-editor__profiles"><label><input checked={configMode === 'existing'} name="platform-config-mode" onChange={() => { onConfigModeChange('existing'); if (!selectedConfigId) onSelectedConfigChange('default'); }} type="radio" />{t('createDialog.useExistingConfig')}</label>{configMode === 'existing' && <div className="platform-editor__profile-select"><label><span>{t('createDialog.selectConfigLabel')}</span><PlatformSelect ariaLabel={t('createDialog.selectConfigLabel')} onChange={onSelectedConfigChange} options={configProfiles} placeholder={t('createDialog.selectConfigLabel')} value={selectedConfigId} /></label><a aria-label={t('createDialog.selectConfigLabel')} href="/config"><MdiIcon name="mdi-arrow-top-right-thick" /></a></div>}<label><input checked={configMode === 'new'} name="platform-config-mode" onChange={() => { onConfigModeChange('new'); onSelectedConfigChange(''); }} type="radio" />{t('createDialog.createNewConfig')}</label>{configMode === 'new' && <label className="platform-editor__new-profile"><span>{t('createDialog.newConfigNameLabel')}</span><input onChange={(event) => onSelectedConfigChange(event.target.value)} value={selectedConfigId} /></label>}</div>}</div></section>}
+        {!editing && <section className="platform-editor__step platform-editor__step--config"><MdiIcon name="mdi-numeric-2-circle" /><div><div className="platform-editor__step-heading"><div><h3>{t('createDialog.configFileTitle')} <small>{t('createDialog.optional')}</small></h3><p>{t('createDialog.configHint')} {t('createDialog.configDefaultHint')}</p></div><button aria-expanded={showConfigSection} onClick={() => setShowConfigSection((current) => !current)} type="button"><MdiIcon name={showConfigSection ? 'mdi-chevron-up' : 'mdi-chevron-down'} /></button></div>{showConfigSection && <div className="platform-editor__profiles"><label><input checked={configMode === 'existing'} name="platform-config-mode" onChange={() => { onConfigModeChange('existing'); if (!selectedConfigId) onSelectedConfigChange('default'); }} type="radio" />{t('createDialog.useExistingConfig')}</label>{configMode === 'existing' && <div className="platform-editor__profile-select"><label><span>{t('createDialog.selectConfigLabel')}</span><PlatformSelect ariaLabel={t('createDialog.selectConfigLabel')} onChange={onSelectedConfigChange} options={configProfiles} placeholder={t('createDialog.selectConfigLabel')} value={selectedConfigId} /></label><Link aria-label={t('createDialog.selectConfigLabel')} to="/config"><MdiIcon name="mdi-arrow-top-right-thick" /></Link></div>}<label><input checked={configMode === 'new'} name="platform-config-mode" onChange={() => { onConfigModeChange('new'); onSelectedConfigChange(''); }} type="radio" />{t('createDialog.createNewConfig')}</label>{configMode === 'new' && <label className="platform-editor__new-profile"><span>{t('createDialog.newConfigNameLabel')}</span><input onChange={(event) => onSelectedConfigChange(event.target.value)} value={selectedConfigId} /></label>}</div>}</div></section>}
       </div>
       <div className="dialog-actions platform-editor__actions"><DialogClose asChild><button type="button">{t('dialog.cancel')}</button></DialogClose><button className="button--primary" disabled={saving || !canSave} onClick={onSave} type="button">{saving ? '…' : t('dialog.save')}</button></div>
     </div>}
@@ -240,7 +241,8 @@ function PlatformEditor({ configMode, configProfiles, creationMode, editor, form
 }
 
 function FallbackPlatformForm({ config, onChange }: { config: JsonObject; onChange: (next: JsonObject) => void }) {
-  return <div className="dialog-form"><label>ID<input onChange={(event) => onChange({ ...config, id: event.target.value })} value={String(config.id || '')} /></label><label>Type<input onChange={(event) => onChange({ ...config, type: event.target.value })} value={String(config.type || '')} /></label></div>;
+  const { t } = useTranslation();
+  return <div className="dialog-form"><label>{t('core.common.id')}<input onChange={(event) => onChange({ ...config, id: event.target.value })} value={String(config.id || '')} /></label><label>{t('core.common.type')}<input onChange={(event) => onChange({ ...config, type: event.target.value })} value={String(config.type || '')} /></label></div>;
 }
 
 function DetailsDialog({ config, details, onOpenChange, t }: { config: JsonObject; details: { kind: 'error' | 'qr' | 'webhook'; item: JsonObject; stat?: JsonObject } | null; onOpenChange: (open: boolean) => void; t: (key: string, options?: Record<string, unknown>) => string }) {

@@ -1,5 +1,39 @@
 import type { JsonObject } from '@/routes/configuration/model';
 
+export type KnowledgeImportSettings = { batch_size: number; chunk_overlap: number; chunk_size: number; cleaning_provider_id: string; enable_cleaning: boolean; max_retries: number; tasks_limit: number };
+
+export function knowledgeFileUploadBody(files: Array<Blob | File>, settings: KnowledgeImportSettings) {
+  return Object.fromEntries([
+    ...files.map((file, index) => [`file${index}`, file] as const),
+    ['chunk_size', settings.chunk_size],
+    ['chunk_overlap', settings.chunk_overlap],
+    ['batch_size', settings.batch_size],
+    ['tasks_limit', settings.tasks_limit],
+    ['max_retries', settings.max_retries],
+  ]);
+}
+
+export function knowledgeUrlImportBody(url: string, settings: KnowledgeImportSettings) {
+  return {
+    url: url.trim(),
+    chunk_size: settings.chunk_size,
+    chunk_overlap: settings.chunk_overlap,
+    batch_size: settings.batch_size,
+    tasks_limit: settings.tasks_limit,
+    max_retries: settings.max_retries,
+    ...(settings.enable_cleaning ? { enable_cleaning: true, cleaning_provider_id: settings.cleaning_provider_id } : {}),
+  };
+}
+
+export function validKnowledgeImportSettings(settings: KnowledgeImportSettings) {
+  return settings.chunk_size > 0
+    && settings.chunk_overlap >= 0
+    && settings.chunk_overlap < settings.chunk_size
+    && settings.batch_size > 0
+    && settings.tasks_limit > 0
+    && settings.max_retries >= 0;
+}
+
 export function knowledgeBaseId(item: JsonObject) {
   return stringField(item, 'kb_id', 'id');
 }

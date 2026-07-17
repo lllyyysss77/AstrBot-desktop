@@ -77,7 +77,19 @@
     "urlPlaceholder": "请输入要提取内容的网页 URL",
     "urlRequired": "请输入 URL",
     "urlHint": "将自动从目标 URL 提取主要内容作为文档。目前支持 {supported} 页面，请确保目标网页允许爬虫访问。",
-    "beta": "测试版"
+    "beta": "测试版",
+    "invalidSettings": "导入参数无效：分块重叠必须小于分块大小，批次和并发数必须大于零",
+    "cleaningProviderRequired": "启用内容清洗后必须选择服务提供商",
+    "tavilySaved": "Tavily API Key 配置成功",
+    "tavilySaveFailed": "Tavily API Key 保存失败",
+    "tavily": {
+      "loading": "正在检查 Tavily 配置...",
+      "configured": "Tavily 已配置，可以从 URL 导入",
+      "not_configured": "使用此功能需要配置 Tavily Key",
+      "error": "检查网页搜索配置失败",
+      "configure": "配置 Tavily Key",
+      "keyLabel": "Tavily API Key"
+    }
   },
   "retrieval": {
     "title": "知识库检索",

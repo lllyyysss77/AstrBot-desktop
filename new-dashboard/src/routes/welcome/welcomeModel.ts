@@ -7,16 +7,25 @@ export function unwrapApiData<T>(response: unknown): T | undefined {
 }
 
 export function hasChatProvider(payload: unknown) {
+  return chatProviders(payload).length > 0;
+}
+
+export function chatProviders(payload: unknown) {
   const data = payload as {
     provider_sources?: Array<{ id?: string; provider_type?: string }>;
-    providers?: Array<{ provider_source_id?: string; provider_type?: string; type?: string }>;
+    providers?: Array<{ enable?: boolean; id?: string; provider_source_id?: string; provider_type?: string; type?: string }>;
   } | undefined;
   const sourceTypes = new Map((data?.provider_sources ?? []).map((source) => [source.id, source.provider_type]));
-  return (data?.providers ?? []).some((provider) => (
+  return (data?.providers ?? []).filter((provider) => (
     provider.provider_type === 'chat_completion'
     || sourceTypes.get(provider.provider_source_id) === 'chat_completion'
     || String(provider.type ?? '').includes('chat_completion')
   ));
+}
+
+export function pickDefaultProviderId(payload: unknown) {
+  const providers = chatProviders(payload);
+  return (providers.find((provider) => provider.enable !== false) ?? providers[0])?.id ?? '';
 }
 
 export function normalizeComputerAccessRuntime(value: unknown): ComputerAccessRuntime {

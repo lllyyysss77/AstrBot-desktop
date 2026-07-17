@@ -547,8 +547,8 @@ export default function SessionManagementPage() {
         {!loading && rules.length === 0 && <div className="session-rules-empty"><MdiIcon name="mdi-file-document-edit-outline" /><strong>{text('customRules.noRules')}</strong><span>{text('customRules.noRulesDesc')}</span><button onClick={() => { setAddOpen(true); void loadUmos(); }} type="button"><MdiIcon name="mdi-plus" />{text('buttons.addRule')}</button></div>}
       </div>
       <footer className="session-rules-pagination">
-        <label>Items per page: <select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 20, 50].map((size) => <option key={size}>{size}</option>)}</select></label>
-        <span>{total ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} of ${total}` : '0-0 of 0'}</span>
+        <label>{t('core.common.itemsPerPage')}: <select onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }} value={pageSize}>{[10, 20, 50].map((size) => <option key={size}>{size}</option>)}</select></label>
+        <span>{t('core.common.paginationRange', { from: total ? (page - 1) * pageSize + 1 : 0, to: total ? Math.min(page * pageSize, total) : 0, total })}</span>
         <button disabled={page <= 1} onClick={() => setPage(1)} type="button"><MdiIcon name="mdi-page-first" /></button>
         <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button"><MdiIcon name="mdi-chevron-left" /></button>
         <button disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)} type="button"><MdiIcon name="mdi-chevron-right" /></button>

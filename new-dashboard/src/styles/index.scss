@@ -2011,7 +2011,11 @@ textarea {
 .config-manager-list > div { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--astrbot-border); }
 .config-manager-list > div > button:first-child { flex: 1; padding: 12px 8px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 .config-manager-list > div > button:first-child.is-active { color: var(--astrbot-primary); font-weight: 700; }
+.config-manager-list > div > button:not(:first-child) { display: grid; width: 34px; height: 34px; flex: 0 0 auto; border: 0; border-radius: 50%; background: transparent; color: var(--astrbot-text-muted); cursor: pointer; place-items: center; }
+.config-manager-list > div > button:not(:first-child):hover { background: var(--astrbot-hover); color: var(--astrbot-primary); }
 .config-manager-list .button--danger { display: grid; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--astrbot-error); cursor: pointer; place-items: center; }
+.config-operation-name { display: grid; gap: 8px; margin: 22px 0; font-weight: 650; }
+.config-operation-name input { padding: 10px 12px; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); color: inherit; font: inherit; }
 
 .metadata-config { display: grid; min-height: 0; flex: 1; grid-template-columns: 150px minmax(0, 1fr); align-items: stretch; overflow: hidden; }
 .metadata-config__tabs {
@@ -2073,6 +2077,14 @@ textarea {
 .dynamic-config > header a:hover { text-decoration: underline; }
 .dynamic-config__label code,
 .dynamic-config__value-hint code { padding: 1px 4px; border-radius: 4px; background: var(--astrbot-hover); color: inherit; font-size: .92em; }
+.plugin-file-config { display: flex; align-items: center; gap: 10px; }
+.plugin-file-config > small { color: var(--astrbot-text-muted); }
+.plugin-file-config__list { display: grid; gap: 5px; min-height: 180px; max-height: 60vh; overflow: auto; }
+.plugin-file-config__list > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 9px; border-bottom: 1px solid var(--astrbot-border); }
+.plugin-file-config__list > div > span { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.plugin-file-config__list > div > em { padding: 2px 7px; border-radius: 999px; background: var(--astrbot-hover); color: var(--astrbot-warning); font-size: 11px; font-style: normal; }
+.plugin-file-config__list > div > button { display: grid; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; place-items: center; }
+.plugin-file-config__drop { display: grid; justify-items: center; gap: 4px; margin-top: 10px; padding: 24px; border: 1px dashed var(--astrbot-primary); border-radius: 10px; background: transparent; color: var(--astrbot-primary); cursor: pointer; }
 .dynamic-config__control { min-width: 0; }
 .dynamic-config__control > input,
 .dynamic-config__control > select,
@@ -3431,6 +3443,20 @@ textarea {
 .knowledge-url-field { margin: 18px 0; }
 .knowledge-url-field small { color: color-mix(in srgb, var(--astrbot-text) 52%, transparent); font-weight: 400; line-height: 1.45; }
 .knowledge-upload__settings { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; background: var(--astrbot-hover); }
+.knowledge-upload__settings > h3 { width: 100%; margin: 4px 0; }
+.knowledge-upload__settings > label { display: grid; min-width: 145px; flex: 1; gap: 5px; font-size: 12px; font-weight: 650; }
+.knowledge-upload__settings input, .knowledge-upload__cleaning select { min-width: 0; padding: 8px 9px; border: 1px solid var(--astrbot-border); border-radius: 7px; background: var(--astrbot-surface); color: inherit; }
+.knowledge-upload__cleaning { display: grid; gap: 10px; padding: 11px; border: 1px solid var(--astrbot-border); border-radius: 9px; }
+.knowledge-upload__cleaning h3 { margin: 0; }
+.knowledge-upload__cleaning > label { display: grid; gap: 5px; }
+.knowledge-upload__cleaning > label:first-of-type { display: flex; align-items: center; }
+.knowledge-upload__cleaning small { color: var(--astrbot-text-muted); }
+.knowledge-tavily { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 8px; background: var(--astrbot-hover); color: var(--astrbot-text-muted); }
+.knowledge-tavily.is-configured { color: var(--astrbot-success); }
+.knowledge-tavily > span { flex: 1; }
+.knowledge-tavily > button { border: 0; background: transparent; color: var(--astrbot-primary); cursor: pointer; font-weight: 650; }
+.welcome-onboarding-dialog { width: min(1120px, 86vw); max-height: 74vh; overflow: auto; }
+.welcome-onboarding-dialog .route-page__heading { display: none; }
 .knowledge-upload__settings h3 { width: 100%; margin: 0; font-size: 13px; }
 .knowledge-upload__settings span { font-size: 11px; }
 

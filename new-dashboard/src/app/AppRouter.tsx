@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { RequireAuth } from '@/auth/RequireAuth';
@@ -30,8 +31,13 @@ const KnowledgeBaseDetailPage = lazy(() => import('@/routes/knowledge/KnowledgeB
 const DocumentDetailPage = lazy(() => import('@/routes/knowledge/DocumentDetailPage'));
 const ChatPage = lazy(() => import('@/routes/chat/ChatPage'));
 
+function RouteLoading() {
+  const { t } = useTranslation();
+  return <div className="route-loading" role="status">{t('core.common.loading')}</div>;
+}
+
 function loading(element: React.ReactNode) {
-  return <Suspense fallback={<div className="route-loading" role="status">Loading…</div>}>{element}</Suspense>;
+  return <Suspense fallback={<RouteLoading />}>{element}</Suspense>;
 }
 
 const reactRouteElements: Partial<Record<string, React.ReactNode>> = {

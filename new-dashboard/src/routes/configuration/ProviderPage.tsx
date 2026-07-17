@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import {
   createProvider,
   createProviderInSourceById,
@@ -761,7 +762,7 @@ export default function ProviderPage() {
             <li>{t('features.provider.agentRunnerTest.steps.openChat')}</li>
           </ol>
           <p>{t('features.provider.agentRunnerTest.hint')}</p>
-          <footer><button onClick={() => setAgentRunnerHelpOpen(false)} type="button">{t('core.common.confirm')}</button><a className="button--primary" href="/config">{t('features.provider.agentRunnerTest.goToConfig')}</a></footer>
+          <footer><button onClick={() => setAgentRunnerHelpOpen(false)} type="button">{t('core.common.confirm')}</button><Link className="button--primary" to="/config">{t('features.provider.agentRunnerTest.goToConfig')}</Link></footer>
         </div>
       </Dialog>
 

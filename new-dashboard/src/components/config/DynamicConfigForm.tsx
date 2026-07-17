@@ -1,12 +1,14 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { deletePluginConfigFile, listPluginConfigFiles, uploadPluginConfigFiles } from '@/api/openapi';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 import { toast } from '@/stores/feedback';
 import { ConfigSpecialSelector, isConfigSelectorSpecial, PersonaQuickPreview } from './ConfigSpecialControls';
 import { DashboardTotpManager, T2ITemplateEditor } from './ConfigSpecialEditors';
+import { isSafePluginConfigPath } from './pluginFileModel';
 
 import {
   configItemsForValue,
@@ -261,13 +263,122 @@ function StringListControl({ disabled, onChange, value }: { disabled?: boolean; 
   </div>;
 }
 
-function ConfigControl({ configRoot, embeddingDimensionLoading, metadata, onChange, onConfigRootChange, onGetEmbeddingDimension, value }: {
+type PluginFileItem = { path: string; status: 'missing' | 'ok' | 'unconfigured' };
+
+function pluginFileResponseData(response: unknown) {
+  const outer = (response as { data?: unknown } | null)?.data;
+  if (!outer || typeof outer !== 'object') return outer as Record<string, unknown> | undefined;
+  return (((outer as { data?: unknown }).data ?? outer) as Record<string, unknown>);
+}
+
+function PluginFileConfigControl({ configKey, metadata, onChange, pluginName, value }: {
+  configKey: string;
+  metadata: ConfigItemMetadata;
+  onChange: (value: unknown) => void;
+  pluginName: string;
+  value: string[];
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [directoryFiles, setDirectoryFiles] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const fileTypes = Array.isArray(metadata.file_types) ? metadata.file_types.map(String) : [];
+  const accept = fileTypes.map((extension) => `.${extension.replace(/^\./, '')}`).join(',');
+  const items = useMemo<PluginFileItem[]>(() => {
+    const configured = new Set(value);
+    const existing = new Set(directoryFiles);
+    return [
+      ...value.map((path): PluginFileItem => ({ path, status: existing.has(path) ? 'ok' : 'missing' })),
+      ...directoryFiles.filter((path) => !configured.has(path)).map((path): PluginFileItem => ({ path, status: 'unconfigured' })),
+    ];
+  }, [directoryFiles, value]);
+
+  const load = async () => {
+    if (!pluginName || !configKey) return;
+    setBusy(true);
+    try {
+      const response = await listPluginConfigFiles({ path: { plugin_id: pluginName, config_key: configKey } });
+      const files = pluginFileResponseData(response)?.files;
+      setDirectoryFiles(Array.isArray(files) ? Array.from(new Set(files.filter(isSafePluginConfigPath))) : []);
+    } catch {
+      toast.warning(t('features.config.fileUpload.loadFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const upload = async (files: File[]) => {
+    if (!files.length || busy) return;
+    const valid = files.filter((file) => {
+      if (file.size <= 500 * 1024 * 1024) return true;
+      toast.warning(t('features.config.fileUpload.fileTooLarge', { max: 500, name: file.name }));
+      return false;
+    });
+    if (!valid.length) return;
+    setBusy(true);
+    try {
+      const body = new FormData();
+      valid.forEach((file, index) => body.append(`file${index}`, file));
+      const response = await uploadPluginConfigFiles({
+        path: { plugin_id: pluginName, config_key: configKey },
+        body: body as unknown as Record<string, unknown>,
+      });
+      const data = pluginFileResponseData(response);
+      const uploadedRaw = data?.uploaded;
+      const errorsRaw = data?.errors;
+      const uploaded = Array.isArray(uploadedRaw) ? uploadedRaw.filter(isSafePluginConfigPath) : [];
+      const errors = Array.isArray(errorsRaw) ? errorsRaw.map(String) : [];
+      if (uploaded.length) {
+        onChange(Array.from(new Set([...value, ...uploaded])));
+        setDirectoryFiles((current) => Array.from(new Set([...current, ...uploaded])));
+        toast.success(t('features.config.fileUpload.uploadSuccess', { count: uploaded.length }));
+      }
+      if (errors.length) toast.warning(errors.join('\n'));
+    } catch {
+      toast.error(t('features.config.fileUpload.uploadFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async (item: PluginFileItem) => {
+    if (!isSafePluginConfigPath(item.path)) {
+      toast.error(t('features.config.fileUpload.deleteFailed'));
+      return;
+    }
+    setDirectoryFiles((current) => current.filter((path) => path !== item.path));
+    onChange(value.filter((path) => path !== item.path));
+    try {
+      await deletePluginConfigFile({ path: { plugin_id: pluginName }, body: { path: item.path } });
+      toast.success(t('features.config.fileUpload.deleteSuccess'));
+    } catch {
+      toast.warning(t('features.config.fileUpload.deleteFailed'));
+    }
+  };
+
+  return <div className="plugin-file-config">
+    <button className="button--primary-soft" onClick={() => { setOpen(true); void load(); }} type="button">{t('features.config.fileUpload.button')}</button>
+    <small>{t('features.config.fileUpload.fileCount', { count: value.length })}</small>
+    <Dialog onOpenChange={setOpen} open={open} title={t('features.config.fileUpload.dialogTitle')}>
+      <div className="plugin-file-config__list">
+        {!items.length && <p>{t('features.config.fileUpload.empty')}</p>}
+        {items.map((item) => <div key={item.path}><MdiIcon name="mdi-file-outline" /><span title={item.path}>{item.path.split('/').pop()}</span>{item.status !== 'ok' && <em>{t(`features.config.fileUpload.${item.status === 'missing' ? 'statusMissing' : 'statusUnconfigured'}`)}</em>}{item.status === 'unconfigured' && <button aria-label={t('features.config.fileUpload.addToConfig')} onClick={() => { onChange([...value, item.path]); toast.success(t('features.config.fileUpload.addToConfig')); }} type="button"><MdiIcon name="mdi-plus" /></button>}<button aria-label={t('features.config.actions.delete')} onClick={() => void remove(item)} type="button"><MdiIcon name="mdi-delete-outline" /></button></div>)}
+        <button className="plugin-file-config__drop" disabled={busy} onClick={() => input.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void upload(Array.from(event.dataTransfer.files)); }} type="button"><MdiIcon className={busy ? 'mdi-spin' : ''} name={busy ? 'mdi-loading' : 'mdi-upload'} /><span>{t('features.config.fileUpload.dropzone')}</span>{fileTypes.length > 0 && <small>{t('features.config.fileUpload.allowedTypes', { types: fileTypes.join(', ') })}</small>}</button>
+        <input accept={accept || undefined} hidden multiple onChange={(event) => { void upload(Array.from(event.target.files ?? [])); event.currentTarget.value = ''; }} ref={input} type="file" />
+      </div>
+      <div className="dialog-actions"><button className="button--primary" onClick={() => setOpen(false)} type="button">{t('features.config.fileUpload.done')}</button></div>
+    </Dialog>
+  </div>;
+}
+
+function ConfigControl({ configKey = '', configRoot, embeddingDimensionLoading, metadata, onChange, onConfigRootChange, onGetEmbeddingDimension, pluginName = '', value }: {
+  configKey?: string;
   configRoot: ConfigRecord;
   embeddingDimensionLoading?: boolean;
   metadata: ConfigItemMetadata;
   onChange: (value: unknown) => void;
   onConfigRootChange: (value: ConfigRecord) => void;
   onGetEmbeddingDimension?: () => void;
+  pluginName?: string;
   value: unknown;
 }) {
   const { t } = useTranslation();
@@ -300,6 +411,10 @@ function ConfigControl({ configRoot, embeddingDimensionLoading, metadata, onChan
         </button>
       </div>
     );
+  }
+
+  if (type === 'file') {
+    return <PluginFileConfigControl configKey={configKey} metadata={metadata} onChange={onChange} pluginName={pluginName} value={Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []} />;
   }
 
   if (type === 'bool') {
@@ -354,6 +469,8 @@ type ConfigGroupProps = {
   onChange: (value: ConfigRecord) => void;
   onConfigRootChange?: (value: ConfigRecord) => void;
   onGetEmbeddingDimension?: () => void;
+  pluginName?: string;
+  configPath?: string;
   resolveText?: TextResolver;
   search?: string;
   showValueHint?: boolean;
@@ -396,7 +513,7 @@ function ValueHint({ children }: { children: string }) {
   );
 }
 
-export function ConfigGroup({ conditionValue, configRoot, embeddingDimensionLoading, fieldsFromValue = false, metadata, onChange, onConfigRootChange, onGetEmbeddingDimension, resolveText, search = '', showValueHint = false, title, translationPath, value, variant = 'default' }: ConfigGroupProps) {
+export function ConfigGroup({ conditionValue, configPath = '', configRoot, embeddingDimensionLoading, fieldsFromValue = false, metadata, onChange, onConfigRootChange, onGetEmbeddingDimension, pluginName, resolveText, search = '', showValueHint = false, title, translationPath, value, variant = 'default' }: ConfigGroupProps) {
   const { t } = useTranslation();
   const textResolver = resolveText ?? defaultTextResolver(t);
   const [showCollapsed, setShowCollapsed] = useState(false);
@@ -438,12 +555,14 @@ export function ConfigGroup({ conditionValue, configRoot, embeddingDimensionLoad
           </header>
           <ConfigGroup
             conditionValue={nestedValue}
+            configPath={configPath ? `${configPath}.${key}` : key}
             configRoot={rootValue}
             fieldsFromValue
             metadata={item as ConfigGroupMetadata}
             onChange={(next) => onChange(setConfigValue(value, key, next))}
             onConfigRootChange={changeRoot}
             onGetEmbeddingDimension={onGetEmbeddingDimension}
+            pluginName={pluginName}
             embeddingDimensionLoading={embeddingDimensionLoading}
             resolveText={textResolver}
             translationPath={path}
@@ -455,7 +574,7 @@ export function ConfigGroup({ conditionValue, configRoot, embeddingDimensionLoad
     }
     const currentValue = getConfigValue(value, key);
     return <Fragment key={key}>
-      <div className="dynamic-config__row"><div className="dynamic-config__label"><label htmlFor={`config-${translationPath}-${key}`}><span><ConfigRichText>{label}</ConfigRichText></span><small>{key}</small></label>{hint && <p><ConfigRichText>{hint}</ConfigRichText></p>}</div><div className="dynamic-config__control" id={`config-${translationPath}-${key}`}><ConfigControl configRoot={rootValue} embeddingDimensionLoading={embeddingDimensionLoading} metadata={item} onChange={(next) => onChange(setConfigValue(value, key, next))} onConfigRootChange={changeRoot} onGetEmbeddingDimension={onGetEmbeddingDimension} value={currentValue} /></div></div>
+      <div className="dynamic-config__row"><div className="dynamic-config__label"><label htmlFor={`config-${translationPath}-${key}`}><span><ConfigRichText>{label}</ConfigRichText></span><small>{key}</small></label>{hint && <p><ConfigRichText>{hint}</ConfigRichText></p>}</div><div className="dynamic-config__control" id={`config-${translationPath}-${key}`}><ConfigControl configKey={configPath ? `${configPath}.${key}` : key} configRoot={rootValue} embeddingDimensionLoading={embeddingDimensionLoading} metadata={item} onChange={(next) => onChange(setConfigValue(value, key, next))} onConfigRootChange={changeRoot} onGetEmbeddingDimension={onGetEmbeddingDimension} pluginName={pluginName} value={currentValue} /></div></div>
       {item._special === 'select_plugin_set' && Array.isArray(currentValue) && currentValue.length > 0 && <div className="config-plugin-set-preview">
         <small>{t('core.shared.pluginSetSelector.selectedPluginsLabel')}</small>
         <div>{currentValue.filter((plugin): plugin is string => typeof plugin === 'string').map((plugin) => <span key={plugin}>{plugin === '*' ? t('core.shared.pluginSetSelector.allPluginsLabel') : plugin}</span>)}</div>
