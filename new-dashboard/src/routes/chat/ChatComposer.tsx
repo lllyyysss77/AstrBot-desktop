@@ -70,6 +70,8 @@ export type ChatComposerProps = {
   commandSuggestionsLabel: string;
   configs?: ChatComposerConfig[];
   configId?: string;
+  /** Prevent actions that depend on pending data while keeping draft input editable. */
+  busy?: boolean;
   disabled?: boolean;
   isRecording?: boolean;
   isRunning?: boolean;
@@ -125,6 +127,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   commandSuggestionsLabel,
   configs = [],
   configId = 'default',
+  busy = false,
   disabled = false,
   isRecording = false,
   isRunning = false,
@@ -164,7 +167,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
   const [selectedCommand, setSelectedCommand] = useState(0);
   const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
 
-  const canSend = !disabled && !isRecording && Boolean(value.trim() || attachments.length);
+  const actionsDisabled = disabled || busy;
+  const canSend = !actionsDisabled && !isRecording && Boolean(value.trim() || attachments.length);
   const normalizedPrefixes = wakePrefixes.filter(Boolean);
 
   const suggestions = useMemo(() => {
@@ -356,10 +360,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
         <div className="chat-composer-v2__left" ref={menuRef}>
           <button aria-expanded={menuOpen} aria-haspopup="menu" aria-label={labels.upload} className="chat-composer-v2__icon-button" onClick={() => setMenuOpen((open) => !open)} type="button"><MdiIcon name="mdi-plus" /></button>
           <div className="chat-composer-v2__menu" hidden={!menuOpen} role="menu">
-            <button disabled={disabled} onClick={() => { fileInputRef.current?.click(); setMenuOpen(false); }} role="menuitem" type="button"><MdiIcon name="mdi-file-upload-outline" />{labels.upload}</button>
+            <button disabled={actionsDisabled} onClick={() => { fileInputRef.current?.click(); setMenuOpen(false); }} role="menuitem" type="button"><MdiIcon name="mdi-file-upload-outline" />{labels.upload}</button>
             {onConfigChange && <label className="chat-composer-v2__config">
               <MdiIcon name="mdi-tune" /><span>{labels.config}</span>
-              <select aria-label={labels.config} disabled={disabled} onChange={(event) => onConfigChange(event.target.value)} value={configId}>
+              <select aria-label={labels.config} disabled={actionsDisabled} onChange={(event) => onConfigChange(event.target.value)} value={configId}>
                 {configs.map((config) => <option key={config.id} value={config.id}>{config.name}</option>)}
               </select>
               {configs.find((config) => config.id === configId)?.description && <small>{configs.find((config) => config.id === configId)?.description}</small>}
@@ -382,10 +386,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             aria-label={placeholder}
             disabled={disabled}
             onChange={(event) => {
-              if (!composingRef.current) {
-                setSuggestionsDismissed(false);
-                onChange(event.target.value);
-              }
+              setSuggestionsDismissed(false);
+              onChange(event.target.value);
             }}
             onCompositionEnd={(event) => {
               composingRef.current = false;
@@ -415,7 +417,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
             aria-label={isRecording ? labels.stopRecording : labels.startRecording}
             aria-pressed={isRecording}
             className={`chat-composer-v2__icon-button chat-composer-v2__record${isRecording ? ' is-recording' : ''}`}
-            disabled={disabled}
+            disabled={actionsDisabled}
             onClick={isRecording ? onStopRecording : onStartRecording}
             title={isRecording ? labels.stopRecording : labels.startRecording}
             type="button"
