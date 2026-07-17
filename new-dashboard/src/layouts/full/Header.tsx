@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { authApi } from '@/api/auth';
+import { statsApi, updatesApi } from '@/api/compat';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { Menu, MenuItem } from '@/components/headless/Menu';
 import { MdiIcon } from '@/components/icons/MdiIcon';
@@ -123,8 +124,7 @@ export function Header() {
   useEffect(() => {
     if (accountWarning) setAccountOpen(true);
     let active = true;
-    void import('@/api/openapi')
-      .then(({ getVersion }) => getVersion())
+    void statsApi.version()
       .then((response) => {
         if (!active) return;
         const data = responseData<JsonObject>(response) ?? {};
@@ -177,11 +177,10 @@ export function Header() {
         });
         return;
       }
-      const { checkUpdate } = await import('@/api/openapi');
       const response = await runHeaderUpdateAction(
         false,
         async () => null,
-        checkUpdate,
+        updatesApi.check,
       );
       setUpdateInfo(responseData<JsonObject>(response) || {});
     } catch (cause) {
@@ -207,11 +206,10 @@ export function Header() {
         ) as AstrBotDesktopResult;
         if (!result.ok) throw new Error(result.reason || t('core.header.updateDialog.desktopApp.installFailed'));
       } else {
-        const { updateCore } = await import('@/api/openapi');
         await runHeaderUpdateAction(
           false,
           async () => ({ ok: false }),
-          () => updateCore({ body: { reboot: true } }),
+          () => updatesApi.core({ reboot: true }),
         );
       }
       toast.success(t('core.header.updateDialog.progress.preparing'));
@@ -254,13 +252,15 @@ export function Header() {
     }
     setAccountSaving(true);
     try {
-      const { updateAuthAccount } = await import('@/api/openapi');
-      await updateAuthAccount({ body: {
+      const response = await authApi.updateAccount({
         password: account.password,
         new_password: account.newPassword || undefined,
         confirm_password: account.confirmPassword || undefined,
         new_username: account.username.trim() || undefined,
-      } });
+      });
+      if (response.data.status === 'error') {
+        throw new Error(response.data.message || t('core.header.accountDialog.messages.updateFailed'));
+      }
       await authApi.logout().catch(() => undefined);
       setAccountOpen(false);
       setAccountWarning(null);

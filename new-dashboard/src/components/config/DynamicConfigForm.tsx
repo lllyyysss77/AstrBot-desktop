@@ -8,7 +8,7 @@ import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 import { toast } from '@/stores/feedback';
 import { ConfigSpecialSelector, isConfigSelectorSpecial, PersonaQuickPreview } from './ConfigSpecialControls';
 import { DashboardTotpManager, T2ITemplateEditor } from './ConfigSpecialEditors';
-import { isSafePluginConfigPath } from './pluginFileModel';
+import { isSafePluginConfigPath, pluginConfigUploadBody } from './pluginFileModel';
 
 import {
   configItemsForValue,
@@ -317,11 +317,9 @@ function PluginFileConfigControl({ configKey, metadata, onChange, pluginName, va
     if (!valid.length) return;
     setBusy(true);
     try {
-      const body = new FormData();
-      valid.forEach((file, index) => body.append(`file${index}`, file));
       const response = await uploadPluginConfigFiles({
         path: { plugin_id: pluginName, config_key: configKey },
-        body: body as unknown as Record<string, unknown>,
+        body: pluginConfigUploadBody(valid),
       });
       const data = pluginFileResponseData(response);
       const uploadedRaw = data?.uploaded;

@@ -15,9 +15,9 @@ import {
   listBackups,
   openApiAxiosClient,
   renameBackup,
-  testGhproxyConnection,
   uploadBackupChunk,
 } from '@/api/openapi';
+import { statsApi } from '@/api/compat';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import {
@@ -152,7 +152,7 @@ export function ProxySelector() {
     setTesting(true);
     const results = await Promise.all(GITHUB_PROXIES.map(async (proxy, index) => {
       try {
-        const data = responseData<JsonObject>(await testGhproxyConnection({ body: { proxy_url: proxy } }));
+        const data = responseData<JsonObject>(await statsApi.testGhproxy({ proxy_url: proxy }));
         return [index, { available: true, latency: Math.round(Number(data?.latency || 0)) }] as const;
       } catch {
         return [index, { available: false, latency: 0 }] as const;

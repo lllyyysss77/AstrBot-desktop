@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { authApi } from '@/api/auth';
+import { publicApi, type PublicVersionData } from '@/api/compat';
 import { formatRecoveryCode, isRecoveryCodeComplete, requireAuthSession, requiresTotp, type LoginStage } from '@/auth/authFlow';
 import { checkOnboardingCompleted } from '@/auth/sessionFlow';
 import { dispatchUpgradeRecovery, legacyUpgradeDetail } from '@/auth/upgradeRecovery';
@@ -13,7 +14,6 @@ import { useAuthStore } from '@/stores/auth';
 import { AuthShell } from './AuthShell';
 
 type AccountValues = { password: string; username: string };
-type PublicVersions = { astrbot_code_version?: string; astrbot_version?: string; webui_version?: string };
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -27,7 +27,7 @@ export default function LoginPage() {
   const [trustDevice, setTrustDevice] = useState(false);
   const [submittingCode, setSubmittingCode] = useState(false);
   const [apiError, setApiError] = useState('');
-  const [versions, setVersions] = useState<PublicVersions | null>(null);
+  const [versions, setVersions] = useState<PublicVersionData | null>(null);
   const schema = createLoginSchema((key) => t(`features.auth.setup.validation.${key}`));
   const form = useForm<AccountValues>({
     defaultValues: { password: '', username: '' },
@@ -49,9 +49,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     let active = true;
-    void import('@/api/openapi').then(({ getPublicVersions }) => getPublicVersions()).then((response) => {
-      const envelope = (response as { data?: { data?: PublicVersions } }).data;
-      if (active) setVersions(envelope?.data ?? null);
+    void publicApi.versions().then((response) => {
+      if (active) setVersions(response.data.data ?? null);
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);
@@ -138,7 +137,7 @@ export default function LoginPage() {
   );
 }
 
-function VersionStatus({ versions }: { versions: PublicVersions }) {
+function VersionStatus({ versions }: { versions: PublicVersionData }) {
   const { t } = useTranslation();
   const values = {
     code: String(versions.astrbot_code_version ?? '').trim(),

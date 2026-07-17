@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { installPipPackage } from '@/api/openapi';
+import { updatesApi } from '@/api/compat';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { toast } from '@/stores/feedback';
@@ -64,7 +64,7 @@ export default function ConsolePage() {
     if (!pipPackage.trim()) return;
     setInstalling(true);
     try {
-      const response = await installPipPackage({ body: { package: pipPackage.trim(), mirror: mirror.trim() || undefined } });
+      const response = await updatesApi.installPip({ package: pipPackage.trim(), mirror: mirror.trim() || undefined });
       const result = response.data as { message?: string; status?: string } | undefined;
       if (result?.status && result.status !== 'ok') throw new Error(result.message || t('features.console.pipInstall.installFailed'));
       toast.success(result?.message || t('features.console.pipInstall.installSuccess'));

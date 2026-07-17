@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ApiError, apiRequest } from './http';
+import { ApiError, apiRequest, fetchWithAuth } from './http';
 
 function createStorage(entries: Record<string, string> = {}): Storage {
   const values = new Map(Object.entries(entries));
@@ -70,5 +70,41 @@ describe('apiRequest', () => {
       fetch: vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 })),
       storage: createStorage(),
     })).resolves.toBeNull();
+  });
+});
+
+describe('fetchWithAuth', () => {
+  it('preserves raw responses while attaching auth and locale headers', async () => {
+    const response = new Response('stream', {
+      headers: { 'content-type': 'text/event-stream' },
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response);
+
+    await expect(fetchWithAuth('/api/v1/chat', {
+      headers: { 'X-Request-ID': 'request-one' },
+    }, {
+      fetch: fetchMock,
+      storage: createStorage({ 'astrbot-locale': 'en-US', token: 'secret' }),
+    })).resolves.toBe(response);
+
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get('Authorization')).toBe('Bearer secret');
+    expect(headers.get('Accept-Language')).toBe('en-US');
+    expect(headers.get('X-Request-ID')).toBe('request-one');
+  });
+
+  it('expires the session for unauthorized raw API responses', async () => {
+    const storage = createStorage({ token: 'expired', user: 'astrbot' });
+    const onUnauthorized = vi.fn();
+
+    await fetchWithAuth('/api/v1/logs/live', {}, {
+      fetch: vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 401 })),
+      onUnauthorized,
+      storage,
+    });
+
+    expect(storage.getItem('token')).toBeNull();
+    expect(storage.getItem('user')).toBeNull();
+    expect(onUnauthorized).toHaveBeenCalledOnce();
   });
 });

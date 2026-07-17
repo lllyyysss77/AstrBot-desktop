@@ -28,6 +28,7 @@ import {
   upsertConfigRoute,
   uploadFile,
 } from '@/api/openapi';
+import { fetchWithAuth } from '@/api/http';
 import { readAuthToken } from '@/auth/storage';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
@@ -491,7 +492,6 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     mediaUrlsRef.current = {};
   }, []);
   useEffect(() => {
-    const token = readAuthToken(localStorage);
     const records = activeThread?.messages ? [...messages, ...activeThread.messages] : messages;
     records.flatMap((message) => message.content.message).forEach((part) => {
       if (!['image', 'record', 'audio', 'video', 'file'].includes(part.type)) return;
@@ -504,7 +504,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           : '';
       if (!url) return;
       mediaUrlsRef.current[key] = '';
-      void fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : undefined })
+      void fetchWithAuth(url)
         .then((response) => {
           if (!response.ok) throw new Error(String(response.status));
           return response.blob();
@@ -898,7 +898,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           token,
         });
       } else {
-        const response = await fetch('/api/v1/chat', {
+        const response = await fetchWithAuth('/api/v1/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -989,7 +989,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     try {
       const token = readAuthToken(localStorage);
       const locale = localStorage.getItem('astrbot-locale');
-      const response = await fetch(`/api/v1/chat/sessions/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(targetId)}/regenerate`, {
+      const response = await fetchWithAuth(`/api/v1/chat/sessions/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(targetId)}/regenerate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1068,12 +1068,10 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       if (activeConversationRef.current === conversationId) setMessages([...messageCacheRef.current[conversationId]]);
     });
     try {
-      const token = readAuthToken(localStorage);
-      const response = await fetch('/api/v1/chat', {
+      const response = await fetchWithAuth('/api/v1/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           session_id: conversationId,
@@ -1226,12 +1224,10 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     setThreadDraft('');
     setThreadSending(true);
     try {
-      const token = readAuthToken(localStorage);
-      const response = await fetch(`/api/v1/chat/threads/${encodeURIComponent(threadId)}/messages`, {
+      const response = await fetchWithAuth(`/api/v1/chat/threads/${encodeURIComponent(threadId)}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           message: [{ type: 'plain', text }],
@@ -1310,8 +1306,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           ? `/api/v1/files/content?filename=${encodeURIComponent(String(part.stored_filename))}`
           : '';
       if (!endpoint) return;
-      const token = readAuthToken(localStorage);
-      const response = await fetch(endpoint, { headers: token ? { Authorization: `Bearer ${token}` } : undefined }).catch(() => null);
+      const response = await fetchWithAuth(endpoint).catch(() => null);
       if (!response?.ok) {
         toast.error(t('features.chat.attachment.downloadFailed', 'Failed to download attachment.'));
         return;

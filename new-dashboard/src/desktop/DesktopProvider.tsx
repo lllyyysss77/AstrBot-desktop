@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from 'react';
 
 import { readAuthToken } from '@/auth/storage';
+import { statsApi } from '@/api/compat';
 import { detectDesktopRuntime } from './runtime';
 import { waitForChangedStartTime, waitForDesktopBackendReady } from './readiness';
 import { useDesktopStore } from '@/stores/desktop';
@@ -55,10 +56,9 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
         if (ready) await refreshBackend();
         return ready;
       }
-      const { getStartTime, restartCore } = await import('@/api/openapi');
-      const previous = extractStartTime(await getStartTime());
-      await restartCore();
-      const ready = await waitForChangedStartTime(previous, async () => extractStartTime(await getStartTime()));
+      const previous = extractStartTime(await statsApi.startTime());
+      await statsApi.restart();
+      const ready = await waitForChangedStartTime(previous, async () => extractStartTime(await statsApi.startTime()));
       patch({ backendStatus: ready ? 'ready' : 'error', error: ready ? null : 'Backend restart timed out.' });
       return ready;
     } catch (cause) {

@@ -7,14 +7,13 @@ import {
   deleteT2iTemplate,
   getActiveT2iTemplate,
   getT2iTemplate,
-  getVersion,
   listT2iTemplates,
-  recoverTotp,
   resetDefaultT2iTemplate,
   setActiveT2iTemplate,
-  setupTotp,
   updateT2iTemplate,
 } from '@/api/openapi';
+import { authApi } from '@/api/auth';
+import { statsApi } from '@/api/compat';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
@@ -113,7 +112,7 @@ export function T2ITemplateEditor() {
       const [listResponse, activeResponse, versionResponse] = await Promise.all([
         listT2iTemplates(),
         getActiveT2iTemplate(),
-        getVersion().catch(() => null),
+        statsApi.version().catch(() => null),
       ]);
       const list = responsePayload<unknown[]>(listResponse) ?? [];
       const nextTemplates = list.flatMap((item) => isConfigRecord(item) && typeof item.name === 'string' ? [{ name: item.name }] : []);
@@ -293,7 +292,7 @@ export function DashboardTotpManager({ configRoot, onConfigRootChange, value }: 
     setLoading(true);
     setError('');
     try {
-      const response = await setupTotp();
+      const response = await authApi.setupTotp();
       const data = responsePayload<ConfigRecord>(response);
       setNewSecret(typeof data?.secret === 'string' ? data.secret : '');
       setStep('secret');
@@ -322,7 +321,7 @@ export function DashboardTotpManager({ configRoot, onConfigRootChange, value }: 
     setLoading(true);
     setError('');
     try {
-      const response = await setupTotp({ body: { code } });
+      const response = await authApi.setupTotp({ code });
       const data = responsePayload<ConfigRecord>(response);
       const nextSecret = typeof data?.secret === 'string' ? data.secret : '';
       if (!nextSecret) throw new Error(responseMessage(response, text('rotateError', '验证失败')));
@@ -341,7 +340,7 @@ export function DashboardTotpManager({ configRoot, onConfigRootChange, value }: 
     setLoading(true);
     setError('');
     try {
-      const response = await setupTotp({ body: { code, secret: newSecret } });
+      const response = await authApi.setupTotp({ code, secret: newSecret });
       const data = responsePayload<ConfigRecord>(response);
       const nextRecoveryCode = typeof data?.recovery_code === 'string' ? data.recovery_code : '';
       const nextRecoveryHash = typeof data?.recovery_code_hash === 'string' ? data.recovery_code_hash : '';
@@ -371,7 +370,7 @@ export function DashboardTotpManager({ configRoot, onConfigRootChange, value }: 
   const rotateRecovery = async () => {
     setLoading(true);
     try {
-      const response = await recoverTotp();
+      const response = await authApi.recoverTotp();
       const data = responsePayload<ConfigRecord>(response);
       const nextCode = typeof data?.recovery_code === 'string' ? data.recovery_code : '';
       const nextHash = typeof data?.recovery_code_hash === 'string' ? data.recovery_code_hash : '';

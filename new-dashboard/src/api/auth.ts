@@ -1,4 +1,5 @@
 import { apiRequest, isLegacyFallbackError, type ApiEnvelope } from '@/api/http';
+import type { TotpSetupRequest, UpdateAccountRequest } from '@/api/openapi';
 
 export type LoginRequest = {
   code?: string;
@@ -52,25 +53,44 @@ export const authApi = {
     '/api/v1/auth/setup-status',
     '/api/auth/setup-status',
   ),
+  setupTotp: (payload?: TotpSetupRequest) => compatibleRequest<Record<string, unknown>>(
+    '/api/v1/auth/totp/setup',
+    '/api/auth/totp/setup',
+    payload ? jsonRequest(payload) : { method: 'POST' },
+  ),
+  recoverTotp: () => compatibleRequest<Record<string, unknown>>(
+    '/api/v1/auth/totp/recovery',
+    '/api/auth/totp/recovery',
+    { method: 'POST' },
+  ),
+  updateAccount: (payload: UpdateAccountRequest) => compatibleRequest<Record<string, unknown>>(
+    '/api/v1/auth/account',
+    '/api/auth/account/edit',
+    jsonRequest(payload, 'PATCH'),
+    jsonRequest(payload),
+  ),
 };
 
 export async function compatibleRequest<T>(
   primaryPath: string,
   legacyPath: string,
   init?: RequestInit,
+  legacyInit: RequestInit | undefined = init,
 ): Promise<CompatibleApiResponse<T>> {
   try {
     const data = await apiRequest<T>(primaryPath, init);
     if (data.status === 'error' && data.message?.toLowerCase().includes('missing api key')) {
-      return { data: await apiRequest<T>(legacyPath, init), legacyFallback: true };
+      return { data: await apiRequest<T>(legacyPath, legacyInit), legacyFallback: true };
     }
     return { data, legacyFallback: false };
   } catch (error) {
     if (!isLegacyFallbackError(error)) throw error;
-    return { data: await apiRequest<T>(legacyPath, init), legacyFallback: true };
+    return { data: await apiRequest<T>(legacyPath, legacyInit), legacyFallback: true };
   }
 }
 
-function jsonPost(payload: object): RequestInit {
-  return { body: JSON.stringify(payload), method: 'POST' };
+function jsonRequest(payload: object, method = 'POST'): RequestInit {
+  return { body: JSON.stringify(payload), method };
 }
+
+const jsonPost = jsonRequest;

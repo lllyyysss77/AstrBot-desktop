@@ -35,16 +35,21 @@ type RequestDependencies = {
   storage?: Storage | null;
 };
 
-export async function apiRequest<T>(
-  path: string,
-  init: RequestInit = {},
-  dependencies: RequestDependencies = {},
-): Promise<ApiEnvelope<T>> {
-  const storage = dependencies.storage === undefined
+function requestStorage(dependencies: RequestDependencies) {
+  return dependencies.storage === undefined
     ? (typeof window === 'undefined' ? null : window.localStorage)
     : dependencies.storage;
-  const fetchImpl = dependencies.fetch ?? fetch;
-  const headers = new Headers(init.headers);
+}
+
+function authenticatedHeaders(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  storage: Storage | null,
+) {
+  const inputHeaders = typeof Request !== 'undefined' && input instanceof Request
+    ? input.headers
+    : undefined;
+  const headers = new Headers(init.headers ?? inputHeaders);
   const token = readAuthToken(storage);
   const locale = storage?.getItem('astrbot-locale');
 
@@ -54,6 +59,47 @@ export async function apiRequest<T>(
   if (locale && !headers.has('Accept-Language')) {
     headers.set('Accept-Language', locale);
   }
+  return headers;
+}
+
+function requestPath(input: RequestInfo | URL) {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+/**
+ * Authenticated raw fetch for streams, blobs, and other responses that must
+ * not be parsed as an API envelope.
+ */
+export async function fetchWithAuth(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  dependencies: RequestDependencies = {},
+) {
+  const storage = requestStorage(dependencies);
+  const fetchImpl = dependencies.fetch ?? fetch;
+  const response = await fetchImpl(input, {
+    ...init,
+    headers: authenticatedHeaders(input, init, storage),
+  });
+  expireUnauthorizedSession(
+    requestPath(input),
+    response.status,
+    storage,
+    dependencies.onUnauthorized,
+  );
+  return response;
+}
+
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  dependencies: RequestDependencies = {},
+): Promise<ApiEnvelope<T>> {
+  const storage = requestStorage(dependencies);
+  const fetchImpl = dependencies.fetch ?? fetch;
+  const headers = authenticatedHeaders(path, init, storage);
   if (init.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }

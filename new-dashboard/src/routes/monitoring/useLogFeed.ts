@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { getLogHistory } from '@/api/openapi';
-import { readAuthToken } from '@/auth/storage';
+import { fetchWithAuth } from '@/api/http';
 import { logIdentity, parseSseChunk, unwrapData, type LogItem } from './model';
 
 const delay = (milliseconds: number, signal: AbortSignal) => new Promise<void>((resolve) => {
@@ -60,10 +60,8 @@ export function useLogFeed(predicate: (log: LogItem) => boolean, maxItems = 300,
       while (!controller.signal.aborted && attempt < 10) {
         try {
           setStatus('connecting');
-          const token = readAuthToken();
-          const response = await fetch('/api/v1/logs/live', {
+          const response = await fetchWithAuth('/api/v1/logs/live', {
             credentials: 'include',
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
             signal: controller.signal,
           });
           if (!response.ok || !response.body) throw new Error(`Log stream failed: ${response.status}`);
