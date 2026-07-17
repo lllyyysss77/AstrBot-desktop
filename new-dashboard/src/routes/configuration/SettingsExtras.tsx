@@ -188,6 +188,15 @@ export function formatBytes(bytes: number) {
   return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
+export function formatBackupDate(value: unknown) {
+  if (value == null || value === '') return '—';
+  const numeric = typeof value === 'number' ? value : Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
 export function StorageCleanupPanel() {
   const { t } = useTranslation();
   const prefix = 'features.settings.system.cleanup';
@@ -218,7 +227,7 @@ type BackupTab = 'export' | 'import' | 'list';
 type TaskState = 'idle' | 'processing' | 'completed' | 'failed';
 type ImportState = 'idle' | 'uploading' | 'confirm' | 'processing' | 'completed' | 'failed';
 
-export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Promise<void>; open: boolean; setOpen: (open: boolean) => void }) {
+export function BackupDialog({ onRestart, open, restarting = false, setOpen }: { onRestart: () => Promise<void>; open: boolean; restarting?: boolean; setOpen: (open: boolean) => void }) {
   const { t } = useTranslation();
   const prefix = 'features.settings.backup';
   const [tab, setTab] = useState<BackupTab>('export');
@@ -235,6 +244,7 @@ export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Pr
   const [check, setCheck] = useState<JsonObject | null>(null);
   const [renameState, setRenameState] = useState<{ error: string; filename: string; name: string; saving: boolean } | null>(null);
   const pollTimer = useRef<number | null>(null);
+  const pollGeneration = useRef(0);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const loadList = useCallback(async () => {
@@ -243,14 +253,36 @@ export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Pr
     catch (cause) { toast.error(errorMessage(cause, t(`${prefix}.list.empty`))); }
     finally { setListLoading(false); }
   }, [t]);
+  const stopPolling = useCallback(() => {
+    pollGeneration.current += 1;
+    if (pollTimer.current != null) window.clearTimeout(pollTimer.current);
+    pollTimer.current = null;
+  }, []);
+  const resetAll = useCallback(() => {
+    stopPolling();
+    setTab('export');
+    setExportState('idle');
+    setExportMessage('');
+    setExportResult(null);
+    setFile(null);
+    setImportState('idle');
+    setImportMessage('');
+    setUploadPercent(0);
+    setUploadedFilename('');
+    setCheck(null);
+    setRenameState(null);
+    if (fileInput.current) fileInput.current.value = '';
+  }, [stopPolling]);
   useEffect(() => {
     if (open) void loadList();
-    return () => { if (pollTimer.current != null) window.clearTimeout(pollTimer.current); };
-  }, [loadList, open]);
+    else resetAll();
+    return stopPolling;
+  }, [loadList, open, resetAll, stopPolling]);
 
-  const pollTask = async (taskId: string, kind: 'export' | 'import') => {
+  const pollTask = async (taskId: string, kind: 'export' | 'import', generation: number) => {
     try {
       const data = responseData<JsonObject>(await getBackupProgress({ path: { task_id: taskId } }));
+      if (generation !== pollGeneration.current) return;
       const progress = isObject(data.progress) ? data.progress : {};
       const message = String(progress.message || '');
       if (kind === 'export') setExportMessage(message); else setImportMessage(message);
@@ -260,18 +292,21 @@ export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Pr
       } else if (data.status === 'failed') {
         if (kind === 'export') setExportState('failed'); else setImportState('failed');
         if (kind === 'export') setExportMessage(String(data.error || '')); else setImportMessage(String(data.error || ''));
-      } else pollTimer.current = window.setTimeout(() => void pollTask(taskId, kind), 1000);
+      } else pollTimer.current = window.setTimeout(() => void pollTask(taskId, kind, generation), 1000);
     } catch (cause) {
+      if (generation !== pollGeneration.current) return;
       if (kind === 'export') { setExportState('failed'); setExportMessage(errorMessage(cause, t(`${prefix}.export.failed`))); }
       else { setImportState('failed'); setImportMessage(errorMessage(cause, t(`${prefix}.import.failed`))); }
     }
   };
   const startExport = async () => {
+    stopPolling();
+    const generation = pollGeneration.current;
     setExportState('processing');
     setExportMessage('');
     try {
       const data = responseData<JsonObject>(await createBackup());
-      await pollTask(String(data.task_id), 'export');
+      if (generation === pollGeneration.current) await pollTask(String(data.task_id), 'export', generation);
     } catch (cause) { setExportState('failed'); setExportMessage(errorMessage(cause, t(`${prefix}.export.failed`))); }
   };
   const upload = async () => {
@@ -314,10 +349,12 @@ export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Pr
     }
   };
   const beginImport = async () => {
+    stopPolling();
+    const generation = pollGeneration.current;
     setImportState('processing');
     try {
       const data = responseData<JsonObject>(await importBackup({ body: { confirmed: true }, path: { filename: uploadedFilename } }));
-      await pollTask(String(data.task_id), 'import');
+      if (generation === pollGeneration.current) await pollTask(String(data.task_id), 'import', generation);
     } catch (cause) { setImportState('failed'); setImportMessage(errorMessage(cause, t(`${prefix}.import.failed`))); }
   };
   const restore = async (filename: string) => {
@@ -351,6 +388,12 @@ export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Pr
   const resetImport = () => { setFile(null); if (fileInput.current) fileInput.current.value = ''; setImportState('idle'); setImportMessage(''); setUploadPercent(0); setUploadedFilename(''); setCheck(null); };
   const versionStatus = String(check?.version_status || 'match');
   const canImport = Boolean(check?.can_import);
+  const backupSummaryCandidate = check?.backup_summary;
+  const backupSummary = isObject(backupSummaryCandidate) ? backupSummaryCandidate : {};
+  const summaryTables = Array.isArray(backupSummary.tables) ? backupSummary.tables : [];
+  const summaryDirectories = Array.isArray(backupSummary.directories) ? backupSummary.directories : [];
+  const checkWarningsCandidate = check?.warnings;
+  const checkWarnings = Array.isArray(checkWarningsCandidate) ? checkWarningsCandidate : [];
 
   return <><Dialog onOpenChange={(next) => { if (exportState !== 'processing' && importState !== 'uploading' && importState !== 'processing') setOpen(next); }} open={open} title={<span className="backup-dialog-title"><MdiIcon name="mdi-backup-restore" />{t(`${prefix}.dialog.title`)}</span>}>
     <div className="backup-dialog-react">
@@ -364,11 +407,11 @@ export function BackupDialog({ onRestart, open, setOpen }: { onRestart: () => Pr
         {tab === 'import' && <BackupState state={importState === 'uploading' || importState === 'processing' ? 'processing' : importState === 'completed' || importState === 'failed' ? importState : 'idle'} icon={importState === 'completed' ? 'mdi-check-circle' : importState === 'failed' ? 'mdi-alert-circle' : 'mdi-cloud-upload'} message={importMessage} title={t(`${prefix}.import.${importState === 'idle' ? 'title' : importState === 'confirm' ? 'confirmImport' : importState}`)}>
           {importState === 'idle' && <><div className="backup-alert backup-alert--warning"><MdiIcon name="mdi-alert" /><span>{String(t(`${prefix}.import.warning`)).replace(/^⚠️\s*/, '')}</span></div><input accept=".zip" hidden onChange={(event) => setFile(event.target.files?.[0] ?? null)} ref={fileInput} type="file" /><button className="backup-file-picker" onClick={() => fileInput.current?.click()} type="button"><MdiIcon name="mdi-file-upload" /><span><strong>{file?.name || t(`${prefix}.import.selectFile`)}</strong>{file && <small>{formatBytes(file.size)}</small>}</span></button><button className="backup-button backup-button--primary" disabled={!file} onClick={() => void upload()} type="button"><MdiIcon name="mdi-upload" />{t(`${prefix}.import.uploadAndCheck`)}</button></>}
           {importState === 'uploading' && <progress max={100} value={uploadPercent} />}
-          {importState === 'confirm' && <><div className={`backup-alert backup-alert--${versionStatus === 'major_diff' ? 'error' : versionStatus === 'minor_diff' ? 'warning' : 'info'}`}><MdiIcon name={versionStatus === 'major_diff' ? 'mdi-alert-octagon' : versionStatus === 'minor_diff' ? 'mdi-alert' : 'mdi-information'} /><span><strong>{t(`${prefix}.import.version.${versionStatus === 'major_diff' ? 'majorDiffTitle' : versionStatus === 'minor_diff' ? 'minorDiffTitle' : 'matchTitle'}`)}</strong><p>{t(`${prefix}.import.version.backupVersion`)}: {String(check?.backup_version || '—')}<br />{t(`${prefix}.import.version.currentVersion`)}: {String(check?.current_version || '—')}</p><p>{t(`${prefix}.import.version.${versionStatus === 'major_diff' ? 'majorDiffMessage' : versionStatus === 'minor_diff' ? 'minorDiffMessage' : 'matchMessage'}`)}</p></span></div><div className="backup-state__actions"><button className="backup-button backup-button--secondary" onClick={resetImport} type="button">{t('core.common.cancel')}</button>{canImport && <button className="backup-button backup-button--danger" onClick={() => void beginImport()} type="button"><MdiIcon name="mdi-database-import" />{t(`${prefix}.import.confirmImport`)}</button>}</div></>}
-          {importState === 'completed' && <><div className="backup-alert backup-alert--info"><MdiIcon name="mdi-information" /><span>{t(`${prefix}.import.restartRequired`)}</span></div><button className="backup-button backup-button--primary" onClick={() => void onRestart()} type="button"><MdiIcon name="mdi-restart" />{t(`${prefix}.import.restartNow`)}</button></>}
+          {importState === 'confirm' && <><div className={`backup-alert backup-alert--${versionStatus === 'major_diff' ? 'error' : versionStatus === 'minor_diff' ? 'warning' : 'info'}`}><MdiIcon name={versionStatus === 'major_diff' ? 'mdi-alert-octagon' : versionStatus === 'minor_diff' ? 'mdi-alert' : 'mdi-information'} /><span><strong>{t(`${prefix}.import.version.${versionStatus === 'major_diff' ? 'majorDiffTitle' : versionStatus === 'minor_diff' ? 'minorDiffTitle' : 'matchTitle'}`)}</strong><p>{t(`${prefix}.import.version.backupVersion`)}: {String(check?.backup_version || '—')}<br />{t(`${prefix}.import.version.currentVersion`)}: {String(check?.current_version || '—')}<br />{t(`${prefix}.import.version.backupTime`)}: {formatBackupDate(check?.backup_time)}</p><p>{t(`${prefix}.import.version.${versionStatus === 'major_diff' ? 'majorDiffMessage' : versionStatus === 'minor_diff' ? 'minorDiffMessage' : 'matchMessage'}`)}</p></span></div>{check?.error && <div className="backup-alert backup-alert--error"><MdiIcon name="mdi-alert-circle" /><span>{String(check.error)}</span></div>}{checkWarnings.length > 0 && <div className="backup-alert backup-alert--warning"><MdiIcon name="mdi-alert" /><span>{checkWarnings.map(String).join('\n')}</span></div>}<section className="backup-summary"><strong>{t(`${prefix}.import.backupContents`)}</strong><div>{summaryTables.length > 0 && <span>{summaryTables.length} {t(`${prefix}.import.tables`)}</span>}{Boolean(backupSummary.has_knowledge_bases) && <span>{t(`${prefix}.import.knowledgeBases`)}</span>}{Boolean(backupSummary.has_config) && <span>{t(`${prefix}.import.configFiles`)}</span>}{summaryDirectories.map((directory) => <span key={String(directory)}>{String(directory)}</span>)}</div></section><div className="backup-state__actions"><button className="backup-button backup-button--secondary" onClick={resetImport} type="button">{t('core.common.cancel')}</button>{canImport && <button className="backup-button backup-button--danger" onClick={() => void beginImport()} type="button"><MdiIcon name="mdi-database-import" />{t(`${prefix}.import.confirmImport`)}</button>}</div></>}
+          {importState === 'completed' && <><div className="backup-alert backup-alert--info"><MdiIcon name="mdi-information" /><span>{t(`${prefix}.import.restartRequired`)}</span></div><button className="backup-button backup-button--primary" disabled={restarting} onClick={() => void onRestart()} type="button"><MdiIcon className={restarting ? 'mdi-spin' : ''} name={restarting ? 'mdi-loading' : 'mdi-restart'} />{restarting ? t('core.common.restart.waiting') : t(`${prefix}.import.restartNow`)}</button></>}
           {importState === 'failed' && <button className="backup-button backup-button--secondary" onClick={resetImport} type="button"><MdiIcon name="mdi-refresh" />{t(`${prefix}.import.retry`)}</button>}
         </BackupState>}
-        {tab === 'list' && <div className="backup-list-react">{listLoading ? <div className="backup-list-empty"><MdiIcon className="mdi-spin" name="mdi-loading" /></div> : !backups.length ? <div className="backup-list-empty"><MdiIcon name="mdi-folder-open-outline" /><p>{t(`${prefix}.list.empty`)}</p></div> : backups.map((backup) => { const filename = String(backup.filename || ''); return <article key={filename}><MdiIcon name={backup.type === 'uploaded' ? 'mdi-upload' : 'mdi-zip-box'} /><span><strong>{filename}</strong><small>{formatBytes(Number(backup.size || 0))} · {new Date(Number(backup.created_at || 0) * 1000).toLocaleString()}</small></span><div><button aria-label={t(`${prefix}.list.restore`)} title={t(`${prefix}.list.restore`)} onClick={() => void restore(filename)} type="button"><MdiIcon name="mdi-restore" /></button><button aria-label={t(`${prefix}.list.rename`)} title={t(`${prefix}.list.rename`)} onClick={() => setRenameState({ error: '', filename, name: filename.replace(/\.zip$/i, ''), saving: false })} type="button"><MdiIcon name="mdi-pencil" /></button><button aria-label={t(`${prefix}.export.download`)} title={t(`${prefix}.export.download`)} onClick={() => void download(filename)} type="button"><MdiIcon name="mdi-download" /></button><button aria-label={t('core.common.delete')} className="backup-list-action--danger" title={t('core.common.delete')} onClick={() => void remove(filename)} type="button"><MdiIcon name="mdi-delete" /></button></div></article>; })}<button className="backup-button backup-button--text" onClick={() => void loadList()} type="button"><MdiIcon name="mdi-refresh" />{t(`${prefix}.list.refresh`)}</button><p className="backup-list-hint"><MdiIcon name="mdi-information-outline" /><span>{t(`${prefix}.list.ftpHint`)}</span></p></div>}
+        {tab === 'list' && <div className="backup-list-react">{listLoading ? <div className="backup-list-empty"><MdiIcon className="mdi-spin" name="mdi-loading" /></div> : !backups.length ? <div className="backup-list-empty"><MdiIcon name="mdi-folder-open-outline" /><p>{t(`${prefix}.list.empty`)}</p></div> : backups.map((backup) => { const filename = String(backup.filename || ''); return <article key={filename}><MdiIcon name={backup.type === 'uploaded' ? 'mdi-upload' : 'mdi-zip-box'} /><span><strong>{filename}</strong><small>{formatBytes(Number(backup.size || 0))} · {formatBackupDate(backup.created_at)}{backup.astrbot_version ? ` · v${String(backup.astrbot_version)}` : ''}{backup.type === 'uploaded' ? ` · ${t(`${prefix}.list.uploaded`)}` : ''}</small></span><div><button aria-label={t(`${prefix}.list.restore`)} title={t(`${prefix}.list.restore`)} onClick={() => void restore(filename)} type="button"><MdiIcon name="mdi-restore" /></button><button aria-label={t(`${prefix}.list.rename`)} title={t(`${prefix}.list.rename`)} onClick={() => setRenameState({ error: '', filename, name: filename.replace(/\.zip$/i, ''), saving: false })} type="button"><MdiIcon name="mdi-pencil" /></button><button aria-label={t(`${prefix}.export.download`)} title={t(`${prefix}.export.download`)} onClick={() => void download(filename)} type="button"><MdiIcon name="mdi-download" /></button><button aria-label={t('core.common.delete')} className="backup-list-action--danger" title={t('core.common.delete')} onClick={() => void remove(filename)} type="button"><MdiIcon name="mdi-delete" /></button></div></article>; })}<button className="backup-button backup-button--text" onClick={() => void loadList()} type="button"><MdiIcon name="mdi-refresh" />{t(`${prefix}.list.refresh`)}</button><p className="backup-list-hint"><MdiIcon name="mdi-information-outline" /><span>{t(`${prefix}.list.ftpHint`)}</span></p></div>}
       </div>
       <div className="dialog-actions"><span /><DialogClose asChild><button className="backup-button backup-button--text" disabled={exportState === 'processing' || importState === 'uploading' || importState === 'processing'} type="button">{t('core.common.close')}</button></DialogClose></div>
     </div>

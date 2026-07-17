@@ -2609,6 +2609,9 @@ textarea {
 .backup-alert--info { background: color-mix(in srgb, var(--astrbot-primary) 9%, var(--astrbot-surface)); color: var(--astrbot-primary); }
 .backup-alert--warning { background: color-mix(in srgb, #ffb300 12%, var(--astrbot-surface)); color: #a96900; }
 .backup-alert--error { background: color-mix(in srgb, var(--astrbot-danger) 10%, var(--astrbot-surface)); color: var(--astrbot-danger); }
+.backup-summary { display: grid; width: min(590px, 100%); box-sizing: border-box; gap: 10px; padding: 14px 16px; border: 1px solid var(--settings-divider); border-radius: 9px; text-align: left; }
+.backup-summary > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.backup-summary span { padding: 4px 9px; border-radius: 999px; background: color-mix(in srgb, var(--astrbot-primary) 10%, var(--astrbot-surface)); color: var(--astrbot-primary); font-size: 13px; }
 .backup-button, .backup-file-picker, .backup-list-react button, .backup-rename-dialog button { display: inline-flex; min-height: 40px; box-sizing: border-box; align-items: center; justify-content: center; gap: 7px; padding: 8px 16px; border: 1px solid transparent; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 650; transition: filter 140ms ease, background-color 140ms ease, border-color 140ms ease, transform 100ms ease; }
 .backup-button:not(:disabled):active, .backup-file-picker:active { transform: translateY(1px); }
 .backup-button:disabled { cursor: not-allowed; opacity: .42; }
