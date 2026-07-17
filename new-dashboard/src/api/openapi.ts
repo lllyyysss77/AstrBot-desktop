@@ -39,7 +39,25 @@ export function createOpenApiAxiosClient({
     return config;
   });
   instance.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      const payload = response.data;
+      if (
+        response.status >= 200
+        && response.status < 300
+        && payload
+        && typeof payload === 'object'
+        && !Array.isArray(payload)
+        && 'status' in payload
+        && payload.status === 'error'
+      ) {
+        throw new ApiError(
+          readApiErrorMessage(payload, response.statusText),
+          response.status,
+          payload,
+        );
+      }
+      return response;
+    },
     (error: AxiosError) => {
       const status = error.response?.status ?? 0;
       const path = error.config?.url ?? '';

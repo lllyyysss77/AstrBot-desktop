@@ -2,6 +2,7 @@ import type { PropsWithChildren, ReactNode } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 import { Header } from './Header';
+import { FirstNoticeDialog } from './FirstNoticeDialog';
 import { Sidebar } from './Sidebar';
 
 type FullLayoutProps = PropsWithChildren<{
@@ -64,6 +65,7 @@ export function FullLayout({
       <main className="full-layout__main">
         <div className={pageClassName}>{children ?? <Outlet />}</div>
       </main>
+      <FirstNoticeDialog />
     </div>
   );
 }

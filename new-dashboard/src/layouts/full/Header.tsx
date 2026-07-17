@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
+import { authApi } from '@/api/auth';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { Menu, MenuItem } from '@/components/headless/Menu';
 import { MdiIcon } from '@/components/icons/MdiIcon';
@@ -9,9 +10,32 @@ import { errorMessage, JsonObject, responseData } from '@/routes/configuration/m
 import { useAuthStore } from '@/stores/auth';
 import { toast } from '@/stores/feedback';
 import { type ThemeMode, useLayoutStore } from '@/stores/layout';
+import { useDesktopStore } from '@/stores/desktop';
+import { useDesktop } from '@/desktop/DesktopProvider';
+import {
+  passwordWarningFromFlags,
+  persistPasswordSecurityFlags,
+  readPasswordWarning,
+  type PasswordSecurityFlags,
+  type PasswordWarning,
+} from './shellStartup';
 
 export const LAST_BOT_ROUTE_KEY = 'astrbot:last_bot_route';
 export const LAST_CHAT_ROUTE_KEY = 'astrbot:last_chat_route';
+
+export function headerUpdateRuntime(isDesktop: boolean) {
+  return isDesktop ? 'desktop' : 'web';
+}
+
+export async function runHeaderUpdateAction(
+  isDesktop: boolean,
+  desktopAction: () => Promise<unknown>,
+  webAction: () => Promise<unknown>,
+) {
+  return headerUpdateRuntime(isDesktop) === 'desktop'
+    ? desktopAction()
+    : webAction();
+}
 
 export function getModeSwitchTarget(pathname: string, storage: Pick<Storage, 'getItem'>) {
   if (pathname === '/chat' || pathname.startsWith('/chat/')) {
@@ -45,6 +69,7 @@ export function Header() {
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<JsonObject>({});
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountWarning, setAccountWarning] = useState<PasswordWarning>(() => readPasswordWarning(localStorage));
   const [accountSaving, setAccountSaving] = useState(false);
   const [account, setAccount] = useState({ password: '', newPassword: '', confirmPassword: '', username: '' });
   const submenuTimer = useRef<number | null>(null);
@@ -58,6 +83,8 @@ export function Header() {
   const toggleChatSidebar = useLayoutStore((state) => state.toggleChatSidebar);
   const toggleMiniSidebar = useLayoutStore((state) => state.toggleMiniSidebar);
   const clearSession = useAuthStore((state) => state.clearSession);
+  const isDesktop = useDesktopStore((state) => state.isDesktop);
+  const { checkForUpdate: checkDesktopUpdate, installUpdate: installDesktopUpdate } = useDesktop();
   const isChat = location.pathname === '/chat' || location.pathname.startsWith('/chat/');
 
   useEffect(() => {
@@ -93,6 +120,28 @@ export function Header() {
     if (submenuTimer.current != null) window.clearTimeout(submenuTimer.current);
   }, []);
 
+  useEffect(() => {
+    if (accountWarning) setAccountOpen(true);
+    let active = true;
+    void import('@/api/openapi')
+      .then(({ getVersion }) => getVersion())
+      .then((response) => {
+        if (!active) return;
+        const data = responseData<JsonObject>(response) ?? {};
+        const flags: PasswordSecurityFlags = {
+          change_pwd_hint: Boolean(data.change_pwd_hint),
+          md5_pwd_hint: Boolean(data.md5_pwd_hint),
+          password_upgrade_required: Boolean(data.password_upgrade_required),
+        };
+        persistPasswordSecurityFlags(flags, localStorage);
+        const warning = passwordWarningFromFlags(flags);
+        setAccountWarning(warning);
+        if (warning) setAccountOpen(true);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
   const currentLanguage = languageOptions.find((item) => item.code === i18n.language) || languageOptions[0];
   const currentTheme = themeOptions.find((item) => item.mode === themeMode) || themeOptions[0];
 
@@ -113,8 +162,28 @@ export function Header() {
   const loadUpdate = async () => {
     setUpdateChecking(true);
     try {
+      if (headerUpdateRuntime(isDesktop) === 'desktop') {
+        const result = await runHeaderUpdateAction(
+          true,
+          checkDesktopUpdate,
+          async () => null,
+        ) as AstrBotDesktopAppUpdateCheckResult | null;
+        if (!result?.ok) throw new Error(result?.reason || t('core.header.updateDialog.desktopApp.checkFailed'));
+        setUpdateInfo({
+          desktop: true,
+          has_new_version: result.hasUpdate,
+          latest_version: result.latestVersion || '—',
+          version: result.currentVersion || '—',
+        });
+        return;
+      }
       const { checkUpdate } = await import('@/api/openapi');
-      setUpdateInfo(responseData<JsonObject>(await checkUpdate()) || {});
+      const response = await runHeaderUpdateAction(
+        false,
+        async () => null,
+        checkUpdate,
+      );
+      setUpdateInfo(responseData<JsonObject>(response) || {});
     } catch (cause) {
       toast.error(errorMessage(cause, t('core.header.updateDialog.status.checking')));
     } finally {
@@ -130,8 +199,21 @@ export function Header() {
   const installUpdate = async () => {
     setUpdateInstalling(true);
     try {
-      const { updateCore } = await import('@/api/openapi');
-      await updateCore({ body: { reboot: true } });
+      if (headerUpdateRuntime(isDesktop) === 'desktop') {
+        const result = await runHeaderUpdateAction(
+          true,
+          installDesktopUpdate,
+          async () => ({ ok: false }),
+        ) as AstrBotDesktopResult;
+        if (!result.ok) throw new Error(result.reason || t('core.header.updateDialog.desktopApp.installFailed'));
+      } else {
+        const { updateCore } = await import('@/api/openapi');
+        await runHeaderUpdateAction(
+          false,
+          async () => ({ ok: false }),
+          () => updateCore({ body: { reboot: true } }),
+        );
+      }
       toast.success(t('core.header.updateDialog.progress.preparing'));
       setUpdateOpen(false);
     } catch (cause) {
@@ -179,7 +261,9 @@ export function Header() {
         confirm_password: account.confirmPassword || undefined,
         new_username: account.username.trim() || undefined,
       } });
+      await authApi.logout().catch(() => undefined);
       setAccountOpen(false);
+      setAccountWarning(null);
       setAccount({ password: '', newPassword: '', confirmPassword: '', username: '' });
       clearSession();
       navigate('/auth/login', { replace: true });
@@ -256,6 +340,7 @@ export function Header() {
     <Dialog onOpenChange={setUpdateOpen} open={updateOpen} title={t('core.header.updateDialog.title')}>
       <div className="header-update-dialog">
         <div className="header-update-status"><span>{t('core.header.updateDialog.currentVersion')}</span><strong>{String(updateInfo.version || '—')}</strong></div>
+        {Boolean(updateInfo.desktop) && <div className="header-update-status"><span>{t('core.header.updateDialog.desktopApp.latestVersion')}</span><strong>{String(updateInfo.latest_version || '—')}</strong></div>}
         {Boolean(updateInfo.dashboard_version) && <div className="header-update-status"><span>WebUI</span><strong>{String(updateInfo.dashboard_version)}</strong></div>}
         <p>{updateChecking ? t('core.header.updateDialog.status.checking') : updateInfo.has_new_version ? t('core.header.version.hasNewVersion') : t('core.header.updateDialog.dashboardUpdate.isLatest')}</p>
         <div className="dialog-actions"><DialogClose asChild><button type="button">{t('core.header.accountDialog.actions.cancel')}</button></DialogClose><button disabled={updateChecking} onClick={() => void loadUpdate()} type="button">{t('core.header.buttons.update')}</button><button className="button--primary" disabled={updateChecking || updateInstalling || !updateInfo.has_new_version} onClick={() => void installUpdate()} type="button">{updateInstalling ? t('core.header.updateDialog.status.updating') : t('core.header.updateDialog.updateToLatest')}</button></div>
@@ -263,6 +348,7 @@ export function Header() {
     </Dialog>
     <Dialog onOpenChange={setAccountOpen} open={accountOpen} title={t('core.header.accountDialog.title')}>
       <div className="dialog-form header-account-form">
+        {accountWarning && <p className="auth-warning" role="status">{t(`core.header.accountDialog.${accountWarning === 'upgrade' ? 'securityWarningUpgrade' : accountWarning === 'md5' ? 'securityWarningMd5' : 'securityWarning'}`)}</p>}
         <label>{t('core.header.accountDialog.form.currentPassword')}<input autoComplete="current-password" onChange={(event) => setAccount({ ...account, password: event.target.value })} type="password" value={account.password} /></label>
         <label>{t('core.header.accountDialog.form.newPassword')}<input autoComplete="new-password" onChange={(event) => setAccount({ ...account, newPassword: event.target.value })} type="password" value={account.newPassword} /><small>{t('core.header.accountDialog.form.passwordHint')}</small></label>
         <label>{t('core.header.accountDialog.form.confirmPassword')}<input autoComplete="new-password" onChange={(event) => setAccount({ ...account, confirmPassword: event.target.value })} type="password" value={account.confirmPassword} /></label>

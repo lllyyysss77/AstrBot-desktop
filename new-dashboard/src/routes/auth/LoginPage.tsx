@@ -7,6 +7,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '@/api/auth';
 import { formatRecoveryCode, isRecoveryCodeComplete, requireAuthSession, requiresTotp, type LoginStage } from '@/auth/authFlow';
 import { checkOnboardingCompleted } from '@/auth/sessionFlow';
+import { dispatchUpgradeRecovery, legacyUpgradeDetail } from '@/auth/upgradeRecovery';
 import { createLoginSchema } from '@/forms/authSchemas';
 import { useAuthStore } from '@/stores/auth';
 import { AuthShell } from './AuthShell';
@@ -62,6 +63,11 @@ export default function LoginPage() {
       trust_device_flag: challengeCode ? trustDevice : undefined,
       username: values.username,
     });
+    const recovery = await legacyUpgradeDetail(response);
+    if (recovery) {
+      dispatchUpgradeRecovery(recovery, response.data.data?.token);
+      return;
+    }
     await completeSession(requireAuthSession(response), navigate);
   };
 
