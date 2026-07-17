@@ -1,6 +1,15 @@
 import type { JsonObject } from '@/routes/configuration/model';
 
-export type ChatPart = JsonObject & { type: string; text?: string; think?: string; attachment_id?: string; filename?: string; stored_filename?: string };
+export type ChatPart = JsonObject & {
+  type: string;
+  text?: string;
+  think?: string;
+  message_id?: string | number;
+  selected_text?: string;
+  attachment_id?: string;
+  filename?: string;
+  stored_filename?: string;
+};
 export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean; agentStats?: JsonObject; refs?: unknown } };
 export type ChatSession = JsonObject & { session_id: string; display_name?: string; updated_at?: string };
 export type StagedAttachmentType = 'image' | 'record' | 'file';
@@ -38,11 +47,54 @@ export function normalizeRecord(value: unknown): ChatRecord {
   return { ...record, content: { type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')), message: normalizeParts(rawContent.message), reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined, agentStats: rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? rawStats as JsonObject : undefined, refs: rawContent.refs } } as ChatRecord;
 }
 
-export function appendStreamPayload(record: ChatRecord, payload: unknown) {
+export function serializeChatParts(parts: ChatPart[]) {
+  return parts.map((part) => {
+    if (part.type === 'plain') return { type: 'plain', text: part.text || '' };
+    if (part.type === 'reply') {
+      return {
+        type: 'reply',
+        message_id: part.message_id,
+        selected_text: part.selected_text || '',
+      };
+    }
+    return {
+      type: part.type,
+      attachment_id: part.attachment_id,
+      filename: part.filename,
+    };
+  });
+}
+
+export function agentRunnerTypeFromProfile(value: unknown) {
+  const payload = value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
+  const config = payload.config && typeof payload.config === 'object' && !Array.isArray(payload.config)
+    ? payload.config as JsonObject
+    : payload;
+  const settings = config.provider_settings && typeof config.provider_settings === 'object' && !Array.isArray(config.provider_settings)
+    ? config.provider_settings as JsonObject
+    : {};
+  const runnerType = typeof settings.agent_runner_type === 'string' ? settings.agent_runner_type.trim().toLowerCase() : '';
+  return runnerType || 'local';
+}
+
+export function usesLocalProviderOverride(agentRunnerType: string) {
+  const normalized = agentRunnerType.trim().toLowerCase();
+  return normalized === 'local' || normalized === 'internal';
+}
+
+export function appendStreamPayload(record: ChatRecord, payload: unknown, userRecord?: ChatRecord) {
   if (!payload || typeof payload !== 'object') return false;
   const raw = payload as JsonObject; const normalized = raw.ct === 'chat' ? { ...raw, type: raw.type || raw.t } : raw;
   const type = String(normalized.type || normalized.t || ''); const chain = String(normalized.chain_type || ''); const data = normalized.data;
-  if (['session_id', 'session_bound', 'user_message_saved'].includes(type)) return false;
+  if (['session_id', 'session_bound'].includes(type)) return false;
+  if (type === 'user_message_saved') {
+    if (!userRecord || !data || typeof data !== 'object' || Array.isArray(data)) return false;
+    const saved = data as JsonObject;
+    userRecord.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : userRecord.id;
+    userRecord.created_at = saved.created_at || userRecord.created_at;
+    userRecord.llm_checkpoint_id = saved.llm_checkpoint_id || userRecord.llm_checkpoint_id;
+    return true;
+  }
   if (type === 'message_saved' && data && typeof data === 'object') { const saved = data as JsonObject; record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id; record.created_at = saved.created_at || record.created_at; record.llm_checkpoint_id = saved.llm_checkpoint_id || record.llm_checkpoint_id; if (saved.refs) record.content.refs = saved.refs; record.content.isLoading = false; return true; }
   if ((type === 'agent_stats' || chain === 'agent_stats') && data && typeof data === 'object' && !Array.isArray(data)) { record.content.agentStats = data as JsonObject; record.content.isLoading = false; return true; }
   if (type === 'error') { appendPlain(record, `\n\n${String(data ?? 'Unknown error')}`); return true; }

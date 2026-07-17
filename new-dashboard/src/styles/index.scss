@@ -3819,6 +3819,10 @@ html[data-theme='dark'] .chat-shell {
 .chat-model-menu > summary > span .mdi { font-size: 15px; transition: transform .15s ease; }
 .chat-model-menu[open] > summary > span .mdi { transform: rotate(180deg); }
 .chat-model-menu > summary small { max-width: 220px; overflow: hidden; color: var(--chat-muted); font-size: 10px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-model-menu--runner { display: grid; min-width: 150px; gap: 0; padding: 4px 6px; }
+.chat-model-menu--runner > span { min-width: 0; overflow: hidden; line-height: 24px; text-overflow: ellipsis; white-space: nowrap; }
+.chat-model-menu--runner > span strong { font-size: 17px; font-weight: 620; }
+.chat-model-menu--runner > small { max-width: 220px; overflow: hidden; color: var(--chat-muted); font-size: 10px; line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .chat-model-menu__panel,
 .chat-composer-menu__panel {
   position: absolute;

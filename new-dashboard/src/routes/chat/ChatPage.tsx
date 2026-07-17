@@ -10,6 +10,7 @@ import {
   deleteChatThread,
   deleteChatProject,
   deleteChatSession,
+  getConfigProfile,
   getChatThread,
   getChatSession,
   listChatConfigs,
@@ -31,8 +32,10 @@ import { readAuthToken } from '@/auth/storage';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { errorMessage, isObject, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
+import { providerTestResult } from '@/routes/configuration/providerPageModel';
 import { confirmAction, toast } from '@/stores/feedback';
 import { useLayoutStore } from '@/stores/layout';
+import { acquireActionLock } from '@/utils/actionLock';
 import ProviderPage from '@/routes/configuration/ProviderPage';
 import { AudioRecorder } from './audioRecorder';
 import {
@@ -54,6 +57,7 @@ import {
 } from './configBinding';
 import { createStreamRenderScheduler } from './streamRenderScheduler';
 import {
+  agentRunnerTypeFromProfile,
   appendStreamPayload,
   type ChatPart,
   type ChatRecord,
@@ -61,9 +65,11 @@ import {
   contextTokenCount,
   normalizeRecord,
   parseSseEvents,
+  serializeChatParts,
   sessionList,
   type StagedAttachmentType,
   stagedAttachmentType,
+  usesLocalProviderOverride,
 } from './model';
 
 type ChatPageProps = { chatbox?: boolean };
@@ -134,6 +140,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [configId, setConfigId] = useState(storedChatConfigId);
   const [configRoutes, setConfigRoutes] = useState<ConfigRouteEntry[]>([]);
   const [configSaving, setConfigSaving] = useState(false);
+  const [agentRunnerType, setAgentRunnerType] = useState('local');
+  const [agentRunnerLoading, setAgentRunnerLoading] = useState(true);
   const [commands, setCommands] = useState<CommandSuggestion[]>([]);
   const [wakePrefixes, setWakePrefixes] = useState<string[]>(['/']);
   const [provider, setProvider] = useState(() => localStorage.getItem('selectedProvider') || '');
@@ -162,6 +170,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const themeMode = useLayoutStore((state) => state.themeMode);
   const setThemeMode = useLayoutStore((state) => state.setThemeMode);
   const abortRef = useRef<AbortController | null>(null);
+  const configSaveLockRef = useRef({ current: false });
+  const configIdRef = useRef(configId);
+  const agentRunnerCacheRef = useRef(new Map<string, string>());
+  const agentRunnerRequestsRef = useRef(new Map<string, Promise<string>>());
+  const agentRunnerRequestIdRef = useRef(0);
   const activeStreamsRef = useRef<Map<string, AbortController>>(new Map());
   const messageCacheRef = useRef<Record<string, ChatRecord[]>>({});
   const activeConversationRef = useRef(conversationId);
@@ -190,6 +203,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     [projects, selectedProjectId],
   );
   const currentProvider = useMemo(() => providers.find((item) => item.id === provider) || providers[0], [provider, providers]);
+  const providerOverrideEnabled = !agentRunnerLoading && usesLocalProviderOverride(agentRunnerType);
   const currentLanguage = chatLanguageOptions.find((item) => item.code === i18n.language) || chatLanguageOptions[0];
   const editingProjectForm = useMemo<ChatProjectForm | null>(() => editingProject ? {
     description: String(editingProject.description || ''),
@@ -206,6 +220,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     return query ? providers.filter((item) => item.id.toLowerCase().includes(query) || item.model.toLowerCase().includes(query)) : providers;
   }, [providerSearch, providers]);
   const tokenUsage = useMemo(() => {
+    if (!providerOverrideEnabled) return null;
     const latestStats = [...messages].reverse().find((message) => message.content.type !== 'user' && message.content.agentStats)?.content.agentStats;
     const used = contextTokenCount(latestStats);
     const metadata = providerMetadata[currentProvider?.model || model];
@@ -221,7 +236,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         percent: formatUsagePercent(rawPercent),
       }),
     };
-  }, [currentProvider, messages, model, providerMetadata, t]);
+  }, [currentProvider, messages, model, providerMetadata, providerOverrideEnabled, t]);
   const sending = pendingSessionSending || Boolean(conversationId && runningSessionIds.has(conversationId));
   const sidebarOpen = chatbox ? chatboxSidebarOpen : layoutChatSidebarOpen;
   const setSidebarOpen = useCallback((open: boolean) => {
@@ -235,32 +250,76 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     Boolean(session?.is_group),
   ), []);
 
-  const applyConfig = useCallback(async (nextConfigId: string, sessionId = conversationId) => {
+  const resolveAgentRunnerType = useCallback((nextConfigId: string) => {
     const normalized = nextConfigId || 'default';
-    const previous = configId;
+    const cached = agentRunnerCacheRef.current.get(normalized);
+    if (cached) return Promise.resolve(cached);
+    const pending = agentRunnerRequestsRef.current.get(normalized);
+    if (pending) return pending;
+    const request = getConfigProfile({ path: { config_id: normalized } })
+      .then((response) => {
+        const type = agentRunnerTypeFromProfile(responseData<JsonObject>(response));
+        agentRunnerCacheRef.current.set(normalized, type);
+        return type;
+      })
+      .catch((cause) => {
+        console.error(`Failed to load agent runner type for config "${normalized}".`, cause);
+        return 'local';
+      })
+      .finally(() => agentRunnerRequestsRef.current.delete(normalized));
+    agentRunnerRequestsRef.current.set(normalized, request);
+    return request;
+  }, []);
+
+  const loadAgentRunnerType = useCallback(async (nextConfigId: string) => {
+    const requestId = ++agentRunnerRequestIdRef.current;
+    setAgentRunnerLoading(true);
+    try {
+      const runnerType = await resolveAgentRunnerType(nextConfigId);
+      if (requestId === agentRunnerRequestIdRef.current) setAgentRunnerType(runnerType);
+      return runnerType;
+    } finally {
+      if (requestId === agentRunnerRequestIdRef.current) setAgentRunnerLoading(false);
+    }
+  }, [resolveAgentRunnerType]);
+
+  const applyConfig = useCallback(async (nextConfigId: string, sessionId = conversationId) => {
+    const releaseLock = acquireActionLock(configSaveLockRef.current);
+    if (!releaseLock) return false;
+    const normalized = nextConfigId || 'default';
+    const previous = configIdRef.current;
+    configIdRef.current = normalized;
     setConfigId(normalized);
     storeChatConfigId(normalized);
-    if (!sessionId) return true;
     setConfigSaving(true);
     try {
-      const session = sessions.find((item) => item.session_id === sessionId)
-        || Object.values(projectSessions).flat().find((item) => item.session_id === sessionId);
-      const umo = sessionUmo(sessionId, session);
-      await upsertConfigRoute({ path: { umo }, body: { config_id: normalized } });
-      setConfigRoutes((entries) => [
-        ...entries.filter((entry) => entry.pattern !== umo),
-        ...(normalized === 'default' ? [] : [{ pattern: umo, configId: normalized }]),
-      ]);
+      const runnerTypeRequest = loadAgentRunnerType(normalized);
+      if (sessionId) {
+        const session = sessions.find((item) => item.session_id === sessionId)
+          || Object.values(projectSessions).flat().find((item) => item.session_id === sessionId);
+        const umo = sessionUmo(sessionId, session);
+        await Promise.all([
+          upsertConfigRoute({ path: { umo }, body: { config_id: normalized } }),
+          runnerTypeRequest,
+        ]);
+        setConfigRoutes((entries) => [
+          ...entries.filter((entry) => entry.pattern !== umo),
+          ...(normalized === 'default' ? [] : [{ pattern: umo, configId: normalized }]),
+        ]);
+      }
+      await runnerTypeRequest;
       return true;
     } catch (cause) {
+      configIdRef.current = previous;
       setConfigId(previous);
       storeChatConfigId(previous);
       toast.error(errorMessage(cause, t('features.chat.config.applyFailed', 'Failed to apply configuration.')));
       return false;
     } finally {
+      releaseLock();
       setConfigSaving(false);
     }
-  }, [configId, conversationId, projectSessions, sessionUmo, sessions, t]);
+  }, [conversationId, loadAgentRunnerType, projectSessions, sessionUmo, sessions, t]);
   const markSessionRunning = useCallback((sessionId: string, running: boolean) => {
     setRunningSessionIds((currentIds) => {
       const next = new Set(currentIds);
@@ -384,9 +443,13 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     const session = sessions.find((item) => item.session_id === conversationId)
       || Object.values(projectSessions).flat().find((item) => item.session_id === conversationId);
     const resolved = resolveChatConfigId(configRoutes, sessionUmo(conversationId, session));
+    configIdRef.current = resolved;
     setConfigId(resolved);
     storeChatConfigId(resolved);
   }, [configRoutes, conversationId, projectSessions, sessionUmo, sessions]);
+  useEffect(() => {
+    void loadAgentRunnerType(configId);
+  }, [configId, loadAgentRunnerType]);
   useEffect(() => {
     void listCommands({ query: { config_id: configId === 'default' ? undefined : configId } })
       .then((response) => {
@@ -704,7 +767,10 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     const startedAt = performance.now();
     try {
       const data = responseData<unknown>(await testProviderById({ body: { provider_id: item.id } }));
-      if (isObject(data) && data.error) throw new Error(String(data.error));
+      const result = providerTestResult(data);
+      if (result.status !== 'available' || result.error) {
+        throw new Error(result.error || t('features.provider.models.testError'));
+      }
       toast.success(t('features.provider.models.testSuccessWithLatency', { id: item.id, latency: Math.max(0, Math.round(performance.now() - startedAt)) }));
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.provider.models.testError')));
@@ -806,16 +872,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       activeSessionRef.current = sessionId;
       const token = readAuthToken(localStorage);
       const locale = localStorage.getItem('astrbot-locale');
-      const messagePayload = outgoing.map((part) => ({
-        type: part.type,
-        text: part.text,
-        attachment_id: part.attachment_id,
-        filename: part.filename,
-      }));
+      const messagePayload = serializeChatParts(outgoing);
       const applyPayloads = (payloads: unknown[]) => {
         if (!bot) return;
         let changed = false;
-        payloads.forEach((payload) => { changed = appendStreamPayload(bot!, payload) || changed; });
+        payloads.forEach((payload) => { changed = appendStreamPayload(bot!, payload, user) || changed; });
         if (changed) streamRender?.schedule();
       };
       streamRender = createStreamRenderScheduler(() => {
@@ -831,8 +892,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           message: messagePayload,
           messageId,
           onPayload: (payload) => applyPayloads([payload]),
-          selectedModel: model,
-          selectedProvider: provider,
+          selectedModel: providerOverrideEnabled ? model : '',
+          selectedProvider: providerOverrideEnabled ? provider : '',
           sessionId,
           token,
         });
@@ -848,8 +909,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
             session_id: sessionId,
             message: messagePayload,
             config_id: configId || undefined,
-            selected_provider: provider || undefined,
-            selected_model: model || undefined,
+            selected_provider: providerOverrideEnabled ? provider || undefined : undefined,
+            selected_model: providerOverrideEnabled ? model || undefined : undefined,
             enable_streaming: streaming,
           }),
           signal: abort.signal,
@@ -935,7 +996,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(locale ? { 'Accept-Language': locale } : {}),
         },
-        body: JSON.stringify({ selected_provider: selectedProvider || undefined, selected_model: selectedModel || undefined, enable_streaming: streaming }),
+        body: JSON.stringify({
+          selected_provider: providerOverrideEnabled ? selectedProvider || undefined : undefined,
+          selected_model: providerOverrideEnabled ? selectedModel || undefined : undefined,
+          enable_streaming: streaming,
+        }),
         signal: abort.signal,
       });
       if (!response.ok || !response.body) throw new Error(`Regenerate failed: ${response.status}`);
@@ -1012,16 +1077,10 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         },
         body: JSON.stringify({
           session_id: conversationId,
-          message: source.content.message.map((part) => ({
-            type: part.type,
-            text: part.text,
-            attachment_id: part.attachment_id,
-            filename: part.filename,
-            message_id: part.message_id,
-          })),
+          message: serializeChatParts(source.content.message),
           config_id: configId || undefined,
-          selected_provider: provider || undefined,
-          selected_model: model || undefined,
+          selected_provider: providerOverrideEnabled ? provider || undefined : undefined,
+          selected_model: providerOverrideEnabled ? model || undefined : undefined,
           enable_streaming: streaming,
           _skip_user_history: true,
           _llm_checkpoint_id: source.llm_checkpoint_id || undefined,
@@ -1176,8 +1235,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         },
         body: JSON.stringify({
           message: [{ type: 'plain', text }],
-          selected_provider: provider || undefined,
-          selected_model: model || undefined,
+          selected_provider: providerOverrideEnabled ? provider || undefined : undefined,
+          selected_model: providerOverrideEnabled ? model || undefined : undefined,
           enable_streaming: streaming,
         }),
       });
@@ -1186,7 +1245,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       const decoder = new TextDecoder();
       let buffer = '';
       const render = (payloads: unknown[]) => {
-        if (payloads.some((payload) => appendStreamPayload(bot, payload))) {
+        if (payloads.some((payload) => appendStreamPayload(bot, payload, user))) {
           setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
         }
       };
@@ -1315,6 +1374,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const sessionTitle = current?.display_name || (selectedProject ? String(selectedProject.title || t('features.chat.project.title')) : t('features.chat.conversation.newConversation'));
   const modelTitle = provider || t('features.chat.models.default');
   const modelMeta = currentProvider?.model || model;
+  const runnerConfigTitle = composerConfigs.find((config) => config.id === configId)?.name || configId;
   const emptyChat = !selectedProject && !loading && !messages.length;
   const selectedReferenceItems: unknown[] = selectedRefs && Array.isArray(selectedRefs.used) ? selectedRefs.used : [];
   const composerNode = <ChatComposer
@@ -1323,7 +1383,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     commandSuggestionsLabel={t('features.chat.commandSuggestion.label')}
     configs={composerConfigs}
     configId={configId}
-    disabled={uploading || configSaving}
+    disabled={uploading || configSaving || agentRunnerLoading}
     isRecording={recording}
     isRunning={sending}
     labels={{
@@ -1460,7 +1520,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     <main className={`chat-main ${emptyChat && !isProviderWorkspace ? 'is-empty-chat' : ''} ${selectedProject ? 'is-project-workspace' : ''} ${isProviderWorkspace ? 'is-provider-workspace' : ''} ${reasoningTarget || selectedRefs || activeThread ? 'has-detail-panel' : ''}`}>
       <header className="chat-toolbar">
         <button aria-label={t('features.chat.accessibility.openConversations')} className="chat-toolbar__sidebar-open" onClick={() => setSidebarOpen(true)} type="button"><MdiIcon name="mdi-menu" /></button>
-        <details className="chat-model-menu" onToggle={(event) => { if (event.currentTarget.open) void loadProviders(); }} ref={modelMenuRef}>
+        {providerOverrideEnabled ? <details className="chat-model-menu" onToggle={(event) => { if (event.currentTarget.open) void loadProviders(); }} ref={modelMenuRef}>
           <summary><span><strong>{modelTitle}</strong>{modelMeta && modelMeta !== modelTitle && <em>{modelMeta}</em>}<MdiIcon name="mdi-chevron-down" /></span><small>{sessionTitle}</small></summary>
           <div className="chat-model-menu__panel">
             <label className="chat-model-search"><MdiIcon name="mdi-magnify" /><input aria-label={t('features.chat.accessibility.searchModels')} onChange={(event) => setProviderSearch(event.target.value)} placeholder={t('features.chat.accessibility.searchModels')} value={providerSearch} /></label>
@@ -1477,7 +1537,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
               {!providersLoading && !filteredProviders.length && <div className="chat-model-list__empty">{t('features.chat.actions.noAvailableModels')}</div>}
             </div>
           </div>
-        </details>
+        </details> : <div className="chat-model-menu chat-model-menu--runner"><span><strong>{runnerConfigTitle}</strong></span><small>{sessionTitle}</small></div>}
       </header>
       {isProviderWorkspace ? <section className="chat-provider-workspace"><ProviderPage /></section> : <><section
         aria-live="polite"

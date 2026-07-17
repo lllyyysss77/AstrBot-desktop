@@ -355,17 +355,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       <div className="chat-composer-v2__row">
         <div className="chat-composer-v2__left" ref={menuRef}>
           <button aria-expanded={menuOpen} aria-haspopup="menu" aria-label={labels.upload} className="chat-composer-v2__icon-button" onClick={() => setMenuOpen((open) => !open)} type="button"><MdiIcon name="mdi-plus" /></button>
-          {menuOpen && <div className="chat-composer-v2__menu" role="menu">
+          <div className="chat-composer-v2__menu" hidden={!menuOpen} role="menu">
             <button disabled={disabled} onClick={() => { fileInputRef.current?.click(); setMenuOpen(false); }} role="menuitem" type="button"><MdiIcon name="mdi-file-upload-outline" />{labels.upload}</button>
             {onConfigChange && <label className="chat-composer-v2__config">
               <MdiIcon name="mdi-tune" /><span>{labels.config}</span>
-              <select aria-label={labels.config} onChange={(event) => onConfigChange(event.target.value)} value={configId}>
+              <select aria-label={labels.config} disabled={disabled} onChange={(event) => onConfigChange(event.target.value)} value={configId}>
                 {configs.map((config) => <option key={config.id} value={config.id}>{config.name}</option>)}
               </select>
               {configs.find((config) => config.id === configId)?.description && <small>{configs.find((config) => config.id === configId)?.description}</small>}
             </label>}
             {onToggleStreaming && <button aria-pressed={streaming} onClick={onToggleStreaming} role="menuitem" type="button"><MdiIcon name="mdi-lightning-bolt" />{streaming ? labels.streamingEnabled : labels.streamingDisabled}</button>}
-          </div>}
+          </div>
           <input
             hidden
             multiple

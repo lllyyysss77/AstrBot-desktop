@@ -9,6 +9,7 @@ import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { i18n } from '@/i18n';
 import { confirmAction, toast } from '@/stores/feedback';
+import { acquireActionLock } from '@/utils/actionLock';
 import { errorMessage, isObject, JsonObject, objectList, recordId, responseData } from './model';
 import { hasScanAndManualCreation, isScanOnlyCreation, platformLogo, scanRegistrationComplete } from './platformAssets';
 import { emptyPlatformRoute, hasPlatformIdConflict, hasUnsafeOneBotToken, isValidPlatformId, mergePlatformTemplate, parsePlatformUmo, platformFormMetadata, platformQrPayload, platformRoutes, platformTemplates, readPlatformRuntime, replacePlatformRouting, webhookUrl, type PlatformRouteDraft } from './platformModel';
@@ -38,6 +39,7 @@ export default function PlatformPage() {
   const [selectedConfigId, setSelectedConfigId] = useState('default');
   const [creationMode, setCreationMode] = useState<'scan' | 'manual' | ''>('');
   const [saving, setSaving] = useState(false);
+  const saveLockRef = useRef({ current: false });
   const [showConsole, setShowConsole] = useState(() => localStorage.getItem('platformPage_showConsole') === 'true');
   const [details, setDetails] = useState<{ kind: 'error' | 'qr' | 'webhook'; item: JsonObject; stat?: JsonObject } | null>(null);
 
@@ -156,32 +158,34 @@ export default function PlatformPage() {
 
   const save = async () => {
     if (!editor) return;
-    const id = recordId(editor.config, 'id', 'bot_id');
-    const type = String(editor.config.type || selectedType);
-    if (!isValidPlatformId(id)) { toast.warning(tm('dialog.invalidPlatformId')); return; }
-    if (!type) { toast.warning(tm('createDialog.platformTypeLabel')); return; }
-    if (!editor.originalId && hasPlatformIdConflict(id, items.map((item) => recordId(item, 'id', 'bot_id')))) {
-      const proceed = await confirmAction({
-        danger: true,
-        title: tm('dialog.idConflict.title'),
-        message: tm('dialog.idConflict.message', { id }),
-        confirmLabel: tm('createDialog.warningContinue'),
-        cancelLabel: tm('createDialog.warningEditAgain'),
-      });
-      if (!proceed) return;
-    }
-    if (hasUnsafeOneBotToken(type, editor.config.ws_reverse_token)) {
-      const proceed = await confirmAction({
-        danger: true,
-        title: tm('dialog.securityWarning.title'),
-        message: tm('dialog.securityWarning.aiocqhttpTokenMissing'),
-        confirmLabel: tm('createDialog.warningContinue'),
-        cancelLabel: tm('createDialog.warningEditAgain'),
-      });
-      if (!proceed) return;
-    }
+    const releaseLock = acquireActionLock(saveLockRef.current);
+    if (!releaseLock) return;
     setSaving(true);
     try {
+      const id = recordId(editor.config, 'id', 'bot_id');
+      const type = String(editor.config.type || selectedType);
+      if (!isValidPlatformId(id)) { toast.warning(tm('dialog.invalidPlatformId')); return; }
+      if (!type) { toast.warning(tm('createDialog.platformTypeLabel')); return; }
+      if (!editor.originalId && hasPlatformIdConflict(id, items.map((item) => recordId(item, 'id', 'bot_id')))) {
+        const proceed = await confirmAction({
+          danger: true,
+          title: tm('dialog.idConflict.title'),
+          message: tm('dialog.idConflict.message', { id }),
+          confirmLabel: tm('createDialog.warningContinue'),
+          cancelLabel: tm('createDialog.warningEditAgain'),
+        });
+        if (!proceed) return;
+      }
+      if (hasUnsafeOneBotToken(type, editor.config.ws_reverse_token)) {
+        const proceed = await confirmAction({
+          danger: true,
+          title: tm('dialog.securityWarning.title'),
+          message: tm('dialog.securityWarning.aiocqhttpTokenMissing'),
+          confirmLabel: tm('createDialog.warningContinue'),
+          cancelLabel: tm('createDialog.warningEditAgain'),
+        });
+        if (!proceed) return;
+      }
       let primaryConfigId = selectedConfigId;
       if (editor.originalId) await updateBotById({ body: { bot_id: editor.originalId, config: editor.config } });
       else {
@@ -205,7 +209,7 @@ export default function PlatformPage() {
       setEditor(null);
       await Promise.all([loadConfig(true), loadStats()]);
     } catch (cause) { toast.error(errorMessage(cause, tm('messages.platformUpdateFailed'))); }
-    finally { setSaving(false); }
+    finally { releaseLock(); setSaving(false); }
   };
 
   const toggle = async (item: JsonObject) => {
