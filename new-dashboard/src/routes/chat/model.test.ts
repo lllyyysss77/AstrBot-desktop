@@ -4,7 +4,6 @@ import {
   appendStreamPayload,
   contextTokenCount,
   normalizeRecord,
-  parseSseEvents,
   serializeChatParts,
   sessionList,
   stagedAttachmentType,
@@ -122,12 +121,6 @@ describe('chat model', () => {
     expect(usesLocalProviderOverride('local')).toBe(true);
     expect(usesLocalProviderOverride('INTERNAL')).toBe(true);
     expect(usesLocalProviderOverride('dify')).toBe(false);
-  });
-
-  it('parses complete SSE events and preserves an incomplete event', () => {
-    const result = parseSseEvents('data: {"type":"plain","data":"A"}\n\ndata: {"type"');
-    expect(result.payloads).toEqual([{ type: 'plain', data: 'A' }]);
-    expect(result.remainder).toBe('data: {"type"');
   });
 
   it('accepts list and envelope session shapes', () => {

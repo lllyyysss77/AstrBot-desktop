@@ -173,12 +173,6 @@ function finishToolCall(record: ChatRecord, result: JsonObject) {
   record.content.message.push({ type: 'tool_call', tool_calls: [{ ...result, status: result.status || 'completed' }] });
 }
 
-export function parseSseEvents(buffer: string, flush = false) {
-  const normalized = buffer.replace(/\r\n/g, '\n'); const blocks = normalized.split('\n\n'); const remainder = flush ? '' : blocks.pop() || ''; const payloads: unknown[] = [];
-  for (const block of blocks) { const data = block.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n'); if (!data) continue; try { payloads.push(JSON.parse(data)); } catch { /* Ignore non-JSON keepalive events. */ } }
-  return { payloads, remainder };
-}
-
 export function sessionList(value: unknown): ChatSession[] {
   const data = value && typeof value === 'object' ? value as JsonObject : {};
   const list = Array.isArray(value) ? value : Array.isArray(data.items) ? data.items : Array.isArray(data.sessions) ? data.sessions : [];

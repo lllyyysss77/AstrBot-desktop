@@ -29,7 +29,6 @@ import {
   uploadFile,
 } from '@/api/openapi';
 import { fetchWithAuth } from '@/api/http';
-import { readAuthToken } from '@/auth/storage';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { errorMessage, isObject, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
@@ -59,7 +58,7 @@ import {
   type ConfigRouteEntry,
 } from './configBinding';
 import { createStreamRenderScheduler } from './streamRenderScheduler';
-import { readWebSocketChat } from './chatTransport';
+import { runChatStream } from './chatTransport';
 import { useChatPreferences } from './useChatPreferences';
 import {
   agentRunnerTypeFromProfile,
@@ -69,7 +68,6 @@ import {
   type ChatSession,
   contextTokenCount,
   normalizeRecord,
-  parseSseEvents,
   serializeChatParts,
   sessionList,
   type StagedAttachmentType,
@@ -871,8 +869,6 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       abortRef.current = abort;
       activeStreamsRef.current.set(sessionId, abort);
       activeSessionRef.current = sessionId;
-      const token = readAuthToken(localStorage);
-      const locale = localStorage.getItem('astrbot-locale');
       const messagePayload = serializeChatParts(outgoing);
       const applyPayloads = (payloads: unknown[]) => {
         if (!bot) return;
@@ -884,54 +880,19 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         const cached = messageCacheRef.current[sessionId];
         if (activeConversationRef.current === sessionId && cached?.includes(bot!)) setMessages([...cached]);
       });
-
-      if (transportMode === 'websocket') {
-        await readWebSocketChat({
-          abort: abort.signal,
-          configId,
-          enableStreaming: streaming,
-          message: messagePayload,
-          messageId,
-          onPayload: (payload) => applyPayloads([payload]),
-          selectedModel: providerOverrideEnabled ? model : '',
-          selectedProvider: providerOverrideEnabled ? provider : '',
-          sessionId,
-          token,
-        });
-      } else {
-        const response = await fetchWithAuth('/api/v1/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...(locale ? { 'Accept-Language': locale } : {}),
-          },
-          body: JSON.stringify({
-            session_id: sessionId,
-            message: messagePayload,
-            config_id: configId || undefined,
-            selected_provider: providerOverrideEnabled ? provider || undefined : undefined,
-            selected_model: providerOverrideEnabled ? model || undefined : undefined,
-            enable_streaming: streaming,
-          }),
-          signal: abort.signal,
-        });
-        if (!response.ok || !response.body) throw new Error(`Chat request failed: ${response.status}`);
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parsed = parseSseEvents(buffer);
-          buffer = parsed.remainder;
-          applyPayloads(parsed.payloads);
-        }
-        buffer += decoder.decode();
-        applyPayloads(parseSseEvents(buffer, true).payloads);
-      }
+      await runChatStream({
+        kind: 'send',
+        configId,
+        enableStreaming: streaming,
+        message: messagePayload,
+        messageId,
+        selectedModel: providerOverrideEnabled ? model : '',
+        selectedProvider: providerOverrideEnabled ? provider : '',
+        sessionId,
+        transport: transportMode,
+      }, abort.signal, {
+        onPayload: (payload) => applyPayloads([payload]),
+      });
       await loadSessions();
       if (targetProjectId) await loadProjectSessions(targetProjectId);
     } catch (cause) {
@@ -988,45 +949,18 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     activeStreamsRef.current.set(conversationId, abort);
     activeSessionRef.current = conversationId;
     try {
-      const token = readAuthToken(localStorage);
-      const locale = localStorage.getItem('astrbot-locale');
-      const response = await fetchWithAuth(`/api/v1/chat/sessions/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(targetId)}/regenerate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(locale ? { 'Accept-Language': locale } : {}),
+      await runChatStream({
+        kind: 'regenerate',
+        enableStreaming: streaming,
+        selectedModel: providerOverrideEnabled ? selectedModel : '',
+        selectedProvider: providerOverrideEnabled ? selectedProvider : '',
+        sessionId: conversationId,
+        targetMessageId: targetId,
+      }, abort.signal, {
+        onPayload: (payload) => {
+          if (appendStreamPayload(regenerated, payload)) streamRender.schedule();
         },
-        body: JSON.stringify({
-          selected_provider: providerOverrideEnabled ? selectedProvider || undefined : undefined,
-          selected_model: providerOverrideEnabled ? selectedModel || undefined : undefined,
-          enable_streaming: streaming,
-        }),
-        signal: abort.signal,
       });
-      if (!response.ok || !response.body) throw new Error(`Regenerate failed: ${response.status}`);
-      if (!(response.headers.get('content-type') || '').includes('text/event-stream')) {
-        const payload = await response.json().catch(() => null) as JsonObject | null;
-        throw new Error(String(payload?.message || 'Regenerate failed.'));
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const applyPayloads = (payloads: unknown[]) => {
-        let changed = false;
-        payloads.forEach((payload) => { changed = appendStreamPayload(regenerated, payload) || changed; });
-        if (changed) streamRender.schedule();
-      };
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parsed = parseSseEvents(buffer);
-        buffer = parsed.remainder;
-        applyPayloads(parsed.payloads);
-      }
-      buffer += decoder.decode();
-      applyPayloads(parseSseEvents(buffer, true).payloads);
       await loadSessions();
     } catch (cause) {
       if ((cause as Error)?.name !== 'AbortError') {
@@ -1069,37 +1003,20 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       if (activeConversationRef.current === conversationId) setMessages([...messageCacheRef.current[conversationId]]);
     });
     try {
-      const response = await fetchWithAuth('/api/v1/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      await runChatStream({
+        kind: 'continue',
+        configId,
+        enableStreaming: streaming,
+        llmCheckpointId: String(source.llm_checkpoint_id || ''),
+        message: serializeChatParts(source.content.message),
+        selectedModel: providerOverrideEnabled ? model : '',
+        selectedProvider: providerOverrideEnabled ? provider : '',
+        sessionId: conversationId,
+      }, abort.signal, {
+        onPayload: (payload) => {
+          if (appendStreamPayload(bot, payload)) scheduler.schedule();
         },
-        body: JSON.stringify({
-          session_id: conversationId,
-          message: serializeChatParts(source.content.message),
-          config_id: configId || undefined,
-          selected_provider: providerOverrideEnabled ? provider || undefined : undefined,
-          selected_model: providerOverrideEnabled ? model || undefined : undefined,
-          enable_streaming: streaming,
-          _skip_user_history: true,
-          _llm_checkpoint_id: source.llm_checkpoint_id || undefined,
-        }),
-        signal: abort.signal,
       });
-      if (!response.ok || !response.body) throw new Error(`Chat request failed: ${response.status}`);
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parsed = parseSseEvents(buffer);
-        buffer = parsed.remainder;
-        if (parsed.payloads.some((payload) => appendStreamPayload(bot, payload))) scheduler.schedule();
-      }
-      buffer += decoder.decode();
-      if (parseSseEvents(buffer, true).payloads.some((payload) => appendStreamPayload(bot, payload))) scheduler.schedule();
     } catch (cause) {
       if ((cause as Error)?.name !== 'AbortError') {
         const message = errorMessage(cause, 'Failed to continue edited message.');
@@ -1224,38 +1141,22 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || []), user, bot] } : thread);
     setThreadDraft('');
     setThreadSending(true);
+    const abort = new AbortController();
     try {
-      const response = await fetchWithAuth(`/api/v1/chat/threads/${encodeURIComponent(threadId)}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      await runChatStream({
+        kind: 'thread',
+        enableStreaming: streaming,
+        message: [{ type: 'plain', text }],
+        selectedModel: providerOverrideEnabled ? model : '',
+        selectedProvider: providerOverrideEnabled ? provider : '',
+        threadId,
+      }, abort.signal, {
+        onPayload: (payload) => {
+          if (appendStreamPayload(bot, payload, user)) {
+            setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
+          }
         },
-        body: JSON.stringify({
-          message: [{ type: 'plain', text }],
-          selected_provider: providerOverrideEnabled ? provider || undefined : undefined,
-          selected_model: providerOverrideEnabled ? model || undefined : undefined,
-          enable_streaming: streaming,
-        }),
       });
-      if (!response.ok || !response.body) throw new Error(`Thread request failed: ${response.status}`);
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const render = (payloads: unknown[]) => {
-        if (payloads.some((payload) => appendStreamPayload(bot, payload, user))) {
-          setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
-        }
-      };
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parsed = parseSseEvents(buffer);
-        buffer = parsed.remainder;
-        render(parsed.payloads);
-      }
-      buffer += decoder.decode();
-      render(parseSseEvents(buffer, true).payloads);
     } catch (cause) {
       const message = errorMessage(cause, t('features.chat.thread.sendFailed', 'Failed to send thread message.'));
       bot.content.message.push({ type: 'plain', text: message });
