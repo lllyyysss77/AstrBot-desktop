@@ -14,9 +14,14 @@ import { type KnowledgeBaseDto, type ProviderDto, parseKnowledgeBasePage, parseP
 import { decodeApiData } from '@/api/response';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
+import { AsyncState } from '@/components/ui/AsyncState';
 import { Button, DialogCancel } from '@/components/ui/Button';
 import { DialogActions } from '@/components/ui/DialogActions';
-import { confirmAction, toast } from '@/stores/feedback';
+import { IconButton } from '@/components/ui/IconButton';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
+import { confirmDestructiveAction } from '@/components/ui/confirm';
+import { toast } from '@/stores/feedback';
 import { errorMessage } from '@/routes/configuration/model';
 import { knowledgeBaseId, chunkCount, documentCount } from './knowledgeModel';
 
@@ -258,8 +263,7 @@ export default function KnowledgeBaseListPage() {
     const name = String(item.kb_name || id);
     if (
       !id ||
-      !(await confirmAction({
-        danger: true,
+      !(await confirmDestructiveAction({
         title: k('delete.title'),
         message: `${k('delete.confirmText', { name })}\n${k('delete.warning')}`,
       }))
@@ -277,120 +281,123 @@ export default function KnowledgeBaseListPage() {
 
   return (
     <div className="knowledge-list-page">
-      <header className="knowledge-page-header">
-        <div>
-          <div>
-            <h1>{k('title')}</h1>
-            <p>{k('subtitle')}</p>
-          </div>
-        </div>
-        <a
-          aria-label={t('core.navigation.documentation')}
-          className="knowledge-page-header__docs"
-          href="https://docs.astrbot.app/use/knowledge-base.html"
-          rel="noreferrer"
-          target="_blank"
-          title={t('core.navigation.documentation')}
-        >
-          <MdiIcon name="mdi-information-outline" />
-        </a>
-      </header>
+      <PageHeader
+        actions={
+          <a
+            aria-label={t('core.navigation.documentation')}
+            className="knowledge-page-header__docs"
+            href="https://docs.astrbot.app/use/knowledge-base.html"
+            rel="noreferrer"
+            target="_blank"
+            title={t('core.navigation.documentation')}
+          >
+            <MdiIcon name="mdi-information-outline" />
+          </a>
+        }
+        className="knowledge-page-header"
+        description={k('subtitle')}
+        title={k('title')}
+      />
       {error && (
         <div className="monitor-error" role="alert">
           {error}
         </div>
       )}
-      {loading && !items.length && (
-        <div className="knowledge-loading" role="status">
-          <MdiIcon className="mdi-spin" name="mdi-loading" />
-          {k('list.loading')}
-        </div>
-      )}
-      <section className="knowledge-list">
-        {items.map((item) => {
-          const id = knowledgeBaseId(item);
-          const initError = String(item.init_error || '');
-          return (
-            <article className={`knowledge-list-item${initError ? ' is-error' : ''}`} key={id}>
-              <Link
-                aria-disabled={Boolean(initError)}
-                className="knowledge-list-item__main"
-                onClick={(event) => initError && event.preventDefault()}
-                to={`/knowledge-base/${encodeURIComponent(id)}`}
-              >
-                <span className="knowledge-list-item__emoji">{String(item.emoji || '📚')}</span>
-                <div>
-                  <header>
-                    <h2>{String(item.kb_name || id)}</h2>
-                    {initError && <span>{k('list.initError')}</span>}
-                  </header>
-                  {initError ? (
-                    <div className="knowledge-list-item__error-panel">
-                      <strong>
-                        <MdiIcon name="mdi-close-circle" />
-                        {k('list.initError')}
-                      </strong>
-                      <p title={initError}>{initError}</p>
-                    </div>
-                  ) : (
-                    <>
-                      <p>{String(item.description || k('list.noDescription'))}</p>
-                      <div className="knowledge-list-item__stats">
-                        <span>
-                          <MdiIcon name="mdi-file-document-outline" />
-                          {documentCount(item)} {k('list.documents')}
-                        </span>
-                        <span>
-                          <MdiIcon name="mdi-text-box-outline" />
-                          {chunkCount(item)} {k('list.chunks')}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </Link>
-              <div className="knowledge-list-item__actions">
-                {!initError && (
-                  <button aria-label={k('card.edit')} onClick={() => open(item)} title={k('card.edit')} type="button">
-                    <MdiIcon name="mdi-pencil-outline" />
-                  </button>
-                )}
-                <button
-                  aria-label={k('card.delete')}
-                  className="button--danger"
-                  onClick={() => void remove(item)}
-                  title={k('card.delete')}
-                  type="button"
+      <AsyncState
+        className={items.length === 0 ? 'knowledge-empty' : ''}
+        empty={
+          !loading && items.length === 0
+            ? {
+                action: (
+                  <Button icon={<MdiIcon name="mdi-plus" />} onClick={() => open()} variant="primary">
+                    {k('list.create')}
+                  </Button>
+                ),
+                icon: <MdiIcon name="mdi-book-open-page-variant" />,
+                title: k('list.empty'),
+              }
+            : undefined
+        }
+        loading={loading && items.length === 0}
+        loadingLabel={k('list.loading')}
+      >
+        <section className="knowledge-list">
+          {items.map((item) => {
+            const id = knowledgeBaseId(item);
+            const initError = String(item.init_error || '');
+            return (
+              <article className={`knowledge-list-item${initError ? ' is-error' : ''}`} key={id}>
+                <Link
+                  aria-disabled={Boolean(initError)}
+                  className="knowledge-list-item__main"
+                  onClick={(event) => initError && event.preventDefault()}
+                  to={`/knowledge-base/${encodeURIComponent(id)}`}
                 >
-                  <MdiIcon name="mdi-delete-outline" />
-                </button>
-              </div>
-            </article>
-          );
-        })}
-      </section>
-      {!loading && !items.length && (
-        <div className="knowledge-empty">
-          <MdiIcon name="mdi-book-open-page-variant" />
-          <h2>{k('list.empty')}</h2>
-          <button className="button--primary" onClick={() => open()} type="button">
-            <MdiIcon name="mdi-plus" />
-            {k('list.create')}
-          </button>
-        </div>
-      )}
+                  <span className="knowledge-list-item__emoji">{String(item.emoji || '📚')}</span>
+                  <div>
+                    <header>
+                      <h2>{String(item.kb_name || id)}</h2>
+                      {initError && <span>{k('list.initError')}</span>}
+                    </header>
+                    {initError ? (
+                      <div className="knowledge-list-item__error-panel">
+                        <strong>
+                          <MdiIcon name="mdi-close-circle" />
+                          {k('list.initError')}
+                        </strong>
+                        <p title={initError}>{initError}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p>{String(item.description || k('list.noDescription'))}</p>
+                        <div className="knowledge-list-item__stats">
+                          <span>
+                            <MdiIcon name="mdi-file-document-outline" />
+                            {documentCount(item)} {k('list.documents')}
+                          </span>
+                          <span>
+                            <MdiIcon name="mdi-text-box-outline" />
+                            {chunkCount(item)} {k('list.chunks')}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Link>
+                <div className="knowledge-list-item__actions">
+                  {!initError && (
+                    <IconButton
+                      icon={<MdiIcon name="mdi-pencil-outline" />}
+                      label={k('card.edit')}
+                      onClick={() => open(item)}
+                      variant="text"
+                    />
+                  )}
+                  <IconButton
+                    icon={<MdiIcon name="mdi-delete-outline" />}
+                    label={k('card.delete')}
+                    onClick={() => void remove(item)}
+                    variant="danger"
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      </AsyncState>
       {total > 20 && (
-        <div className="pagination">
-          <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">
-            ‹
-          </button>
-          <span>
-            {page} / {Math.ceil(total / 20)}
-          </span>
-          <button disabled={page * 20 >= total} onClick={() => setPage((value) => value + 1)} type="button">
-            ›
-          </button>
-        </div>
+        <Pagination
+          className="pagination"
+          labels={{
+            navigation: t('core.common.pagination'),
+            next: t('core.common.nextPage'),
+            previous: t('core.common.previousPage'),
+          }}
+          onPageChange={setPage}
+          page={page}
+          pageSize={20}
+          totalItems={total}
+        />
       )}
       {typeof document !== 'undefined' &&
         createPortal(

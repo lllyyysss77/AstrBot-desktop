@@ -28,6 +28,11 @@ import { ConfigGroup } from '@/components/config/DynamicConfigForm';
 import type { ConfigGroupMetadata } from '@/components/config/configFormModel';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
+import { AsyncState } from '@/components/ui/AsyncState';
+import { FormDialog } from '@/components/ui/FormDialog';
+import { Pagination } from '@/components/ui/Pagination';
+import { SearchField } from '@/components/ui/SearchField';
+import { confirmDestructiveAction } from '@/components/ui/confirm';
 import { confirmAction, toast } from '@/stores/feedback';
 import { errorMessage, isObject, type JsonObject, recordId, responseData } from '@/routes/configuration/model';
 import { ComponentsSection, McpSection, SkillsSection } from './ExtensionSections';
@@ -1121,8 +1126,7 @@ function PluginMarket() {
   };
   const removeSource = async (source: JsonObject) => {
     if (
-      !(await confirmAction({
-        danger: true,
+      !(await confirmDestructiveAction({
         title: e('market.removeSource'),
         message: `${e('market.confirmRemoveSource')}\n${String(source.name || '')}\n${String(source.url || '')}`,
       }))
@@ -1220,19 +1224,13 @@ function PluginMarket() {
             {e('market.sourceSafetyWarning')}
           </p>
         </div>
-        <label>
-          <MdiIcon name="mdi-magnify" />
-          <input
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder={e('search.marketPlaceholder')}
-            value={keyword}
-          />
-          {keyword && (
-            <button aria-label={e('buttons.close')} onClick={() => setKeyword('')} type="button">
-              <MdiIcon name="mdi-close" />
-            </button>
-          )}
-        </label>
+        <SearchField
+          clearLabel={e('buttons.close')}
+          label={e('search.marketPlaceholder')}
+          onChange={setKeyword}
+          placeholder={e('search.marketPlaceholder')}
+          value={keyword}
+        />
       </header>
       <button
         aria-label={e('market.installPlugin')}
@@ -1301,12 +1299,17 @@ function PluginMarket() {
           )}
         </div>
       </div>
-      {error && <div className="monitor-error">{error}</div>}
-      {loading ? (
-        <div className="extension-state">
-          <MdiIcon className="mdi-spin" name="mdi-loading" />
-        </div>
-      ) : (
+      <AsyncState
+        className="extension-state"
+        empty={
+          !loading && !visible.length
+            ? { icon: <MdiIcon name="mdi-puzzle-outline" />, title: e('empty.noPlugins') }
+            : undefined
+        }
+        error={error}
+        loading={loading}
+        loadingLabel={e('status.loading')}
+      >
         <div className="extension-market-grid">
           {visible.map((item, index) => (
             <MarketPluginCard
@@ -1318,29 +1321,22 @@ function PluginMarket() {
             />
           ))}
         </div>
-      )}
-      {!loading && !visible.length && <div className="monitor-empty">{e('empty.noPlugins')}</div>}
+      </AsyncState>
       {pages > 1 && (
-        <div className="extension-market__pagination">
-          <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">
-            <MdiIcon name="mdi-chevron-left" />
-          </button>
-          {Array.from({ length: pages }, (_, index) => index + 1)
-            .slice(Math.max(0, page - 4), Math.max(7, page + 3))
-            .map((number) => (
-              <button
-                aria-current={number === page ? 'page' : undefined}
-                key={number}
-                onClick={() => setPage(number)}
-                type="button"
-              >
-                {number}
-              </button>
-            ))}
-          <button disabled={page >= pages} onClick={() => setPage((value) => value + 1)} type="button">
-            <MdiIcon name="mdi-chevron-right" />
-          </button>
-        </div>
+        <Pagination
+          className="extension-market__pagination"
+          labels={{
+            navigation: t('core.common.pagination'),
+            next: t('core.common.nextPage'),
+            previous: t('core.common.previousPage'),
+          }}
+          numbered
+          onPageChange={setPage}
+          page={page}
+          pageSize={9}
+          totalItems={sorted.length}
+          totalPages={pages}
+        />
       )}
       {randomPlugins.length > 0 && (
         <section className="extension-market__random">
@@ -1465,65 +1461,54 @@ function PluginMarket() {
           </button>
         </div>
       </Dialog>
-      <Dialog
+      <FormDialog
+        busy={Boolean(sourceEditor?.resolving)}
+        cancelLabel={e('buttons.cancel')}
+        className="extension-source-editor"
         onOpenChange={(open) => !open && setSourceEditor(null)}
+        onSubmit={() => (sourceEditor?.resolved ? saveSource() : resolveSource())}
         open={sourceEditor !== null}
+        submitLabel={
+          sourceEditor?.resolving ? e('status.loading') : e(sourceEditor?.resolved ? 'buttons.save' : 'buttons.next')
+        }
         title={e(sourceEditor?.editingUrl ? 'market.editSource' : 'market.addSource')}
       >
-        <div className="extension-source-editor">
+        <label>
+          {e('market.sourceUrl')}
+          <input
+            onChange={(event) =>
+              sourceEditor && setSourceEditor({ ...sourceEditor, meta: null, resolved: false, url: event.target.value })
+            }
+            placeholder="https://example.com/plugins.json"
+            value={sourceEditor?.url || ''}
+          />
+          <small>{e('messages.enterJsonUrl')}</small>
+        </label>
+        {sourceEditor?.resolved && (
+          <div className="extension-validation is-valid">
+            <MdiIcon name="mdi-check-circle" />
+            <span>
+              {e('market.sourceResolved')}
+              {sourceEditor.meta && (
+                <small>
+                  {String(sourceEditor.meta.name || '')}{' '}
+                  {sourceEditor.meta.version ? `v${String(sourceEditor.meta.version)}` : ''}
+                </small>
+              )}
+            </span>
+          </div>
+        )}
+        {(sourceEditor?.editingUrl || sourceEditor?.resolved) && (
           <label>
-            {e('market.sourceUrl')}
+            {e('market.sourceName')}
             <input
-              onChange={(event) =>
-                sourceEditor &&
-                setSourceEditor({ ...sourceEditor, meta: null, resolved: false, url: event.target.value })
-              }
-              placeholder="https://example.com/plugins.json"
-              value={sourceEditor?.url || ''}
+              onChange={(event) => sourceEditor && setSourceEditor({ ...sourceEditor, name: event.target.value })}
+              placeholder={e('market.sourceName')}
+              value={sourceEditor?.name || ''}
             />
-            <small>{e('messages.enterJsonUrl')}</small>
           </label>
-          {sourceEditor?.resolved && (
-            <div className="extension-validation is-valid">
-              <MdiIcon name="mdi-check-circle" />
-              <span>
-                {e('market.sourceResolved')}
-                {sourceEditor.meta && (
-                  <small>
-                    {String(sourceEditor.meta.name || '')}{' '}
-                    {sourceEditor.meta.version ? `v${String(sourceEditor.meta.version)}` : ''}
-                  </small>
-                )}
-              </span>
-            </div>
-          )}
-          {(sourceEditor?.editingUrl || sourceEditor?.resolved) && (
-            <label>
-              {e('market.sourceName')}
-              <input
-                onChange={(event) => sourceEditor && setSourceEditor({ ...sourceEditor, name: event.target.value })}
-                placeholder={e('market.sourceName')}
-                value={sourceEditor?.name || ''}
-              />
-            </label>
-          )}
-        </div>
-        <div className="dialog-actions">
-          <button onClick={() => setSourceEditor(null)} type="button">
-            {e('buttons.cancel')}
-          </button>
-          <button
-            className="button--primary"
-            disabled={sourceEditor?.resolving}
-            onClick={() => void (sourceEditor?.resolved ? saveSource() : resolveSource())}
-            type="button"
-          >
-            {sourceEditor?.resolving
-              ? e('status.loading')
-              : e(sourceEditor?.resolved ? 'buttons.save' : 'buttons.next')}
-          </button>
-        </div>
-      </Dialog>
+        )}
+      </FormDialog>
     </section>
   );
 }

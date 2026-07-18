@@ -15,8 +15,12 @@ import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { Button, DialogCancel } from '@/components/ui/Button';
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable';
 import { DialogActions } from '@/components/ui/DialogActions';
-import { confirmAction, toast } from '@/stores/feedback';
+import { Pagination } from '@/components/ui/Pagination';
+import { SearchField } from '@/components/ui/SearchField';
+import { confirmDestructiveAction } from '@/components/ui/confirm';
+import { toast } from '@/stores/feedback';
 import {
   conversationKey,
   parseConversation,
@@ -112,8 +116,7 @@ export default function ConversationPage() {
   };
   const remove = async (targets: Conversation[]) => {
     if (
-      !(await confirmAction({
-        danger: true,
+      !(await confirmDestructiveAction({
         message: t(`${prefix}.dialogs.batchDelete.message`, { count: targets.length }),
         title: t(`${prefix}.dialogs.delete.title`),
       }))
@@ -196,6 +199,97 @@ export default function ConversationPage() {
   };
   const rangeStart = total ? (page - 1) * pageSize + 1 : 0;
   const rangeEnd = Math.min(page * pageSize, total);
+  const columns: DataTableColumn<Conversation>[] = [
+    {
+      header: t(`${prefix}.table.headers.title`),
+      id: 'title',
+      render: (item) => (
+        <div className="conversation-title-cell">
+          <span>
+            <strong>{item.title || t(`${prefix}.status.noTitle`)}</strong>
+            <button onClick={() => setEditing({ ...item })} title={t(`${prefix}.actions.edit`)} type="button">
+              <MdiIcon name="mdi-pencil-outline" />
+            </button>
+          </span>
+          <small title={item.cid}>{item.cid}</small>
+        </div>
+      ),
+    },
+    {
+      header: (
+        <div className="conversation-umo-header">
+          <span>{t(`${prefix}.table.headers.umo`)}</span>
+          <div>
+            <button aria-pressed={umoDisplay === 'parsed'} onClick={() => setUmoDisplay('parsed')} type="button">
+              {t(`${prefix}.table.umoDisplay.parsed`)}
+            </button>
+            <button aria-pressed={umoDisplay === 'raw'} onClick={() => setUmoDisplay('raw')} type="button">
+              {t(`${prefix}.table.umoDisplay.raw`)}
+            </button>
+          </div>
+        </div>
+      ),
+      id: 'umo',
+      render: (item) => {
+        const umo = parseUmo(item.user_id);
+        return (
+          <div className="conversation-umo-cell">
+            {umoDisplay === 'raw' ? (
+              <code title={item.user_id}>{item.user_id}</code>
+            ) : (
+              <div>
+                <span>{umo.platform || t(`${prefix}.status.unknown`)}</span>
+                <span>
+                  {umo.messageType === 'GroupMessage'
+                    ? t(`${prefix}.messageTypes.group`)
+                    : umo.messageType === 'FriendMessage'
+                      ? t(`${prefix}.messageTypes.friend`)
+                      : umo.messageType}
+                </span>
+                <code title={umo.sessionId}>{umo.sessionId}</code>
+              </div>
+            )}
+            <button
+              onClick={() => void copyUmo(item.user_id)}
+              title={t(`${prefix}.messages.copySuccess`)}
+              type="button"
+            >
+              <MdiIcon name="mdi-content-copy" />
+            </button>
+          </div>
+        );
+      },
+    },
+    {
+      header: t(`${prefix}.table.headers.createdAt`),
+      id: 'created',
+      render: (item) => formatTimestamp(item.created_at, i18n.language),
+    },
+    {
+      header: t(`${prefix}.table.headers.updatedAt`),
+      id: 'updated',
+      render: (item) => formatTimestamp(item.updated_at, i18n.language),
+    },
+    {
+      header: t(`${prefix}.table.headers.actions`),
+      id: 'actions',
+      render: (item) => (
+        <div className="conversation-row-actions">
+          <button onClick={() => void openDetail(item)} title={t(`${prefix}.actions.view`)} type="button">
+            <MdiIcon name="mdi-eye" />
+          </button>
+          <button
+            className="button--danger"
+            onClick={() => void remove([item])}
+            title={t(`${prefix}.actions.delete`)}
+            type="button"
+          >
+            <MdiIcon name="mdi-delete-outline" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="monitor-page data-page conversation-page-react">
@@ -225,17 +319,15 @@ export default function ConversationPage() {
               <option value="GroupMessage">{t(`${prefix}.messageTypes.group`)}</option>
               <option value="FriendMessage">{t(`${prefix}.messageTypes.friend`)}</option>
             </select>
-            <label>
-              <MdiIcon name="mdi-magnify" />
-              <input
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(1);
-                }}
-                placeholder={t(`${prefix}.filters.search`)}
-                value={search}
-              />
-            </label>
+            <SearchField
+              label={t(`${prefix}.filters.search`)}
+              onChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
+              placeholder={t(`${prefix}.filters.search`)}
+              value={search}
+            />
           </div>
           <div className="conversation-panel__actions">
             <button disabled={loading} onClick={() => void load()} type="button">
@@ -261,151 +353,46 @@ export default function ConversationPage() {
             {error}
           </div>
         )}
-        <div className="monitor-table-wrap">
-          <table className="monitor-table conversation-table">
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    aria-label={t(`${prefix}.table.headers.title`)}
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    type="checkbox"
-                  />
-                </th>
-                <th>{t(`${prefix}.table.headers.title`)}</th>
-                <th>
-                  <div className="conversation-umo-header">
-                    <span>{t(`${prefix}.table.headers.umo`)}</span>
-                    <div>
-                      <button
-                        aria-pressed={umoDisplay === 'parsed'}
-                        onClick={() => setUmoDisplay('parsed')}
-                        type="button"
-                      >
-                        {t(`${prefix}.table.umoDisplay.parsed`)}
-                      </button>
-                      <button aria-pressed={umoDisplay === 'raw'} onClick={() => setUmoDisplay('raw')} type="button">
-                        {t(`${prefix}.table.umoDisplay.raw`)}
-                      </button>
-                    </div>
-                  </div>
-                </th>
-                <th>{t(`${prefix}.table.headers.createdAt`)}</th>
-                <th>{t(`${prefix}.table.headers.updatedAt`)}</th>
-                <th>{t(`${prefix}.table.headers.actions`)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const umo = parseUmo(item.user_id);
-                return (
-                  <tr key={conversationKey(item)}>
-                    <td>
-                      <input
-                        checked={selected.has(conversationKey(item))}
-                        onChange={() => toggle(item)}
-                        type="checkbox"
-                      />
-                    </td>
-                    <td>
-                      <div className="conversation-title-cell">
-                        <span>
-                          <strong>{item.title || t(`${prefix}.status.noTitle`)}</strong>
-                          <button
-                            onClick={() => setEditing({ ...item })}
-                            title={t(`${prefix}.actions.edit`)}
-                            type="button"
-                          >
-                            <MdiIcon name="mdi-pencil-outline" />
-                          </button>
-                        </span>
-                        <small title={item.cid}>{item.cid}</small>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="conversation-umo-cell">
-                        {umoDisplay === 'raw' ? (
-                          <code title={item.user_id}>{item.user_id}</code>
-                        ) : (
-                          <div>
-                            <span>{umo.platform || t(`${prefix}.status.unknown`)}</span>
-                            <span>
-                              {umo.messageType === 'GroupMessage'
-                                ? t(`${prefix}.messageTypes.group`)
-                                : umo.messageType === 'FriendMessage'
-                                  ? t(`${prefix}.messageTypes.friend`)
-                                  : umo.messageType}
-                            </span>
-                            <code title={umo.sessionId}>{umo.sessionId}</code>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => void copyUmo(item.user_id)}
-                          title={t(`${prefix}.messages.copySuccess`)}
-                          type="button"
-                        >
-                          <MdiIcon name="mdi-content-copy" />
-                        </button>
-                      </div>
-                    </td>
-                    <td>{formatTimestamp(item.created_at, i18n.language)}</td>
-                    <td>{formatTimestamp(item.updated_at, i18n.language)}</td>
-                    <td>
-                      <div className="conversation-row-actions">
-                        <button onClick={() => void openDetail(item)} title={t(`${prefix}.actions.view`)} type="button">
-                          <MdiIcon name="mdi-eye" />
-                        </button>
-                        <button
-                          className="button--danger"
-                          onClick={() => void remove([item])}
-                          title={t(`${prefix}.actions.delete`)}
-                          type="button"
-                        >
-                          <MdiIcon name="mdi-delete-outline" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {!loading && items.length === 0 && (
-            <div className="monitor-empty">
-              <MdiIcon name="mdi-chat-remove" />
-              {t(`${prefix}.status.noData`)}
-            </div>
-          )}
-        </div>
-        <footer className="conversation-pagination">
-          <label>
-            {t(`${prefix}.pagination.itemsPerPage`)}
-            <select
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setPage(1);
-              }}
-              value={pageSize}
-            >
-              {[10, 20, 50, 100].map((size) => (
-                <option key={size}>{size}</option>
-              ))}
-            </select>
-          </label>
-          <span>{t(`${prefix}.pagination.showingItems`, { start: rangeStart, end: rangeEnd, total })}</span>
-          <div>
-            <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">
-              ‹
-            </button>
-            <span>
-              {page}/{totalPages}
-            </span>
-            <button disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)} type="button">
-              ›
-            </button>
-          </div>
-        </footer>
+        <DataTable
+          className="monitor-table-wrap"
+          columns={columns}
+          empty={{
+            icon: <MdiIcon name="mdi-chat-remove" />,
+            title: t(`${prefix}.status.noData`),
+          }}
+          getRowKey={conversationKey}
+          loading={loading}
+          loadingLabel={t('core.common.loading')}
+          rows={items}
+          selection={{
+            allSelected,
+            headerLabel: t(`${prefix}.table.headers.title`),
+            isSelected: (item) => selected.has(conversationKey(item)),
+            onToggle: toggle,
+            onToggleAll: toggleAll,
+            rowLabel: (item) => item.title || item.cid,
+          }}
+          tableClassName="monitor-table conversation-table"
+        />
+        <Pagination
+          className="conversation-pagination"
+          labels={{
+            navigation: t('core.common.pagination'),
+            next: t('core.common.nextPage'),
+            pageSize: t(`${prefix}.pagination.itemsPerPage`),
+            previous: t('core.common.previousPage'),
+            range: t(`${prefix}.pagination.showingItems`, { start: rangeStart, end: rangeEnd, total }),
+          }}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(1);
+          }}
+          page={page}
+          pageSize={pageSize}
+          totalItems={total}
+          totalPages={totalPages}
+        />
       </section>
       <Dialog
         onOpenChange={(open) => !open && setDetail(null)}
