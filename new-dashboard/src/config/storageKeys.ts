@@ -35,9 +35,6 @@ export const storageKeys = {
   notice: {
     firstSeen: 'astrbot:first_notice_seen:v1',
   },
-  platform: {
-    showConsole: 'platformPage_showConsole',
-  },
   theme: {
     primary: 'themePrimary',
     secondary: 'themeSecondary',

@@ -21,7 +21,6 @@ import type { ConfigGroupMetadata, ConfigRecord } from '@/components/config/conf
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { DEFAULT_CONFIG_ID } from '@/config/defaults';
-import { platformConsolePreference } from '@/config/preferences';
 import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { i18n } from '@/i18n';
 import { confirmAction, toast } from '@/stores/feedback';
@@ -45,7 +44,7 @@ import {
   type PlatformRouteDraft,
 } from './platformModel';
 import { PlatformRegistrationPanel } from './PlatformRegistrationPanel';
-import { PlatformLogConsole, QrCodeImage } from './PlatformRuntimePanels';
+import { QrCodeImage } from './PlatformQrCode';
 
 type EditorState = { config: JsonObject; originalId: string } | null;
 type ConfigProfileOption = { id: string; name: string };
@@ -76,7 +75,6 @@ export default function PlatformPage() {
   const [creationMode, setCreationMode] = useState<'scan' | 'manual' | ''>('');
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef({ current: false });
-  const [showConsole, setShowConsole] = useState(() => platformConsolePreference.read());
   const [details, setDetails] = useState<{
     kind: 'error' | 'qr' | 'webhook';
     item: JsonObject;
@@ -125,10 +123,6 @@ export default function PlatformPage() {
       window.removeEventListener('astrbot-locale-changed', localeChanged);
     };
   }, [loadConfig, loadStats]);
-  useEffect(() => {
-    platformConsolePreference.write(showConsole);
-  }, [showConsole]);
-
   const items = objectList(config.platform, []);
   const templates = useMemo(() => platformTemplates(metadata), [metadata]);
   const formMetadata = useMemo(() => platformFormMetadata(metadata), [metadata]);
@@ -375,20 +369,6 @@ export default function PlatformPage() {
             />
           );
         })}
-      </section>
-
-      <section className="platform-log-panel">
-        <header>
-          <h2>
-            <MdiIcon name="mdi-console-line" />
-            {tm('logs.title')}
-          </h2>
-          <button onClick={() => setShowConsole((current) => !current)} type="button">
-            {tm(showConsole ? 'logs.collapse' : 'logs.expand')}
-            <MdiIcon name={showConsole ? 'mdi-chevron-up' : 'mdi-chevron-down'} />
-          </button>
-        </header>
-        {showConsole && <PlatformLogConsole />}
       </section>
 
       <PlatformEditor

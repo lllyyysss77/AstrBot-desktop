@@ -57,12 +57,6 @@ export const consoleAutoScrollPreference = definePersistentValue({
   parse: parseBoolean,
 });
 
-export const platformConsolePreference = definePersistentValue({
-  fallback: false,
-  key: storageKeys.platform.showConsole,
-  parse: parseBoolean,
-});
-
 export const selectedPluginSourcePreference = definePersistentValue({
   fallback: '',
   key: storageKeys.extensions.selectedSource,
