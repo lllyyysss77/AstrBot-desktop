@@ -1,3 +1,5 @@
+import { createSafeStorage } from '@/platform/safeStorage';
+
 type VersionedValue<T> = {
   data: T;
   version: number;
@@ -17,7 +19,7 @@ type PersistentValueOptions<T> = {
   version?: number;
 };
 
-function browserStorage(): Storage | null {
+function browserLocalStorage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage;
 }
 
@@ -29,10 +31,11 @@ export function definePersistentValue<T>({
 }: PersistentValueOptions<T>): PersistentValue<T> {
   return {
     key,
-    read(storage = browserStorage()) {
+    read(storage = browserLocalStorage()) {
       if (!storage) return fallback;
+      const safe = createSafeStorage(storage);
       try {
-        const raw = storage.getItem(key);
+        const raw = safe.get(key);
         if (raw == null) return fallback;
         let decoded: unknown = raw;
         try {
@@ -47,37 +50,25 @@ export function definePersistentValue<T>({
         if (!envelope || envelope.version !== version) {
           const legacy = parse(decoded);
           if (legacy === undefined) {
-            storage.removeItem(key);
+            safe.remove(key);
             return fallback;
           }
-          storage.setItem(key, JSON.stringify({ data: legacy, version }));
+          safe.set(key, JSON.stringify({ data: legacy, version }));
           return legacy;
         }
         const value = parse(envelope.data);
         if (value !== undefined) return value;
-        storage.removeItem(key);
+        safe.remove(key);
       } catch {
-        try {
-          storage.removeItem(key);
-        } catch {
-          // Ignore storage access failures and recover with the fallback.
-        }
+        safe.remove(key);
       }
       return fallback;
     },
-    remove(storage = browserStorage()) {
-      try {
-        storage?.removeItem(key);
-      } catch {
-        // Storage can be unavailable in private or embedded contexts.
-      }
+    remove(storage = browserLocalStorage()) {
+      createSafeStorage(storage).remove(key);
     },
-    write(value, storage = browserStorage()) {
-      try {
-        storage?.setItem(key, JSON.stringify({ data: value, version }));
-      } catch {
-        // Storage can be unavailable in private or embedded contexts.
-      }
+    write(value, storage = browserLocalStorage()) {
+      createSafeStorage(storage).set(key, JSON.stringify({ data: value, version }));
     },
   };
 }

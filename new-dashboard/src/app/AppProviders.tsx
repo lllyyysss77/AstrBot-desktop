@@ -6,6 +6,7 @@ import { i18n } from '@/i18n';
 import { GlobalFeedback } from '@/components/feedback/GlobalFeedback';
 import { UpgradeRecoveryDialog } from '@/components/feedback/UpgradeRecoveryDialog';
 import { DesktopProvider, DesktopRestartStatus } from '@/desktop/DesktopProvider';
+import { BrowserCapabilitiesProvider } from '@/platform/BrowserCapabilitiesProvider';
 import { useAuthStore } from '@/stores/auth';
 import { useLayoutStore } from '@/stores/layout';
 
@@ -38,12 +39,14 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <I18nextProvider i18n={i18n}>
       <LayoutEffects />
       <AuthSessionEffects />
-      <DesktopProvider>
-        {children}
-        <DesktopRestartStatus />
-        <UpgradeRecoveryDialog />
-        <GlobalFeedback />
-      </DesktopProvider>
+      <BrowserCapabilitiesProvider>
+        <DesktopProvider>
+          {children}
+          <DesktopRestartStatus />
+          <UpgradeRecoveryDialog />
+          <GlobalFeedback />
+        </DesktopProvider>
+      </BrowserCapabilitiesProvider>
     </I18nextProvider>
   );
 }

@@ -12,6 +12,7 @@ import {
 import { decodeApiData, isRecord } from '@/api/response';
 import { conversationFilesApi } from '@/api/services';
 import { paginationDefaults } from '@/config/defaults';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
 import { MdiIcon } from '@/components/icons/MdiIcon';
@@ -33,6 +34,7 @@ import {
 import { formatTimestamp } from './model';
 
 export default function ConversationPage() {
+  const { copyText, downloadBlob } = useBrowserCapabilities();
   const { i18n, t } = useTranslation();
   const prefix = 'features.conversation';
   const [items, setItems] = useState<Conversation[]>([]);
@@ -168,12 +170,7 @@ export default function ConversationPage() {
   const exportSelected = async () => {
     try {
       const blob = await conversationFilesApi.export(selectedItems.map(({ cid, user_id }) => ({ cid, user_id })));
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `conversations-${new Date().toISOString().slice(0, 10)}.jsonl`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      await downloadBlob(blob, `conversations-${new Date().toISOString().slice(0, 10)}.jsonl`);
       toast.success(t(`${prefix}.messages.exportSuccess`));
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t(`${prefix}.messages.exportError`));
@@ -191,8 +188,7 @@ export default function ConversationPage() {
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.map(conversationKey)));
   const copyUmo = async (value: string) => {
     try {
-      if (!navigator.clipboard) throw new Error('Clipboard API unavailable');
-      await navigator.clipboard.writeText(value);
+      await copyText(value);
       toast.success(t(`${prefix}.messages.copySuccess`));
     } catch {
       toast.error(t(`${prefix}.messages.copyError`));

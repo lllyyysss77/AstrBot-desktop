@@ -22,6 +22,7 @@ import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { DEFAULT_CONFIG_ID } from '@/config/defaults';
 import { platformConsolePreference } from '@/config/preferences';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { i18n } from '@/i18n';
 import { confirmAction, toast } from '@/stores/feedback';
 import { acquireActionLock } from '@/utils/actionLock';
@@ -1010,6 +1011,7 @@ function DetailsDialog({
   onOpenChange: (open: boolean) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  const { copyText } = useBrowserCapabilities();
   const kind = details?.kind;
   const qr = platformQrPayload(details?.stat);
   const uuid = String(details?.item.webhook_uuid || '');
@@ -1019,7 +1021,7 @@ function DetailsDialog({
     kind === 'qr' ? t('platformQr.title') : kind === 'webhook' ? t('webhookDialog.title') : t('errorDialog.title');
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(url);
+      await copyText(url);
       toast.success(t('webhookCopied'));
     } catch {
       toast.error(t('webhookCopyFailed'));

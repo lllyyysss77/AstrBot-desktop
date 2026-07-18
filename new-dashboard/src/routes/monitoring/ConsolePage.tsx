@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { updatesApi } from '@/api/compat';
 import { consoleAutoScrollPreference } from '@/config/preferences';
+import { useFullscreen } from '@/platform/browserHooks';
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { toast } from '@/stores/feedback';
@@ -18,12 +19,12 @@ export default function ConsolePage() {
   const { items } = useLogFeed(filter, 500);
   const [selected, setSelected] = useState(() => new Set<string>(levels));
   const [autoScroll, setAutoScroll] = useState(() => consoleAutoScrollPreference.read());
-  const [fullscreen, setFullscreen] = useState(false);
   const [pipOpen, setPipOpen] = useState(false);
   const [pipPackage, setPipPackage] = useState('');
   const [mirror, setMirror] = useState('');
   const [installing, setInstalling] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const { active: fullscreen, toggle: toggleFullscreenCapability } = useFullscreen(wrapperRef);
   const terminalRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
   const visible = useMemo(() => items.filter((item) => selected.has(item.level ?? 'INFO')), [items, selected]);
@@ -44,12 +45,6 @@ export default function ConsolePage() {
       scrollFrameRef.current = null;
     };
   }, [autoScroll, visible]);
-  useEffect(() => {
-    const sync = () => setFullscreen(document.fullscreenElement === wrapperRef.current);
-    document.addEventListener('fullscreenchange', sync);
-    return () => document.removeEventListener('fullscreenchange', sync);
-  }, []);
-
   const toggleLevel = (level: string) =>
     setSelected((current) => {
       const next = new Set(current);
@@ -59,8 +54,7 @@ export default function ConsolePage() {
     });
   const toggleFullscreen = async () => {
     try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await wrapperRef.current?.requestFullscreen();
+      await toggleFullscreenCapability();
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t('features.console.fullscreen.failed'));
     }

@@ -9,7 +9,6 @@ import { useDesktopStore } from '@/stores/desktop';
 type DesktopActions = {
   checkForUpdate: () => Promise<AstrBotDesktopAppUpdateCheckResult | null>;
   installUpdate: () => Promise<AstrBotDesktopResult>;
-  openExternalUrl: (url: string) => Promise<boolean>;
   refreshBackend: () => Promise<AstrBotDesktopBackendState | null>;
   restartBackend: () => Promise<boolean>;
   setUpdateChannel: (channel: string) => Promise<boolean>;
@@ -122,20 +121,6 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     [patch],
   );
 
-  const openExternalUrl = useCallback(async (url: string) => {
-    let normalized: URL;
-    try {
-      normalized = new URL(url, typeof window === 'undefined' ? undefined : window.location.href);
-    } catch {
-      return false;
-    }
-    if (normalized.protocol !== 'http:' && normalized.protocol !== 'https:') return false;
-    const bridge = globalThis.window?.astrbotDesktop;
-    if (bridge?.isDesktop && bridge.openExternalUrl) return (await bridge.openExternalUrl(normalized.href)).ok;
-    if (typeof window !== 'undefined') window.open(normalized.href, '_blank', 'noopener,noreferrer');
-    return true;
-  }, []);
-
   useEffect(() => {
     let active = true;
     let unsubscribe: (() => void) | undefined;
@@ -164,13 +149,12 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     () => ({
       checkForUpdate,
       installUpdate,
-      openExternalUrl,
       refreshBackend,
       restartBackend,
       setUpdateChannel,
       stopBackend,
     }),
-    [checkForUpdate, installUpdate, openExternalUrl, refreshBackend, restartBackend, setUpdateChannel, stopBackend],
+    [checkForUpdate, installUpdate, refreshBackend, restartBackend, setUpdateChannel, stopBackend],
   );
   return <DesktopContext.Provider value={actions}>{children}</DesktopContext.Provider>;
 }

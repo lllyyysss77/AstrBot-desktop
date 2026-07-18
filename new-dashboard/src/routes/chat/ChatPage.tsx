@@ -36,6 +36,8 @@ import { MdiIcon } from '@/components/icons/MdiIcon';
 import { apiEndpoints } from '@/config/endpoints';
 import { expandedChatProjectsPreference } from '@/config/preferences';
 import { DEFAULT_CONFIG_ID } from '@/config/defaults';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
+import { useObjectUrlRegistry } from '@/platform/browserHooks';
 import { errorMessage, isObject, JsonObject, objectList, recordId, responseData } from '@/routes/configuration/model';
 import { providerTestResult } from '@/routes/configuration/providerPageModel';
 import { confirmAction, toast } from '@/stores/feedback';
@@ -92,6 +94,8 @@ type CommandSuggestion = JsonObject & {
 };
 
 export default function ChatPage({ chatbox = false }: ChatPageProps) {
+  const { downloadBlob } = useBrowserCapabilities();
+  const { create: createObjectUrl, revoke: revokeObjectUrl } = useObjectUrlRegistry();
   const { i18n, t } = useTranslation();
   const { conversationId = '' } = useParams();
   const navigate = useNavigate();
@@ -534,10 +538,10 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       audioRecorderRef.current.cancel();
       if (settingsSubmenuTimer.current != null) window.clearTimeout(settingsSubmenuTimer.current);
       if (messageScrollFrame.current != null) window.cancelAnimationFrame(messageScrollFrame.current);
-      Object.values(mediaUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+      Object.values(mediaUrlsRef.current).forEach(revokeObjectUrl);
       mediaUrlsRef.current = {};
     },
-    [],
+    [revokeObjectUrl],
   );
   useEffect(() => {
     const records = activeThread?.messages ? [...messages, ...activeThread.messages] : messages;
@@ -560,14 +564,14 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
             return response.blob();
           })
           .then((blob) => {
-            mediaUrlsRef.current[key] = URL.createObjectURL(blob);
+            mediaUrlsRef.current[key] = createObjectUrl(blob);
             setMediaVersion((version) => version + 1);
           })
           .catch(() => {
             delete mediaUrlsRef.current[key];
           });
       });
-  }, [activeThread?.messages, messages]);
+  }, [activeThread?.messages, createObjectUrl, messages]);
   useEffect(() => {
     if (!shouldStickToBottomRef.current) return;
     if (messageScrollFrame.current != null) return;
@@ -625,7 +629,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     messageLoadRequestRef.current += 1;
     setSelectedProjectId('');
     setMessages([]);
-    files.forEach((file) => file.preview_url && URL.revokeObjectURL(file.preview_url));
+    files.forEach((file) => revokeObjectUrl(file.preview_url));
     setFiles([]);
     setRecording(false);
     setPendingSessionSending(false);
@@ -786,7 +790,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     setSelectedProjectId(projectId);
     setMessages([]);
     setLoading(false);
-    files.forEach((file) => file.preview_url && URL.revokeObjectURL(file.preview_url));
+    files.forEach((file) => revokeObjectUrl(file.preview_url));
     setFiles([]);
     setRecording(false);
     setPendingSessionSending(false);
@@ -849,7 +853,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         {
           attachment_id: id,
           filename: String(data.filename || data.original_name || file.name),
-          preview_url: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+          preview_url: file.type.startsWith('image/') ? createObjectUrl(file) : undefined,
           type: stagedAttachmentType(data.type, file.type),
         },
       ]);
@@ -920,7 +924,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         return next;
       });
       setDraft('');
-      files.forEach((file) => file.preview_url && URL.revokeObjectURL(file.preview_url));
+      files.forEach((file) => revokeObjectUrl(file.preview_url));
       setFiles([]);
       setReplyTarget(null);
       markSessionRunning(sessionId, true);
@@ -1306,30 +1310,18 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   };
 
   const downloadMessagePart = async (part: ChatPart) => {
-    let url = mediaUrlsRef.current[mediaPartKey(part)];
-    let temporaryUrl = false;
-    if (!url) {
-      const endpoint = part.attachment_id
-        ? apiEndpoints.fileById(String(part.attachment_id))
-        : part.stored_filename
-          ? apiEndpoints.fileByName(String(part.stored_filename))
-          : '';
-      if (!endpoint) return;
-      const response = await fetchWithAuth(endpoint).catch(() => null);
-      if (!response?.ok) {
-        toast.error(t('features.chat.attachment.downloadFailed'));
-        return;
-      }
-      url = URL.createObjectURL(await response.blob());
-      temporaryUrl = true;
+    const endpoint = part.attachment_id
+      ? apiEndpoints.fileById(String(part.attachment_id))
+      : part.stored_filename
+        ? apiEndpoints.fileByName(String(part.stored_filename))
+        : '';
+    if (!endpoint) return;
+    const response = await fetchWithAuth(endpoint).catch(() => null);
+    if (!response?.ok) {
+      toast.error(t('features.chat.attachment.downloadFailed'));
+      return;
     }
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = String(part.filename || part.stored_filename || 'attachment');
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    if (temporaryUrl) window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    await downloadBlob(await response.blob(), String(part.filename || part.stored_filename || 'attachment'));
   };
 
   const stop = async () => {
@@ -1415,7 +1407,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       onRemoveAttachment={(attachment) =>
         setFiles((items) => {
           const removed = items.find((item) => item.attachment_id === attachment.id);
-          if (removed?.preview_url) URL.revokeObjectURL(removed.preview_url);
+          revokeObjectUrl(removed?.preview_url);
           return items.filter((item) => item.attachment_id !== attachment.id);
         })
       }

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Markdown } from '@/components/content/Markdown';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { apiEndpoints } from '@/config/endpoints';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import type { JsonObject } from '@/routes/configuration/model';
 import type { ChatPart, ChatRecord } from './model';
 import './ChatMessageList.scss';
@@ -113,6 +114,7 @@ export function ChatMessageList({
   onOpenThread,
   onSelectText,
 }: ChatMessageListProps) {
+  const { copyText } = useBrowserCapabilities();
   const { t } = useTranslation();
   const labels = useMemo<ChatMessageLabels>(
     () => ({
@@ -295,7 +297,7 @@ export function ChatMessageList({
                     <IconButton
                       icon="mdi-content-copy"
                       label={labels.copy}
-                      onClick={() => copyMessage(message, text, onCopy)}
+                      onClick={() => copyMessage(message, text, onCopy, copyText)}
                     />
                   ) : null}
                   {!user && message.content.agentStats ? (
@@ -639,9 +641,14 @@ function IconButton({ icon, label, onClick }: { icon: `mdi-${string}`; label: st
   );
 }
 
-async function copyMessage(message: ChatRecord, text: string, callback?: ChatMessageListProps['onCopy']) {
+async function copyMessage(
+  message: ChatRecord,
+  text: string,
+  callback: ChatMessageListProps['onCopy'],
+  copyText: (text: string) => Promise<void>,
+) {
   if (callback) await callback(message, text);
-  else await navigator.clipboard.writeText(text);
+  else await copyText(text);
 }
 
 function messageParts(message: ChatRecord): ChatPart[] {

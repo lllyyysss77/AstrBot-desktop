@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { isObject, type JsonObject } from '@/routes/configuration/model';
 import { ChatMessageList } from './ChatMessageList';
 import type { ChatPart, ChatRecord } from './model';
@@ -57,6 +58,7 @@ export function ChatDetailPanels({
   threadSending,
   onThreadDraftChange,
 }: ChatDetailPanelsProps) {
+  const { openExternal } = useBrowserCapabilities();
   const { t } = useTranslation();
   const references: unknown[] = referenceData && Array.isArray(referenceData.used) ? referenceData.used : [];
 
@@ -95,7 +97,7 @@ export function ChatDetailPanels({
               return (
                 <article
                   key={String(item.id || item.url || index)}
-                  onClick={() => item.url && window.open(String(item.url), '_blank')}
+                  onClick={() => item.url && void openExternal(String(item.url))}
                 >
                   <strong>
                     {Boolean(item.favicon) && <img alt="" src={String(item.favicon)} />}

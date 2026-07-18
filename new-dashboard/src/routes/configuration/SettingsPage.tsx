@@ -17,6 +17,7 @@ import { DialogActions } from '@/components/ui/DialogActions';
 import { themeDefaults } from '@/config/defaults';
 import { externalLinks } from '@/config/links';
 import { themePrimaryPreference, themeSecondaryPreference } from '@/config/preferences';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { useDesktop } from '@/desktop/DesktopProvider';
 import { useDesktopStore } from '@/stores/desktop';
 import { confirmAction, toast } from '@/stores/feedback';
@@ -96,6 +97,7 @@ function selectMetadata(metadata: ConfigGroupMetadata, keys: readonly string[]):
 }
 
 export default function SettingsPage() {
+  const { copyText } = useBrowserCapabilities();
   const { t } = useTranslation();
   const { restartBackend } = useDesktop();
   const prefix = 'features.settings';
@@ -668,8 +670,7 @@ export default function SettingsPage() {
                             <code>{createdKey}</code>
                             <button
                               onClick={() =>
-                                void navigator.clipboard
-                                  ?.writeText(createdKey)
+                                void copyText(createdKey)
                                   .then(() => toast.success(t(`${prefix}.apiKey.messages.copySuccess`)))
                                   .catch(() => toast.error(t(`${prefix}.apiKey.messages.copyFailed`)))
                               }

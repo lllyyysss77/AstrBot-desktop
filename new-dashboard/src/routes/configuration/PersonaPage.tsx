@@ -18,6 +18,7 @@ import {
 } from '@/api/openapi';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { confirmAction, toast } from '@/stores/feedback';
 import { errorMessage, type JsonObject, objectList, recordId, responseData } from './model';
 import {
@@ -344,6 +345,7 @@ function ChoicePanel({
 }
 
 export default function PersonaPage() {
+  const { downloadBlob } = useBrowserCapabilities();
   const { t } = useTranslation();
   const k = (key: string, options?: Record<string, unknown>) => t(`features.persona.${key}`, options);
   const l = (key: string, count?: number) => k(`import.${key}`, { count });
@@ -599,19 +601,12 @@ export default function PersonaPage() {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/persona-id', id);
   };
-  const exportPersona = (item: JsonObject) => {
+  const exportPersona = async (item: JsonObject) => {
     try {
       const blob = new Blob([JSON.stringify(exportPersonaRecord(item), null, 2)], {
         type: 'application/json;charset=utf-8',
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = personaExportFilename(item);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      await downloadBlob(blob, personaExportFilename(item));
       toast.success(k('messages.exportSuccess'));
     } catch (cause) {
       toast.error(errorMessage(cause, k('messages.exportError')));
@@ -870,7 +865,7 @@ export default function PersonaPage() {
                             <button
                               onClick={(event) => {
                                 event.currentTarget.closest('details')?.removeAttribute('open');
-                                exportPersona(persona);
+                                void exportPersona(persona);
                               }}
                               type="button"
                             >

@@ -35,6 +35,7 @@ import {
   readNavigationItems,
   type NavigationItem,
 } from '@/layouts/full/navigation';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { confirmAction, toast } from '@/stores/feedback';
 import { errorMessage, isObject, objectList, responseData, type JsonObject } from './model';
 
@@ -416,6 +417,7 @@ export function BackupDialog({
   restarting?: boolean;
   setOpen: (open: boolean) => void;
 }) {
+  const { downloadBlob } = useBrowserCapabilities();
   const { t } = useTranslation();
   const prefix = 'features.settings.backup';
   const [tab, setTab] = useState<BackupTab>('export');
@@ -619,12 +621,7 @@ export function BackupDialog({
   const download = async (filename: string) => {
     try {
       const blob = await backupFilesApi.download(filename);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
+      await downloadBlob(blob, filename);
     } catch (cause) {
       toast.error(errorMessage(cause, filename));
     }

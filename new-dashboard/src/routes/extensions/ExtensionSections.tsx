@@ -44,6 +44,7 @@ import { MdiIcon } from '@/components/icons/MdiIcon';
 import { Dialog } from '@/components/headless/Dialog';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
 import { confirmAction, toast } from '@/stores/feedback';
+import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import {
   errorMessage,
   isObject,
@@ -1390,6 +1391,7 @@ export function McpSection() {
 }
 
 export function SkillsSection() {
+  const { downloadBlob } = useBrowserCapabilities();
   const { t } = useTranslation();
   const e = (key: string, options?: Record<string, unknown>) => t(`features.extension.${key}`, options);
   const input = useRef<HTMLInputElement>(null);
@@ -1544,12 +1546,7 @@ export function SkillsSection() {
     try {
       const response = await downloadSkillByName({ query: { skill_name: name }, responseType: 'blob' });
       if (!(response.data instanceof Blob)) throw new Error(e('skills.downloadFailed'));
-      const url = URL.createObjectURL(response.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${name}.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
+      await downloadBlob(response.data, `${name}.zip`);
       toast.success(e('skills.downloadSuccess'));
     } catch (cause) {
       toast.error(errorMessage(cause, e('skills.downloadFailed')));
