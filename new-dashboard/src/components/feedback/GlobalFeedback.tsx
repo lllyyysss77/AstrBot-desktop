@@ -2,9 +2,17 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
+import { MdiIcon } from '@/components/icons/MdiIcon';
 import { Button, DialogCancel } from '@/components/ui/Button';
 import { DialogActions } from '@/components/ui/DialogActions';
-import { useFeedbackStore } from '@/stores/feedback';
+import { type ToastVariant, useFeedbackStore } from '@/stores/feedback';
+
+const toastIcons: Record<ToastVariant, `mdi-${string}`> = {
+  error: 'mdi-alert-circle-outline',
+  info: 'mdi-information-outline',
+  success: 'mdi-check-circle-outline',
+  warning: 'mdi-alert-outline',
+};
 
 function LoadingIndicator() {
   const active = useFeedbackStore((state) => state.loadingIds.size > 0);
@@ -42,10 +50,18 @@ function ToastViewport() {
         className={`global-toast global-toast--${current.variant}`}
         role={current.variant === 'error' ? 'alert' : 'status'}
       >
-        <span>{current.message}</span>
+        <div className="global-toast__message">
+          <MdiIcon className="global-toast__icon" name={toastIcons[current.variant]} size={24} />
+          <span>{current.message}</span>
+        </div>
         {current.closable && (
-          <button aria-label="Close notification" onClick={() => dismiss(current.id)} type="button">
-            ×
+          <button
+            aria-label="Close notification"
+            className="global-toast__close"
+            onClick={() => dismiss(current.id)}
+            type="button"
+          >
+            <MdiIcon name="mdi-close" size={20} />
           </button>
         )}
       </div>
