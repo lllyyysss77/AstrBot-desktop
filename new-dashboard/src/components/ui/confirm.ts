@@ -1,7 +1,15 @@
 import { confirmAction, type ConfirmOptions } from '@/stores/feedback';
 
-export type DestructiveConfirmOptions = Omit<ConfirmOptions, 'danger'>;
+export type IntentConfirmOptions = Omit<ConfirmOptions, 'danger' | 'intent'>;
 
-export function confirmDestructiveAction(options: DestructiveConfirmOptions | string) {
-  return confirmAction(typeof options === 'string' ? { danger: true, message: options } : { ...options, danger: true });
+function confirmWithIntent(intent: 'destructive' | 'warning', options: IntentConfirmOptions | string) {
+  return confirmAction(typeof options === 'string' ? { intent, message: options } : { ...options, intent });
+}
+
+export function confirmDestructiveAction(options: IntentConfirmOptions | string) {
+  return confirmWithIntent('destructive', options);
+}
+
+export function confirmWarningAction(options: IntentConfirmOptions | string) {
+  return confirmWithIntent('warning', options);
 }

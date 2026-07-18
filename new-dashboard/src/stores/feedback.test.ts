@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { confirmAction, loading, toast, useFeedbackStore } from './feedback';
+import { confirmAction, loading, normalizeConfirmOptions, toast, useFeedbackStore } from './feedback';
 
 const initialState = useFeedbackStore.getState();
 
@@ -39,6 +39,17 @@ describe('global feedback state', () => {
 
     await expect(first).resolves.toBe(true);
     await expect(second).resolves.toBe(false);
+  });
+
+  it('normalizes confirmation intent and keeps legacy destructive requests compatible', () => {
+    expect(normalizeConfirmOptions({ danger: true, message: 'Delete?' })).toMatchObject({
+      intent: 'destructive',
+      message: 'Delete?',
+    });
+    expect(normalizeConfirmOptions({ intent: 'warning', message: 'Discard?' })).toMatchObject({
+      intent: 'warning',
+      message: 'Discard?',
+    });
   });
 
   it('tracks concurrent loading operations and clamps progress', () => {

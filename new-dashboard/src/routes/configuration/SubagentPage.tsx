@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useBlocker } from 'react-router-dom';
 
 import { getSubagentConfig, updateSubagentConfig } from '@/api/openapi';
 import { ConfigSpecialSelector, PersonaQuickPreview } from '@/components/config/ConfigSpecialControls';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
-import { confirmAction, toast } from '@/stores/feedback';
+import { useUnsavedChangesGuard } from '@/components/ui/useUnsavedChangesGuard';
+import { toast } from '@/stores/feedback';
 import {
   EMPTY_SUBAGENT_CONFIG,
   newSubagent,
@@ -34,6 +34,10 @@ export default function SubagentPage() {
 
   const snapshot = useMemo(() => serializeSubagentConfig(config), [config]);
   const hasUnsavedChanges = loaded && snapshot !== savedSnapshot;
+  const confirmDiscard = useUnsavedChangesGuard(hasUnsavedChanges, {
+    title: k('page.title'),
+    message: k('messages.unsavedChangesLeaveConfirm'),
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,33 +58,8 @@ export default function SubagentPage() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => {
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasUnsavedChanges) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', beforeUnload);
-    return () => window.removeEventListener('beforeunload', beforeUnload);
-  }, [hasUnsavedChanges]);
-
-  const blocker = useBlocker(hasUnsavedChanges);
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    void confirmAction({ title: k('page.title'), message: k('messages.unsavedChangesLeaveConfirm') }).then(
-      (confirmed) => {
-        if (confirmed) blocker.proceed();
-        else blocker.reset();
-      },
-    );
-  }, [blocker.state]);
-
   const reload = async () => {
-    if (
-      hasUnsavedChanges &&
-      !(await confirmAction({ title: k('actions.refresh'), message: k('messages.unsavedChangesReloadConfirm') }))
-    )
-      return;
+    if (!(await confirmDiscard())) return;
     await load();
   };
   const save = async () => {

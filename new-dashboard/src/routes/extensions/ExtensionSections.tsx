@@ -43,6 +43,7 @@ import {
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { Dialog } from '@/components/headless/Dialog';
 import { MonacoEditor } from '@/components/editor/MonacoEditor';
+import { useUnsavedChangesGuard } from '@/components/ui/useUnsavedChangesGuard';
 import { confirmAction, toast } from '@/stores/feedback';
 import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import {
@@ -1409,6 +1410,10 @@ export function SkillsSection() {
   const [dragging, setDragging] = useState(false);
   const uploadId = useRef(0);
   const [editor, setEditor] = useState<SkillEditorState | null>(null);
+  const confirmDiscard = useUnsavedChangesGuard(Boolean(editor?.dirty), {
+    title: e('skills.unsaved'),
+    message: e('skills.discardChanges'),
+  });
   const [neoCandidates, setNeoCandidates] = useState<JsonObject[]>([]);
   const [neoReleases, setNeoReleases] = useState<JsonObject[]>([]);
   const [neoLoading, setNeoLoading] = useState(false);
@@ -1663,7 +1668,7 @@ export function SkillsSection() {
     }
   };
   const loadFile = async (state: SkillEditorState, path: string) => {
-    if (state.dirty && !window.confirm(e('skills.discardChanges'))) return;
+    if (state.dirty && !(await confirmDiscard())) return;
     setEditor({ ...state, loading: true, error: '' });
     try {
       const response = await getSkillFileByName({ query: { skill_name: state.skillName, path } });
@@ -1695,8 +1700,9 @@ export function SkillsSection() {
     if (next && skillMd?.editable) await loadFile(next, 'SKILL.md');
   };
   const closeEditor = () => {
-    if (editor?.dirty && !window.confirm(e('skills.discardChanges'))) return;
-    setEditor(null);
+    void confirmDiscard().then((confirmed) => {
+      if (confirmed) setEditor(null);
+    });
   };
   const saveFile = async () => {
     if (!editor?.filePath || !editor.editable) return;

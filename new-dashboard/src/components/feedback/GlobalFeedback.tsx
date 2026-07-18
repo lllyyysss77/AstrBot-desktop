@@ -58,6 +58,10 @@ function ConfirmHost() {
   const current = useFeedbackStore((state) => state.confirmQueue[0]);
   const resolve = useFeedbackStore((state) => state.resolveConfirmation);
   if (!current) return null;
+  const title =
+    current.title ?? (current.intent === 'warning' ? t('core.common.warning') : t('core.common.dialog.confirmTitle'));
+  const confirmVariant =
+    current.intent === 'destructive' ? 'danger' : current.intent === 'warning' ? 'warning' : 'primary';
   return (
     <Dialog
       description={current.message}
@@ -65,14 +69,14 @@ function ConfirmHost() {
         if (!open) resolve(current.id, false);
       }}
       open
-      title={current.title ?? t('core.common.confirm')}
+      title={title}
     >
       <DialogActions className="global-confirm__actions">
-        <DialogCancel onClick={() => resolve(current.id, false)}>
+        <DialogCancel autoFocus onClick={() => resolve(current.id, false)}>
           {current.cancelLabel ?? t('core.common.cancel')}
         </DialogCancel>
         <DialogClose asChild>
-          <Button onClick={() => resolve(current.id, true)} variant={current.danger ? 'danger' : 'primary'}>
+          <Button onClick={() => resolve(current.id, true)} variant={confirmVariant}>
             {current.confirmLabel ?? t('core.common.confirm')}
           </Button>
         </DialogClose>

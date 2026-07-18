@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 export type ToastVariant = 'success' | 'error' | 'warning' | 'info';
+export type ConfirmIntent = 'default' | 'destructive' | 'warning';
 
 export type ToastMessage = {
   closable: boolean;
@@ -13,13 +14,16 @@ export type ToastMessage = {
 export type ConfirmOptions = {
   cancelLabel?: string;
   confirmLabel?: string;
+  /** @deprecated Use intent: 'destructive'. */
   danger?: boolean;
+  intent?: ConfirmIntent;
   message: string;
   title?: string;
 };
 
-type ConfirmRequest = ConfirmOptions & {
+type ConfirmRequest = Omit<ConfirmOptions, 'danger' | 'intent'> & {
   id: string;
+  intent: ConfirmIntent;
   resolve: (confirmed: boolean) => void;
 };
 
@@ -39,6 +43,16 @@ type FeedbackState = {
 
 let sequence = 0;
 const nextId = (prefix: string) => `${prefix}-${++sequence}`;
+
+export function normalizeConfirmOptions(options: ConfirmOptions): Omit<ConfirmOptions, 'danger'> & {
+  intent: ConfirmIntent;
+} {
+  const { danger, ...normalized } = options;
+  return {
+    ...normalized,
+    intent: normalized.intent ?? (danger ? 'destructive' : 'default'),
+  };
+}
 
 export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
   confirmQueue: [],
@@ -77,7 +91,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
   requestConfirmation: (options) =>
     new Promise<boolean>((resolve) => {
       set((state) => ({
-        confirmQueue: [...state.confirmQueue, { ...options, id: nextId('confirm'), resolve }],
+        confirmQueue: [...state.confirmQueue, { ...normalizeConfirmOptions(options), id: nextId('confirm'), resolve }],
       }));
     }),
   resolveConfirmation: (id, confirmed) => {
