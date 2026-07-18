@@ -1,9 +1,6 @@
 import { ApiError, fetchWithAuth, readApiErrorMessage, type RequestDependencies } from './http';
 import { ApiPayloadError, isRecord, unwrapApiData, type UnknownRecord } from './response';
 import { apiEndpoints } from '@/config/endpoints';
-import { deploymentEndpoints } from '@/config/links';
-
-type PublicRequestDependencies = Pick<RequestDependencies, 'fetch'>;
 
 export type ConversationExportItem = {
   cid: string;
@@ -16,19 +13,6 @@ export class SystemConfigTwoFactorRequired extends ApiError {
     this.name = 'SystemConfigTwoFactorRequired';
   }
 }
-
-export const announcementApi = {
-  async welcomeNotice(dependencies: PublicRequestDependencies = {}) {
-    const fetchImpl = dependencies.fetch ?? fetch;
-    const response = await fetchImpl(deploymentEndpoints.announcement);
-    const payload = await responsePayload(response);
-    if (!response.ok) throw apiError(response, payload);
-    const data = unwrapApiData(payload);
-    if (!isRecord(data)) return null;
-    const notice = isRecord(data.notice) ? data.notice : {};
-    return notice.welcome_page ?? null;
-  },
-};
 
 export const conversationFilesApi = {
   export: (conversations: ConversationExportItem[], dependencies: RequestDependencies = {}) =>

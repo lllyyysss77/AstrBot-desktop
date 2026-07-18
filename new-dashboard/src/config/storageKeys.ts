@@ -45,6 +45,7 @@ export const storageKeys = {
 } as const;
 
 export const sessionStorageKeys = {
+  announcementCache: 'astrbot:announcement-cache:v1',
   lastBotRoute: 'astrbot:last_bot_route',
   lastChatRoute: 'astrbot:last_chat_route',
   upgradeRecoveryToken: 'astrbot-upgrade-recovery-token',

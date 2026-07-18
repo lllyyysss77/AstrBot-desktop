@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  announcementApi,
   backupFilesApi,
   conversationFilesApi,
   pluginExtensionApi,
@@ -35,17 +34,6 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
 }
 
 describe('page-facing API services', () => {
-  it('loads the public announcement without forwarding dashboard credentials', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        data: { notice: { welcome_page: { 'zh-CN': '欢迎' } } },
-      }),
-    );
-
-    await expect(announcementApi.welcomeNotice({ fetch: fetchMock })).resolves.toEqual({ 'zh-CN': '欢迎' });
-    expect(fetchMock).toHaveBeenCalledWith('https://cloud.astrbot.app/api/v1/announcement');
-  });
-
   it('exports conversations and downloads encoded backup filenames as blobs', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { parseConfigProfile, parseProviderSchema } from '@/api/domain';
 import { getConfigProfile, getProviderSchema, getSystemConfig, updateConfigProfileContent } from '@/api/openapi';
 import { decodeApiData, expectRecord, isRecord } from '@/api/response';
-import { announcementApi } from '@/api/services';
 import { Markdown } from '@/components/content/Markdown';
 import { Dialog } from '@/components/headless/Dialog';
 import { MdiIcon } from '@/components/icons/MdiIcon';
 import { toast } from '@/stores/feedback';
+import { loadWelcomeAnnouncement } from '@/services/announcementService';
 import PlatformPage from '@/routes/configuration/PlatformPage';
 import ProviderPage from '@/routes/configuration/ProviderPage';
 import {
@@ -80,8 +80,7 @@ export default function WelcomePage() {
   useEffect(() => {
     let active = true;
     void refreshOnboarding();
-    void announcementApi
-      .welcomeNotice()
+    void loadWelcomeAnnouncement()
       .then((notice) => active && setAnnouncementRaw(notice))
       .catch(() => undefined);
     return () => {

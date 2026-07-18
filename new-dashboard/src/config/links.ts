@@ -1,29 +1,44 @@
 const withoutTrailingSlash = (value: string) => value.replace(/\/+$/, '');
-const deploymentValue = (value: string | undefined, fallback: string) =>
-  withoutTrailingSlash(value?.trim() || fallback);
+const deploymentValue = (value: string | undefined, fallback: string) => {
+  const candidate = value?.trim() || fallback;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? withoutTrailingSlash(candidate) : fallback;
+  } catch {
+    return fallback;
+  }
+};
 
-const docsBase = deploymentValue(import.meta.env.VITE_ASTRBOT_DOCS_URL, 'https://docs.astrbot.app');
-const projectBase = deploymentValue(import.meta.env.VITE_ASTRBOT_GITHUB_URL, 'https://github.com/AstrBotDevs/AstrBot');
+type ExternalLinkEnvironment = {
+  VITE_ASTRBOT_DOCS_URL?: string;
+  VITE_ASTRBOT_GITHUB_URL?: string;
+};
 
-export const externalLinks = {
-  afdian: 'https://afdian.com/a/astrbot_team',
-  docs: {
-    faq: `${docsBase}/faq.html`,
-    home: `${docsBase}/`,
-    knowledgeBase: `${docsBase}/use/knowledge-base.html`,
-    openApi: `${docsBase}/dev/openapi.html`,
-    customRules: `${docsBase}/use/custom-rules.html`,
-  },
-  modelScope: {
-    accessToken: 'https://modelscope.cn/my/myaccesstoken',
-    mcp: 'https://www.modelscope.cn/mcp',
-  },
-  project: {
-    issues: `${projectBase}/issues`,
-    releases: `${projectBase}/releases`,
-    repository: projectBase,
-  },
-} as const;
+export function resolveExternalLinks(environment: ExternalLinkEnvironment) {
+  const docsBase = deploymentValue(environment.VITE_ASTRBOT_DOCS_URL, 'https://docs.astrbot.app');
+  const projectBase = deploymentValue(environment.VITE_ASTRBOT_GITHUB_URL, 'https://github.com/AstrBotDevs/AstrBot');
+  return {
+    afdian: 'https://afdian.com/a/astrbot_team',
+    docs: {
+      customRules: `${docsBase}/use/custom-rules.html`,
+      faq: `${docsBase}/faq.html`,
+      home: `${docsBase}/`,
+      knowledgeBase: `${docsBase}/use/knowledge-base.html`,
+      openApi: `${docsBase}/dev/openapi.html`,
+    },
+    modelScope: {
+      accessToken: 'https://modelscope.cn/my/myaccesstoken',
+      mcp: 'https://www.modelscope.cn/mcp',
+    },
+    project: {
+      issues: `${projectBase}/issues`,
+      releases: `${projectBase}/releases`,
+      repository: projectBase,
+    },
+  } as const;
+}
+
+export const externalLinks = resolveExternalLinks(import.meta.env);
 
 const platformTutorialPaths: Record<string, string> = {
   aiocqhttp: 'aiocqhttp.html',
@@ -48,12 +63,6 @@ const platformTutorialPaths: Record<string, string> = {
 };
 
 export function platformTutorialLink(type: string) {
-  return `${docsBase}/platform/${platformTutorialPaths[type] ?? ''}`;
+  const docsHome = externalLinks.docs.home.replace(/\/+$/, '');
+  return `${docsHome}/platform/${platformTutorialPaths[type] ?? ''}`;
 }
-
-export const deploymentEndpoints = {
-  announcement: deploymentValue(
-    import.meta.env.VITE_ASTRBOT_ANNOUNCEMENT_URL,
-    'https://cloud.astrbot.app/api/v1/announcement',
-  ),
-} as const;
