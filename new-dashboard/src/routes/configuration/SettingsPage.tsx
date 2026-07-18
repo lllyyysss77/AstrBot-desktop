@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createApiKey, deleteApiKey, getSystemConfig, listApiKeys, revokeApiKey } from '@/api/openapi';
+import { getSystemConfig } from '@/api/openapi';
 import { SystemConfigTwoFactorRequired, systemConfigApi } from '@/api/services';
 import { ConfigGroup } from '@/components/config/DynamicConfigForm';
 import {
@@ -17,18 +17,16 @@ import { DialogActions } from '@/components/ui/DialogActions';
 import { themeDefaults } from '@/config/defaults';
 import { externalLinks } from '@/config/links';
 import { themePrimaryPreference, themeSecondaryPreference } from '@/config/preferences';
-import { useBrowserCapabilities } from '@/platform/BrowserCapabilitiesProvider';
 import { useDesktop } from '@/desktop/DesktopProvider';
 import { useDesktopStore } from '@/stores/desktop';
 import { confirmAction, toast } from '@/stores/feedback';
 import { acquireActionLock } from '@/utils/actionLock';
 import { LoadingState } from './ConfigurationUi';
-import { errorMessage, JsonObject, objectList, recordId, responseData } from './model';
+import { errorMessage, type JsonObject, responseData } from './model';
+import { ApiKeySettingsSection } from './ApiKeySettingsSection';
 import { BackupDialog, ProxySelector, SidebarCustomizer, StorageCleanupPanel } from './SettingsExtras';
 
 type SettingsSection = 'general' | 'appearance' | 'network' | 'security' | 'maintenance' | 'openapi' | 'about';
-type ApiScope =
-  'bot' | 'provider' | 'persona' | 'im' | 'config' | 'chat' | 'data' | 'file' | 'plugin' | 'mcp' | 'skill';
 
 const SYSTEM_GROUPS = {
   runtime: ['timezone', 'callback_api_base'],
@@ -67,20 +65,6 @@ const NAV_ITEMS: Array<{ icon: `mdi-${string}`; id: SettingsSection }> = [
   { id: 'about', icon: 'mdi-information-outline' },
 ];
 
-const API_SCOPES: ApiScope[] = [
-  'bot',
-  'provider',
-  'persona',
-  'im',
-  'config',
-  'chat',
-  'data',
-  'file',
-  'plugin',
-  'mcp',
-  'skill',
-];
-
 function systemMetadataRoot(metadata: ConfigRecord): ConfigGroupMetadata {
   const group = metadata.system_group;
   if (!isConfigRecord(group) || !isConfigRecord(group.metadata) || !isConfigRecord(group.metadata.system))
@@ -97,7 +81,6 @@ function selectMetadata(metadata: ConfigGroupMetadata, keys: readonly string[]):
 }
 
 export default function SettingsPage() {
-  const { copyText } = useBrowserCapabilities();
   const { t } = useTranslation();
   const { restartBackend } = useDesktop();
   const prefix = 'features.settings';
@@ -106,19 +89,11 @@ export default function SettingsPage() {
   const [config, setConfig] = useState<ConfigRecord>({});
   const [metadata, setMetadata] = useState<ConfigRecord>({});
   const [saved, setSaved] = useState('{}');
-  const [keys, setKeys] = useState<JsonObject[]>([]);
-  const [keysLoading, setKeysLoading] = useState(true);
-  const [keysError, setKeysError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [failedSave, setFailedSave] = useState('');
   const [restartRequired, setRestartRequired] = useState(false);
-  const [keyName, setKeyName] = useState('');
-  const [expiry, setExpiry] = useState<number | 'permanent'>(30);
-  const [scopes, setScopes] = useState<ApiScope[]>(['bot', 'provider', 'im', 'config', 'chat', 'file']);
-  const [createdKey, setCreatedKey] = useState('');
-  const [keyCreating, setKeyCreating] = useState(false);
   const [restarting, setRestarting] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
@@ -127,22 +102,7 @@ export default function SettingsPage() {
   const [pendingConfig, setPendingConfig] = useState<{ config: ConfigRecord; snapshot: string } | null>(null);
   const [primary, setPrimary] = useState(() => themePrimaryPreference.read() || themeDefaults.primary);
   const [secondary, setSecondary] = useState(() => themeSecondaryPreference.read() || themeDefaults.secondary);
-  const createKeyLockRef = useRef({ current: false });
   const restartLockRef = useRef({ current: false });
-
-  const loadKeys = useCallback(async () => {
-    setKeysLoading(true);
-    setKeysError('');
-    try {
-      setKeys(objectList(responseData(await listApiKeys()), ['keys', 'api_keys', 'items']));
-    } catch (cause) {
-      const message = errorMessage(cause, t(`${prefix}.apiKey.messages.loadFailed`));
-      setKeysError(message);
-      toast.error(message);
-    } finally {
-      setKeysLoading(false);
-    }
-  }, [t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,9 +125,6 @@ export default function SettingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
-  useEffect(() => {
-    void loadKeys();
-  }, [loadKeys]);
   useEffect(() => {
     const item = NAV_ITEMS.find((navItem) => window.location.hash.includes(navItem.id));
     if (item) setSection(item.id);
@@ -263,88 +220,10 @@ export default function SettingsPage() {
     setSecondary(themeDefaults.secondary);
   };
 
-  const addKey = async () => {
-    if (!keyName.trim() || !scopes.length) return;
-    const release = acquireActionLock(createKeyLockRef.current);
-    if (!release) return;
-    setKeyCreating(true);
-    try {
-      const data = responseData<JsonObject>(
-        await createApiKey({
-          body: { name: keyName.trim(), scopes, ...(expiry === 'permanent' ? {} : { expires_in_days: expiry }) },
-        }),
-      );
-      const secret = data?.key ?? data?.api_key ?? data?.token;
-      setCreatedKey(typeof secret === 'string' ? secret : '');
-      setKeyName('');
-      setExpiry(30);
-      toast.success(t(`${prefix}.apiKey.messages.createSuccess`));
-      await loadKeys();
-      setSection('openapi');
-    } catch (cause) {
-      toast.error(errorMessage(cause, t(`${prefix}.apiKey.messages.createFailed`)));
-    } finally {
-      setKeyCreating(false);
-      release();
-    }
-  };
-
-  const toggleScope = (scope: ApiScope) => {
-    setScopes((current) => {
-      const selected = current.includes(scope);
-      if (scope === 'config' && !selected)
-        return API_SCOPES.filter((item) => new Set([...current, 'config', 'bot', 'provider']).has(item));
-      const next = selected ? current.filter((item) => item !== scope) : [...current, scope];
-      if (selected && (scope === 'bot' || scope === 'provider')) return next.filter((item) => item !== 'config');
-      return next;
-    });
-  };
-
   const changeSection = (next: SettingsSection) => {
     setSection(next);
     const hash = next === 'general' ? 'system-config' : next === 'about' ? 'settings-about' : `settings-${next}`;
     window.history.replaceState(null, '', `${window.location.pathname}#${hash}`);
-  };
-
-  const removeKey = async (item: JsonObject) => {
-    const id = recordId(item, 'key_id', 'id');
-    if (
-      !id ||
-      !(await confirmAction({
-        danger: true,
-        title: t(`${prefix}.apiKey.delete`),
-        message: `${t(`${prefix}.apiKey.delete`)} ${String(item.name || id)}?`,
-      }))
-    )
-      return;
-    try {
-      await deleteApiKey({ path: { key_id: id } });
-      toast.success(t(`${prefix}.apiKey.messages.deleteSuccess`));
-      await loadKeys();
-    } catch (cause) {
-      toast.error(errorMessage(cause, t(`${prefix}.apiKey.messages.deleteFailed`)));
-    }
-  };
-
-  const revokeKey = async (item: JsonObject) => {
-    const id = recordId(item, 'key_id', 'id');
-    if (
-      !id ||
-      !(await confirmAction({
-        danger: true,
-        title: t(`${prefix}.apiKey.revoke`),
-        message: `${t(`${prefix}.apiKey.revoke`)} ${String(item.name || id)}?`,
-      }))
-    )
-      return;
-    try {
-      await revokeApiKey({ path: { key_id: id } });
-      toast.success(t(`${prefix}.apiKey.messages.revokeSuccess`));
-      await loadKeys();
-      setSection('openapi');
-    } catch (cause) {
-      toast.error(errorMessage(cause, t(`${prefix}.apiKey.messages.revokeFailed`)));
-    }
   };
 
   const restart = async (needsConfirmation = true) => {
@@ -389,38 +268,6 @@ export default function SettingsPage() {
     />
   );
 
-  const aboutResources = [
-    {
-      description: t('features.settings.about.resources.changelog'),
-      icon: 'mdi-file-document-outline' as const,
-      label: t('core.navigation.changelog'),
-      url: externalLinks.project.releases,
-    },
-    {
-      description: t('features.settings.about.resources.documentation'),
-      icon: 'mdi-book-open-variant' as const,
-      label: t('core.navigation.documentation'),
-      url: externalLinks.docs.home,
-    },
-    {
-      description: t('features.settings.about.resources.troubleshooting'),
-      icon: 'mdi-frequently-asked-questions' as const,
-      label: t('core.navigation.faq'),
-      url: externalLinks.docs.faq,
-    },
-    {
-      description: t('features.settings.about.resources.github'),
-      icon: 'mdi-github' as const,
-      label: t('core.navigation.github'),
-      url: externalLinks.project.repository,
-    },
-    {
-      description: t('features.welcome.resources.afdianDesc'),
-      icon: 'mdi-hand-heart' as const,
-      label: t('features.welcome.resources.afdianTitle'),
-      url: externalLinks.afdian,
-    },
-  ];
   const pendingDashboard =
     pendingConfig && isConfigRecord(pendingConfig.config.dashboard) ? pendingConfig.config.dashboard : null;
   const pendingTotp = pendingDashboard && isConfigRecord(pendingDashboard.totp) ? pendingDashboard.totp : null;
@@ -446,27 +293,7 @@ export default function SettingsPage() {
           ))}
         </nav>
         <main className="settings-main">
-          {section === 'about' && (
-            <section className="settings-section">
-              <header className="settings-section__heading">
-                <h2 className="settings-section__title">{t('core.navigation.about')}</h2>
-              </header>
-              <div className="settings-about-card settings-list-card">
-                {aboutResources.map((resource) => (
-                  <article className="settings-about-item" key={resource.label}>
-                    <div>
-                      <strong>{resource.label}</strong>
-                      <p>{resource.description}</p>
-                    </div>
-                    <a href={resource.url} rel="noreferrer" target="_blank">
-                      <MdiIcon name={resource.icon} />
-                      {resource.label}
-                    </a>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
+          {section === 'about' && <SettingsAboutSection />}
           {section !== 'about' && (
             <>
               {restartRequired && (
@@ -595,163 +422,7 @@ export default function SettingsPage() {
                         </div>
                       </section>
                     )}
-                    {!loading && section === 'openapi' && (
-                      <section className="settings-list-card route-card">
-                        <header>
-                          <h2>
-                            {t(`${prefix}.apiKey.manageTitle`)}{' '}
-                            <a
-                              aria-label={t(`${prefix}.apiKey.docsLink`)}
-                              href={externalLinks.docs.openApi}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              <MdiIcon name="mdi-help-circle-outline" />
-                            </a>
-                          </h2>
-                          <p>{t(`${prefix}.apiKey.subtitle`)}</p>
-                        </header>
-                        {keysError && <div className="settings-alert settings-alert--error">{keysError}</div>}
-                        <div className="api-key-create">
-                          <input
-                            disabled={keyCreating}
-                            onChange={(event) => setKeyName(event.target.value)}
-                            placeholder={t(`${prefix}.apiKey.name`)}
-                            value={keyName}
-                          />
-                          <select
-                            aria-label={t(`${prefix}.apiKey.expiresInDays`)}
-                            disabled={keyCreating}
-                            onChange={(event) =>
-                              setExpiry(event.target.value === 'permanent' ? 'permanent' : Number(event.target.value))
-                            }
-                            value={expiry}
-                          >
-                            <option value={1}>{t(`${prefix}.apiKey.expiryOptions.day1`)}</option>
-                            <option value={7}>{t(`${prefix}.apiKey.expiryOptions.day7`)}</option>
-                            <option value={30}>{t(`${prefix}.apiKey.expiryOptions.day30`)}</option>
-                            <option value={90}>{t(`${prefix}.apiKey.expiryOptions.day90`)}</option>
-                            <option value="permanent">{t(`${prefix}.apiKey.expiryOptions.permanent`)}</option>
-                          </select>
-                          <button
-                            disabled={keyCreating || !keyName.trim() || !scopes.length}
-                            onClick={() => void addKey()}
-                            type="button"
-                          >
-                            <MdiIcon
-                              className={keyCreating ? 'mdi-spin' : ''}
-                              name={keyCreating ? 'mdi-loading' : 'mdi-key-plus'}
-                            />
-                            {t(`${prefix}.apiKey.create`)}
-                          </button>
-                        </div>
-                        {expiry === 'permanent' && (
-                          <div className="settings-alert settings-alert--warning">
-                            {t(`${prefix}.apiKey.permanentWarning`)}
-                          </div>
-                        )}
-                        <div className="api-key-scopes">
-                          <span>{t(`${prefix}.apiKey.scopes`)}</span>
-                          {API_SCOPES.map((scope) => (
-                            <label className={scopes.includes(scope) ? 'is-selected' : ''} key={scope}>
-                              <input
-                                checked={scopes.includes(scope)}
-                                disabled={keyCreating}
-                                onChange={() => toggleScope(scope)}
-                                type="checkbox"
-                              />
-                              {scope}
-                            </label>
-                          ))}
-                        </div>
-                        {createdKey && (
-                          <div className="config-secret" role="status">
-                            <strong>{t(`${prefix}.apiKey.plaintextHint`)}</strong>
-                            <code>{createdKey}</code>
-                            <button
-                              onClick={() =>
-                                void copyText(createdKey)
-                                  .then(() => toast.success(t(`${prefix}.apiKey.messages.copySuccess`)))
-                                  .catch(() => toast.error(t(`${prefix}.apiKey.messages.copyFailed`)))
-                              }
-                              type="button"
-                            >
-                              <MdiIcon name="mdi-content-copy" />
-                              {t(`${prefix}.apiKey.copy`)}
-                            </button>
-                          </div>
-                        )}
-                        <div className="monitor-table-wrap">
-                          {keysLoading ? (
-                            <div className="monitor-empty">
-                              <MdiIcon className="mdi-spin" name="mdi-loading" />
-                            </div>
-                          ) : (
-                            <>
-                              <table className="monitor-table">
-                                <thead>
-                                  <tr>
-                                    <th>{t(`${prefix}.apiKey.table.name`)}</th>
-                                    <th>{t(`${prefix}.apiKey.table.scopes`)}</th>
-                                    <th>{t(`${prefix}.apiKey.table.status`)}</th>
-                                    <th>{t(`${prefix}.apiKey.table.lastUsed`)}</th>
-                                    <th>{t(`${prefix}.apiKey.table.createdAt`)}</th>
-                                    <th>{t(`${prefix}.apiKey.table.actions`)}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {keys.map((item, index) => {
-                                    const id = recordId(item, 'key_id', 'id') || `key-${index}`;
-                                    const inactive = Boolean(item.is_revoked || item.is_expired);
-                                    return (
-                                      <tr key={id}>
-                                        <td>
-                                          <strong>{String(item.name || id)}</strong>
-                                          <small>{String(item.key_prefix || '')}</small>
-                                        </td>
-                                        <td>{Array.isArray(item.scopes) ? item.scopes.join(', ') : '—'}</td>
-                                        <td>
-                                          <span
-                                            className={`status-chip ${inactive ? 'status-chip--error' : 'status-chip--success'}`}
-                                          >
-                                            {t(`${prefix}.apiKey.status.${inactive ? 'inactive' : 'active'}`)}
-                                          </span>
-                                        </td>
-                                        <td>
-                                          {item.last_used_at
-                                            ? new Date(String(item.last_used_at)).toLocaleString()
-                                            : '—'}
-                                        </td>
-                                        <td>
-                                          {item.created_at ? new Date(String(item.created_at)).toLocaleString() : '—'}
-                                        </td>
-                                        <td>
-                                          <div className="api-key-actions">
-                                            {!inactive && (
-                                              <button onClick={() => void revokeKey(item)} type="button">
-                                                {t(`${prefix}.apiKey.revoke`)}
-                                              </button>
-                                            )}
-                                            <button
-                                              className="button--danger"
-                                              onClick={() => void removeKey(item)}
-                                              type="button"
-                                            >
-                                              {t(`${prefix}.apiKey.delete`)}
-                                            </button>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                              {!keys.length && <div className="monitor-empty">{t(`${prefix}.apiKey.empty`)}</div>}
-                            </>
-                          )}
-                        </div>
-                      </section>
-                    )}
+                    {!loading && section === 'openapi' && <ApiKeySettingsSection />}
                   </div>
                 </section>
               )}
@@ -804,5 +475,62 @@ export default function SettingsPage() {
         </div>
       </Dialog>
     </div>
+  );
+}
+
+function SettingsAboutSection() {
+  const { t } = useTranslation();
+  const resources = [
+    {
+      description: t('features.settings.about.resources.changelog'),
+      icon: 'mdi-file-document-outline' as const,
+      label: t('core.navigation.changelog'),
+      url: externalLinks.project.releases,
+    },
+    {
+      description: t('features.settings.about.resources.documentation'),
+      icon: 'mdi-book-open-variant' as const,
+      label: t('core.navigation.documentation'),
+      url: externalLinks.docs.home,
+    },
+    {
+      description: t('features.settings.about.resources.troubleshooting'),
+      icon: 'mdi-frequently-asked-questions' as const,
+      label: t('core.navigation.faq'),
+      url: externalLinks.docs.faq,
+    },
+    {
+      description: t('features.settings.about.resources.github'),
+      icon: 'mdi-github' as const,
+      label: t('core.navigation.github'),
+      url: externalLinks.project.repository,
+    },
+    {
+      description: t('features.welcome.resources.afdianDesc'),
+      icon: 'mdi-hand-heart' as const,
+      label: t('features.welcome.resources.afdianTitle'),
+      url: externalLinks.afdian,
+    },
+  ];
+  return (
+    <section className="settings-section">
+      <header className="settings-section__heading">
+        <h2 className="settings-section__title">{t('core.navigation.about')}</h2>
+      </header>
+      <div className="settings-about-card settings-list-card">
+        {resources.map((resource) => (
+          <article className="settings-about-item" key={resource.label}>
+            <div>
+              <strong>{resource.label}</strong>
+              <p>{resource.description}</p>
+            </div>
+            <a href={resource.url} rel="noreferrer" target="_blank">
+              <MdiIcon name={resource.icon} />
+              {resource.label}
+            </a>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

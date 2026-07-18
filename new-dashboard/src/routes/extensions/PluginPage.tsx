@@ -6,20 +6,7 @@ import { isRecord } from '@/api/response';
 import { pluginExtensionApi } from '@/api/services';
 import { localePreference } from '@/config/preferences';
 import { errorMessage, JsonObject, responseData } from '@/routes/configuration/model';
-
-const CHANNEL = 'astrbot-plugin-page';
-export function isTrustedPluginMessageOrigin(
-  origin: string,
-  expectedOrigin = window.location.origin,
-  lockedOrigin?: string | null,
-) {
-  if (origin !== expectedOrigin && origin !== 'null') return false;
-  return !lockedOrigin || lockedOrigin === origin;
-}
-
-export function pluginMessageTargetOrigin(lockedOrigin?: string | null) {
-  return lockedOrigin && lockedOrigin !== 'null' ? lockedOrigin : '*';
-}
+import { isTrustedPluginMessageOrigin, PLUGIN_PAGE_CHANNEL, pluginMessageTargetOrigin } from './pluginBridge';
 
 export default function PluginPage() {
   const { t } = useTranslation();
@@ -34,7 +21,7 @@ export default function PluginPage() {
   const post = useCallback(
     (payload: JsonObject) =>
       frame.current?.contentWindow?.postMessage(
-        { channel: CHANNEL, ...payload },
+        { channel: PLUGIN_PAGE_CHANNEL, ...payload },
         pluginMessageTargetOrigin(messageOrigin.current),
       ),
     [],
@@ -92,7 +79,7 @@ export default function PluginPage() {
         return;
       messageOrigin.current = event.origin;
       const message = isRecord(event.data) ? event.data : null;
-      if (!message || message.channel !== CHANNEL) return;
+      if (!message || message.channel !== PLUGIN_PAGE_CHANNEL) return;
       if (message.kind === 'ready') {
         sendContext();
         return;

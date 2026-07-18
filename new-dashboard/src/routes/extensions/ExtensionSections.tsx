@@ -286,55 +286,21 @@ export function ComponentsSection() {
       <header className="component-panel__title">
         <h2>{e('tabs.handlersOperation')}</h2>
       </header>
-      <nav className="component-panel__tabs">
-        <button aria-pressed={tab === 'commands'} onClick={() => setTab('commands')} type="button">
-          <MdiIcon name="mdi-console-line" />
-          {c('type.command')}
-        </button>
-        <button aria-pressed={tab === 'tools'} onClick={() => setTab('tools')} type="button">
-          <MdiIcon name="mdi-function-variant" />
-          {u('functionTools.title')}
-        </button>
-      </nav>
-      {tab === 'commands' ? (
-        <div className="component-panel__filters">
-          <label>
-            <span>{c('filters.byPlugin')}</span>
-            <select onChange={(event) => setPluginFilter(event.target.value)} value={pluginFilter}>
-              <option value="all">{c('filters.all')}</option>
-              {plugins.map((plugin) => (
-                <option key={plugin}>{plugin}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>{c('filters.byType')}</span>
-            <select onChange={(event) => setTypeFilter(event.target.value)} value={typeFilter}>
-              <option value="all">{c('filters.all')}</option>
-              <option value="group">{c('type.group')}</option>
-              <option value="command">{c('type.command')}</option>
-              <option value="sub_command">{c('type.subCommand')}</option>
-            </select>
-          </label>
-          <label>
-            <span>{c('filters.byPermission')}</span>
-            <select onChange={(event) => setPermissionFilter(event.target.value)} value={permissionFilter}>
-              <option value="all">{c('filters.all')}</option>
-              <option value="everyone">{c('permission.everyone')}</option>
-              <option value="admin">{c('permission.admin')}</option>
-            </select>
-          </label>
-          <label>
-            <span>{c('filters.byStatus')}</span>
-            <select onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-              <option value="all">{c('filters.all')}</option>
-              <option value="enabled">{c('filters.enabled')}</option>
-              <option value="disabled">{c('filters.disabled')}</option>
-              <option value="conflict">{c('filters.conflict')}</option>
-            </select>
-          </label>
-        </div>
-      ) : null}
+      <ComponentTabs onChange={setTab} tab={tab} tCommand={c} tTool={u} />
+      {tab === 'commands' && (
+        <CommandFilters
+          onPermissionChange={setPermissionFilter}
+          onPluginChange={setPluginFilter}
+          onStatusChange={setStatusFilter}
+          onTypeChange={setTypeFilter}
+          permission={permissionFilter}
+          plugin={pluginFilter}
+          plugins={plugins}
+          status={statusFilter}
+          t={c}
+          type={typeFilter}
+        />
+      )}
       <div className="component-panel__toolbar">
         <label>
           <MdiIcon name="mdi-magnify" />
@@ -393,19 +359,7 @@ export function ComponentsSection() {
           )}
         </div>
       </div>
-      {tab === 'commands' && summary.conflicts > 0 && (
-        <div className="component-panel__conflict">
-          <MdiIcon name="mdi-alert-circle" />
-          <div>
-            <strong>{c('conflictAlert.title')}</strong>
-            <p>{c('conflictAlert.description', { count: summary.conflicts })}</p>
-            <small>
-              <MdiIcon name="mdi-lightbulb-outline" />
-              {c('conflictAlert.hint')}
-            </small>
-          </div>
-        </div>
-      )}
+      {tab === 'commands' && summary.conflicts > 0 && <CommandConflictAlert count={summary.conflicts} t={c} />}
       <SectionState error={error} loading={loading} />
       {!loading && (
         <div className="component-panel__table">
@@ -475,37 +429,14 @@ export function ComponentsSection() {
               {tab === 'commands' && <p>{c('empty.noCommandsDesc')}</p>}
             </div>
           )}
-          <footer>
-            <label>
-              {t('core.common.itemsPerPage')}:{' '}
-              <select onChange={(event) => setPageSize(Number(event.target.value))} value={pageSize}>
-                <option>10</option>
-                <option>25</option>
-                <option>50</option>
-              </select>
-            </label>
-            <span>
-              {rows.length
-                ? t('core.common.paginationRange', {
-                    from: (page - 1) * pageSize + 1,
-                    to: Math.min(page * pageSize, rows.length),
-                    total: rows.length,
-                  })
-                : t('core.common.paginationRange', { from: 0, to: 0, total: 0 })}
-            </span>
-            <button disabled={page <= 1} onClick={() => setPage(1)} type="button">
-              <MdiIcon name="mdi-page-first" />
-            </button>
-            <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">
-              <MdiIcon name="mdi-chevron-left" />
-            </button>
-            <button disabled={page >= pages} onClick={() => setPage((value) => value + 1)} type="button">
-              <MdiIcon name="mdi-chevron-right" />
-            </button>
-            <button disabled={page >= pages} onClick={() => setPage(pages)} type="button">
-              <MdiIcon name="mdi-page-last" />
-            </button>
-          </footer>
+          <ComponentPagination
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            page={page}
+            pageSize={pageSize}
+            pages={pages}
+            total={rows.length}
+          />
         </div>
       )}
       <RenameCommandDialog
@@ -526,6 +457,160 @@ export function ComponentsSection() {
 }
 
 type ModuleText = (key: string, options?: Record<string, unknown>) => string;
+
+function ComponentTabs({
+  onChange,
+  tab,
+  tCommand,
+  tTool,
+}: {
+  onChange: (tab: 'commands' | 'tools') => void;
+  tab: 'commands' | 'tools';
+  tCommand: ModuleText;
+  tTool: ModuleText;
+}) {
+  return (
+    <nav className="component-panel__tabs">
+      <button aria-pressed={tab === 'commands'} onClick={() => onChange('commands')} type="button">
+        <MdiIcon name="mdi-console-line" />
+        {tCommand('type.command')}
+      </button>
+      <button aria-pressed={tab === 'tools'} onClick={() => onChange('tools')} type="button">
+        <MdiIcon name="mdi-function-variant" />
+        {tTool('functionTools.title')}
+      </button>
+    </nav>
+  );
+}
+
+function ComponentPagination({
+  onPageChange,
+  onPageSizeChange,
+  page,
+  pageSize,
+  pages,
+  total,
+}: {
+  onPageChange: Dispatch<SetStateAction<number>>;
+  onPageSizeChange: (size: number) => void;
+  page: number;
+  pageSize: number;
+  pages: number;
+  total: number;
+}) {
+  const { t } = useTranslation();
+  return (
+    <footer>
+      <label>
+        {t('core.common.itemsPerPage')}:{' '}
+        <select onChange={(event) => onPageSizeChange(Number(event.target.value))} value={pageSize}>
+          <option>10</option>
+          <option>25</option>
+          <option>50</option>
+        </select>
+      </label>
+      <span>
+        {t('core.common.paginationRange', {
+          from: total ? (page - 1) * pageSize + 1 : 0,
+          to: total ? Math.min(page * pageSize, total) : 0,
+          total,
+        })}
+      </span>
+      <button disabled={page <= 1} onClick={() => onPageChange(1)} type="button">
+        <MdiIcon name="mdi-page-first" />
+      </button>
+      <button disabled={page <= 1} onClick={() => onPageChange((value) => value - 1)} type="button">
+        <MdiIcon name="mdi-chevron-left" />
+      </button>
+      <button disabled={page >= pages} onClick={() => onPageChange((value) => value + 1)} type="button">
+        <MdiIcon name="mdi-chevron-right" />
+      </button>
+      <button disabled={page >= pages} onClick={() => onPageChange(pages)} type="button">
+        <MdiIcon name="mdi-page-last" />
+      </button>
+    </footer>
+  );
+}
+
+function CommandConflictAlert({ count, t }: { count: number; t: ModuleText }) {
+  return (
+    <div className="component-panel__conflict">
+      <MdiIcon name="mdi-alert-circle" />
+      <div>
+        <strong>{t('conflictAlert.title')}</strong>
+        <p>{t('conflictAlert.description', { count })}</p>
+        <small>
+          <MdiIcon name="mdi-lightbulb-outline" />
+          {t('conflictAlert.hint')}
+        </small>
+      </div>
+    </div>
+  );
+}
+
+function CommandFilters({
+  onPermissionChange,
+  onPluginChange,
+  onStatusChange,
+  onTypeChange,
+  permission,
+  plugin,
+  plugins,
+  status,
+  t,
+  type,
+}: {
+  onPermissionChange: (value: string) => void;
+  onPluginChange: (value: string) => void;
+  onStatusChange: (value: string) => void;
+  onTypeChange: (value: string) => void;
+  permission: string;
+  plugin: string;
+  plugins: string[];
+  status: string;
+  t: ModuleText;
+  type: string;
+}) {
+  return (
+    <div className="component-panel__filters">
+      <label>
+        <span>{t('filters.byPlugin')}</span>
+        <select onChange={(event) => onPluginChange(event.target.value)} value={plugin}>
+          <option value="all">{t('filters.all')}</option>
+          {plugins.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>{t('filters.byType')}</span>
+        <select onChange={(event) => onTypeChange(event.target.value)} value={type}>
+          <option value="all">{t('filters.all')}</option>
+          <option value="group">{t('type.group')}</option>
+          <option value="command">{t('type.command')}</option>
+          <option value="sub_command">{t('type.subCommand')}</option>
+        </select>
+      </label>
+      <label>
+        <span>{t('filters.byPermission')}</span>
+        <select onChange={(event) => onPermissionChange(event.target.value)} value={permission}>
+          <option value="all">{t('filters.all')}</option>
+          <option value="everyone">{t('permission.everyone')}</option>
+          <option value="admin">{t('permission.admin')}</option>
+        </select>
+      </label>
+      <label>
+        <span>{t('filters.byStatus')}</span>
+        <select onChange={(event) => onStatusChange(event.target.value)} value={status}>
+          <option value="all">{t('filters.all')}</option>
+          <option value="enabled">{t('filters.enabled')}</option>
+          <option value="disabled">{t('filters.disabled')}</option>
+          <option value="conflict">{t('filters.conflict')}</option>
+        </select>
+      </label>
+    </div>
+  );
+}
 
 function CommandRow({
   expanded,
@@ -1250,24 +1335,7 @@ export function McpSection() {
           );
         })}
       </div>
-      <div className="legacy-fab-stack">
-        <button
-          aria-label={m('mcpServers.buttons.sync')}
-          onClick={() => setSyncOpen(true)}
-          title={m('mcpServers.buttons.sync')}
-          type="button"
-        >
-          <MdiIcon name="mdi-sync" />
-        </button>
-        <button
-          aria-label={m('mcpServers.buttons.add')}
-          onClick={() => open()}
-          title={m('mcpServers.buttons.add')}
-          type="button"
-        >
-          <MdiIcon name="mdi-plus" />
-        </button>
-      </div>
+      <McpFloatingActions onAdd={() => open()} onSync={() => setSyncOpen(true)} t={m} />
       <Dialog
         onOpenChange={(openValue) => !openValue && setEditing(null)}
         open={editing !== null}
@@ -1391,11 +1459,33 @@ export function McpSection() {
   );
 }
 
+function McpFloatingActions({ onAdd, onSync, t }: { onAdd: () => void; onSync: () => void; t: ModuleText }) {
+  return (
+    <div className="legacy-fab-stack">
+      <button
+        aria-label={t('mcpServers.buttons.sync')}
+        onClick={onSync}
+        title={t('mcpServers.buttons.sync')}
+        type="button"
+      >
+        <MdiIcon name="mdi-sync" />
+      </button>
+      <button
+        aria-label={t('mcpServers.buttons.add')}
+        onClick={onAdd}
+        title={t('mcpServers.buttons.add')}
+        type="button"
+      >
+        <MdiIcon name="mdi-plus" />
+      </button>
+    </div>
+  );
+}
+
 export function SkillsSection() {
   const { downloadBlob } = useBrowserCapabilities();
   const { t } = useTranslation();
   const e = (key: string, options?: Record<string, unknown>) => t(`features.extension.${key}`, options);
-  const input = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<JsonObject[]>([]);
   const [runtime, setRuntime] = useState('local');
   const [sandboxReady, setSandboxReady] = useState(true);
@@ -1407,7 +1497,6 @@ export function SkillsSection() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadItems, setUploadItems] = useState<SkillUploadItem[]>([]);
-  const [dragging, setDragging] = useState(false);
   const uploadId = useRef(0);
   const [editor, setEditor] = useState<SkillEditorState | null>(null);
   const confirmDiscard = useUnsavedChangesGuard(Boolean(editor?.dirty), {
@@ -1492,19 +1581,17 @@ export function SkillsSection() {
       else next.delete(name);
       return next;
     });
-  const sourceType = (item: JsonObject) => String(item.source_type || 'local_only');
-  const readonly = (item: JsonObject) => ['sandbox_only', 'plugin'].includes(sourceType(item));
   const sourceLabel = (item: JsonObject) =>
-    sourceType(item) === 'plugin'
+    skillSourceType(item) === 'plugin'
       ? e('skills.sourcePlugin', { plugin: String(item.source_label || item.plugin_name || '') })
-      : sourceType(item) === 'sandbox_only'
+      : skillSourceType(item) === 'sandbox_only'
         ? e('skills.sourceSandboxOnly')
-        : sourceType(item) === 'both'
+        : skillSourceType(item) === 'both'
           ? e('skills.sourceBoth')
           : e('skills.sourceLocalOnly');
   const toggle = async (item: JsonObject) => {
     const name = recordId(item, 'name', 'skill_name', 'id');
-    if (sourceType(item) === 'sandbox_only') {
+    if (skillSourceType(item) === 'sandbox_only') {
       toast.warning(e('skills.sandboxPresetReadonly'));
       return;
     }
@@ -1523,8 +1610,8 @@ export function SkillsSection() {
   };
   const remove = async (item: JsonObject) => {
     const name = recordId(item, 'name', 'skill_name', 'id');
-    if (readonly(item)) {
-      toast.warning(e(sourceType(item) === 'plugin' ? 'skills.pluginReadonly' : 'skills.sandboxPresetReadonly'));
+    if (isReadonlySkill(item)) {
+      toast.warning(e(skillSourceType(item) === 'plugin' ? 'skills.pluginReadonly' : 'skills.sandboxPresetReadonly'));
       return;
     }
     if (!(await confirmAction({ danger: true, title: e('skills.deleteTitle'), message: e('skills.deleteMessage') })))
@@ -1543,8 +1630,8 @@ export function SkillsSection() {
   };
   const download = async (item: JsonObject) => {
     const name = recordId(item, 'name', 'skill_name', 'id');
-    if (readonly(item)) {
-      toast.warning(e(sourceType(item) === 'plugin' ? 'skills.pluginReadonly' : 'skills.sandboxPresetReadonly'));
+    if (isReadonlySkill(item)) {
+      toast.warning(e(skillSourceType(item) === 'plugin' ? 'skills.pluginReadonly' : 'skills.sandboxPresetReadonly'));
       return;
     }
     setItemBusy(name, true);
@@ -1688,7 +1775,7 @@ export function SkillsSection() {
     }
   };
   const openEditor = async (item: JsonObject) => {
-    if (sourceType(item) === 'sandbox_only') {
+    if (skillSourceType(item) === 'sandbox_only') {
       toast.warning(e('skills.sandboxPresetReadonly'));
       return;
     }
@@ -1733,259 +1820,55 @@ export function SkillsSection() {
   };
   return (
     <section className="extension-section legacy-resource-page skills-page-react">
-      {neoEnabled && (
-        <nav className="skills-mode">
-          <button aria-pressed={mode === 'local'} onClick={() => setMode('local')} type="button">
-            {e('skills.modeLocal')}
-          </button>
-          <button aria-pressed={mode === 'neo'} onClick={() => setMode('neo')} type="button">
-            {e('skills.modeNeo')}
-          </button>
-        </nav>
-      )}
+      {neoEnabled && <SkillsModeTabs mode={mode} onChange={setMode} t={e} />}
       {mode === 'local' ? (
-        <>
-          {runtime === 'sandbox' && !sandboxReady && (
-            <div className="extension-warning is-info">
-              <MdiIcon name="mdi-information-outline" />
-              {e('skills.sandboxDiscoveryPending')}
-            </div>
-          )}
-          <SectionState error={error} loading={loading} />
-          {!loading && !items.length && (
-            <div className="legacy-resource-empty">
-              <MdiIcon name="mdi-folder-open" />
-              <p>{e('skills.empty')}</p>
-              <small>{e('skills.emptyHint')}</small>
-            </div>
-          )}
-          <div className="legacy-resource-list">
-            {items.map((item, index) => {
-              const name = recordId(item, 'name', 'skill_name', 'id') || `skill-${index}`;
-              const active = (item.active ?? item.enabled) !== false;
-              return (
-                <article className="legacy-resource-item" key={name} onClick={() => void openEditor(item)}>
-                  <div className="legacy-resource-item__content">
-                    <header>
-                      <h3>{name}</h3>
-                      <span className={`skill-source is-${sourceType(item)}`}>{sourceLabel(item)}</span>
-                    </header>
-                    <p>{String(item.description || e('skills.noDescription'))}</p>
-                    <small>
-                      <MdiIcon name="mdi-file-document" />
-                      {e('skills.path')}: {String(item.path || '')}
-                    </small>
-                  </div>
-                  <div className="legacy-resource-item__actions">
-                    <button
-                      aria-label={e('skills.download')}
-                      disabled={busy.has(name) || readonly(item)}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void download(item);
-                      }}
-                      type="button"
-                    >
-                      <MdiIcon name="mdi-download-outline" />
-                    </button>
-                    <button
-                      aria-label={t('core.common.itemCard.delete')}
-                      disabled={busy.has(name) || readonly(item)}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void remove(item);
-                      }}
-                      type="button"
-                    >
-                      <MdiIcon name="mdi-delete-outline" />
-                    </button>
-                    <label className="config-toggle" onClick={(event) => event.stopPropagation()}>
-                      <input
-                        checked={active}
-                        disabled={busy.has(name) || sourceType(item) === 'sandbox_only'}
-                        onChange={() => void toggle(item)}
-                        type="checkbox"
-                      />
-                    </label>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </>
+        <LocalSkillsList
+          busy={busy}
+          error={error}
+          isReadonly={isReadonlySkill}
+          items={items}
+          loading={loading}
+          onDelete={remove}
+          onDownload={download}
+          onOpen={openEditor}
+          onToggle={toggle}
+          runtime={runtime}
+          sandboxReady={sandboxReady}
+          sourceLabel={sourceLabel}
+          sourceType={skillSourceType}
+          t={e}
+        />
       ) : (
-        <NeoSkills
+        <NeoSkillsContent
           candidates={neoCandidates}
           filters={neoFilters}
           loading={neoLoading}
-          onCandidateDelete={(item) =>
-            void neoAction(
-              () => deleteNeoSkillCandidate({ body: { candidate_id: String(item.id), reason: 'deleted_from_webui' } }),
-              'skills.neoDeleteSuccess',
-              'skills.neoDeleteFailed',
-            )
-          }
-          onEvaluate={(item, passed) =>
-            void neoAction(
-              () =>
-                evaluateNeoSkillCandidate({
-                  body: {
-                    candidate_id: String(item.id),
-                    passed,
-                    score: passed ? 1 : 0,
-                    report: passed ? 'approved_from_webui' : 'rejected_from_webui',
-                  },
-                }),
-              'skills.neoEvaluateSuccess',
-              'skills.neoEvaluateFailed',
-            )
-          }
+          onAction={neoAction}
           onFilters={setNeoFilters}
-          onPayload={async (item) => {
-            try {
-              const response = await getNeoSkillPayload({ query: { payload_ref: String(item.payload_ref) } });
-              setPayload(JSON.stringify(responseData(response), null, 2));
-            } catch (cause) {
-              toast.error(errorMessage(cause, e('skills.neoPayloadFailed')));
-            }
-          }}
-          onPromote={(item, stage) =>
-            void neoAction(
-              () => promoteNeoSkillCandidate({ body: { candidate_id: String(item.id), stage, sync_to_local: true } }),
-              'skills.neoPromoteSuccess',
-              'skills.neoPromoteFailed',
-              stage === 'stable',
-            )
-          }
-          onReleaseDelete={(item) =>
-            void neoAction(
-              () => deleteNeoSkillRelease({ body: { release_id: String(item.id), reason: 'deleted_from_webui' } }),
-              'skills.neoDeleteSuccess',
-              'skills.neoDeleteFailed',
-            )
-          }
-          onReleaseLifecycle={(item) =>
-            void neoAction(
-              () => rollbackNeoSkillRelease({ body: { release_id: String(item.id) } }),
-              item.is_active ? 'skills.neoDeactivateSuccess' : 'skills.neoRollbackSuccess',
-              item.is_active ? 'skills.neoDeactivateFailed' : 'skills.neoRollbackFailed',
-            )
-          }
-          onSync={(item) =>
-            void neoAction(
-              () => syncNeoSkillRelease({ body: { release_id: String(item.id) } }),
-              'skills.neoSyncSuccess',
-              'skills.neoSyncFailed',
-              true,
-            )
-          }
+          onPayload={setPayload}
           releases={neoReleases}
           t={e}
         />
       )}
-      <div className="legacy-fab-stack">
-        <button
-          aria-label={e('skills.refresh')}
-          onClick={() => void (mode === 'neo' ? loadNeo() : load())}
-          title={e('skills.refresh')}
-          type="button"
-        >
-          <MdiIcon name="mdi-refresh" />
-        </button>
-        {mode === 'local' && (
-          <button
-            aria-label={e('skills.upload')}
-            onClick={() => setUploadOpen(true)}
-            title={e('skills.upload')}
-            type="button"
-          >
-            <MdiIcon name="mdi-upload" />
-          </button>
-        )}
-      </div>
-      <Dialog
-        onOpenChange={(openValue) => {
-          if (!uploading) {
-            setUploadOpen(openValue);
-            if (!openValue) setUploadItems([]);
-          }
+      <SkillsFloatingActions
+        mode={mode}
+        onRefresh={() => (mode === 'neo' ? loadNeo() : load())}
+        onUpload={() => setUploadOpen(true)}
+        t={e}
+      />
+      <SkillUploadDialog
+        items={uploadItems}
+        onAddFiles={addFiles}
+        onClose={() => {
+          setUploadOpen(false);
+          setUploadItems([]);
         }}
+        onRemove={(id) => setUploadItems((current) => current.filter((item) => item.id !== id))}
+        onUpload={upload}
         open={uploadOpen}
-        title={e('skills.uploadDialogTitle')}
-      >
-        <div className="skills-upload">
-          <p>{e('skills.uploadHint')}</p>
-          <div className="skills-upload__note">
-            <MdiIcon name="mdi-information-outline" />
-            {e('skills.structureRequirement')}
-          </div>
-          <div className="skills-upload__abilities">
-            <span>
-              <MdiIcon name="mdi-layers-outline" />
-              {e('skills.abilityMultiple')}
-            </span>
-            <span>
-              <MdiIcon name="mdi-shield-check-outline" />
-              {e('skills.abilityValidate')}
-            </span>
-            <span>
-              <MdiIcon name="mdi-skip-next-circle-outline" />
-              {e('skills.abilitySkip')}
-            </span>
-          </div>
-          <div
-            className={`skills-dropzone-react ${dragging ? 'is-dragging' : ''}`}
-            onClick={() => input.current?.click()}
-            onDragLeave={() => setDragging(false)}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragging(true);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              addFiles(Array.from(event.dataTransfer.files));
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            <MdiIcon name="mdi-folder-zip-outline" />
-            <strong>{e('skills.dropzoneTitle')}</strong>
-            <span>{e('skills.dropzoneAction')}</span>
-            <small>{e('skills.dropzoneHint')}</small>
-            <input
-              accept=".zip"
-              hidden
-              multiple
-              onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                addFiles(Array.from(event.target.files || []));
-                event.target.value = '';
-              }}
-              ref={input}
-              type="file"
-            />
-          </div>
-          <SkillUploadList
-            items={uploadItems}
-            onRemove={(id) => setUploadItems((current) => current.filter((item) => item.id !== id))}
-            t={e}
-            uploading={uploading}
-          />
-        </div>
-        <div className="dialog-actions">
-          <button disabled={uploading} onClick={() => setUploadOpen(false)} type="button">
-            {e('skills.cancel')}
-          </button>
-          <button
-            className="button--primary"
-            disabled={uploading || !uploadItems.some((item) => item.status === 'waiting' || item.status === 'error')}
-            onClick={() => void upload()}
-            type="button"
-          >
-            {e('skills.confirmUpload')}
-          </button>
-        </div>
-      </Dialog>
+        t={e}
+        uploading={uploading}
+      />
       <SkillEditor
         editor={editor}
         onClose={closeEditor}
@@ -1995,20 +1878,383 @@ export function SkillsSection() {
         setEditor={setEditor}
         t={e}
       />
-      <Dialog
-        onOpenChange={(openValue) => !openValue && setPayload('')}
-        open={Boolean(payload)}
-        title={e('skills.neoPayloadTitle')}
-      >
-        <pre className="skills-payload">{payload}</pre>
-        <div className="dialog-actions">
-          <button onClick={() => setPayload('')} type="button">
-            {e('skills.cancel')}
-          </button>
-        </div>
-      </Dialog>
+      <SkillsPayloadDialog onClose={() => setPayload('')} payload={payload} t={e} />
     </section>
   );
+}
+
+function SkillsModeTabs({
+  mode,
+  onChange,
+  t,
+}: {
+  mode: 'local' | 'neo';
+  onChange: (mode: 'local' | 'neo') => void;
+  t: ModuleText;
+}) {
+  return (
+    <nav className="skills-mode">
+      <button aria-pressed={mode === 'local'} onClick={() => onChange('local')} type="button">
+        {t('skills.modeLocal')}
+      </button>
+      <button aria-pressed={mode === 'neo'} onClick={() => onChange('neo')} type="button">
+        {t('skills.modeNeo')}
+      </button>
+    </nav>
+  );
+}
+
+function SkillsFloatingActions({
+  mode,
+  onRefresh,
+  onUpload,
+  t,
+}: {
+  mode: 'local' | 'neo';
+  onRefresh: () => Promise<void>;
+  onUpload: () => void;
+  t: ModuleText;
+}) {
+  return (
+    <div className="legacy-fab-stack">
+      <button
+        aria-label={t('skills.refresh')}
+        onClick={() => void onRefresh()}
+        title={t('skills.refresh')}
+        type="button"
+      >
+        <MdiIcon name="mdi-refresh" />
+      </button>
+      {mode === 'local' && (
+        <button aria-label={t('skills.upload')} onClick={onUpload} title={t('skills.upload')} type="button">
+          <MdiIcon name="mdi-upload" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SkillsPayloadDialog({ onClose, payload, t }: { onClose: () => void; payload: string; t: ModuleText }) {
+  return (
+    <Dialog onOpenChange={(open) => !open && onClose()} open={Boolean(payload)} title={t('skills.neoPayloadTitle')}>
+      <pre className="skills-payload">{payload}</pre>
+      <div className="dialog-actions">
+        <button onClick={onClose} type="button">
+          {t('skills.cancel')}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+type NeoAction = (
+  action: () => Promise<unknown>,
+  success: string,
+  failure: string,
+  refreshLocal?: boolean,
+) => Promise<void>;
+
+function NeoSkillsContent({
+  candidates,
+  filters,
+  loading,
+  onAction,
+  onFilters,
+  onPayload,
+  releases,
+  t,
+}: {
+  candidates: JsonObject[];
+  filters: { skillKey: string; stage: string; status: string };
+  loading: boolean;
+  onAction: NeoAction;
+  onFilters: Dispatch<SetStateAction<{ skillKey: string; stage: string; status: string }>>;
+  onPayload: (payload: string) => void;
+  releases: JsonObject[];
+  t: ModuleText;
+}) {
+  const showPayload = async (item: JsonObject) => {
+    try {
+      const response = await getNeoSkillPayload({ query: { payload_ref: String(item.payload_ref) } });
+      onPayload(JSON.stringify(responseData(response), null, 2));
+    } catch (cause) {
+      toast.error(errorMessage(cause, t('skills.neoPayloadFailed')));
+    }
+  };
+  return (
+    <NeoSkills
+      candidates={candidates}
+      filters={filters}
+      loading={loading}
+      onCandidateDelete={(item) =>
+        void onAction(
+          () => deleteNeoSkillCandidate({ body: { candidate_id: String(item.id), reason: 'deleted_from_webui' } }),
+          'skills.neoDeleteSuccess',
+          'skills.neoDeleteFailed',
+        )
+      }
+      onEvaluate={(item, passed) =>
+        void onAction(
+          () =>
+            evaluateNeoSkillCandidate({
+              body: {
+                candidate_id: String(item.id),
+                passed,
+                score: passed ? 1 : 0,
+                report: passed ? 'approved_from_webui' : 'rejected_from_webui',
+              },
+            }),
+          'skills.neoEvaluateSuccess',
+          'skills.neoEvaluateFailed',
+        )
+      }
+      onFilters={onFilters}
+      onPayload={(item) => void showPayload(item)}
+      onPromote={(item, stage) =>
+        void onAction(
+          () => promoteNeoSkillCandidate({ body: { candidate_id: String(item.id), stage, sync_to_local: true } }),
+          'skills.neoPromoteSuccess',
+          'skills.neoPromoteFailed',
+          stage === 'stable',
+        )
+      }
+      onReleaseDelete={(item) =>
+        void onAction(
+          () => deleteNeoSkillRelease({ body: { release_id: String(item.id), reason: 'deleted_from_webui' } }),
+          'skills.neoDeleteSuccess',
+          'skills.neoDeleteFailed',
+        )
+      }
+      onReleaseLifecycle={(item) =>
+        void onAction(
+          () => rollbackNeoSkillRelease({ body: { release_id: String(item.id) } }),
+          item.is_active ? 'skills.neoDeactivateSuccess' : 'skills.neoRollbackSuccess',
+          item.is_active ? 'skills.neoDeactivateFailed' : 'skills.neoRollbackFailed',
+        )
+      }
+      onSync={(item) =>
+        void onAction(
+          () => syncNeoSkillRelease({ body: { release_id: String(item.id) } }),
+          'skills.neoSyncSuccess',
+          'skills.neoSyncFailed',
+          true,
+        )
+      }
+      releases={releases}
+      t={t}
+    />
+  );
+}
+
+function SkillUploadDialog({
+  items,
+  onAddFiles,
+  onClose,
+  onRemove,
+  onUpload,
+  open,
+  t,
+  uploading,
+}: {
+  items: SkillUploadItem[];
+  onAddFiles: (files: File[]) => void;
+  onClose: () => void;
+  onRemove: (id: string) => void;
+  onUpload: () => Promise<void>;
+  open: boolean;
+  t: ModuleText;
+  uploading: boolean;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  return (
+    <Dialog
+      onOpenChange={(nextOpen) => !nextOpen && !uploading && onClose()}
+      open={open}
+      title={t('skills.uploadDialogTitle')}
+    >
+      <div className="skills-upload">
+        <p>{t('skills.uploadHint')}</p>
+        <div className="skills-upload__note">
+          <MdiIcon name="mdi-information-outline" />
+          {t('skills.structureRequirement')}
+        </div>
+        <div className="skills-upload__abilities">
+          <span>
+            <MdiIcon name="mdi-layers-outline" />
+            {t('skills.abilityMultiple')}
+          </span>
+          <span>
+            <MdiIcon name="mdi-shield-check-outline" />
+            {t('skills.abilityValidate')}
+          </span>
+          <span>
+            <MdiIcon name="mdi-skip-next-circle-outline" />
+            {t('skills.abilitySkip')}
+          </span>
+        </div>
+        <div
+          className={`skills-dropzone-react ${dragging ? 'is-dragging' : ''}`}
+          onClick={() => input.current?.click()}
+          onDragLeave={() => setDragging(false)}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            onAddFiles(Array.from(event.dataTransfer.files));
+          }}
+          role="button"
+          tabIndex={0}
+        >
+          <MdiIcon name="mdi-folder-zip-outline" />
+          <strong>{t('skills.dropzoneTitle')}</strong>
+          <span>{t('skills.dropzoneAction')}</span>
+          <small>{t('skills.dropzoneHint')}</small>
+          <input
+            accept=".zip"
+            hidden
+            multiple
+            onChange={(event: ChangeEvent<HTMLInputElement>) => {
+              onAddFiles(Array.from(event.target.files || []));
+              event.target.value = '';
+            }}
+            ref={input}
+            type="file"
+          />
+        </div>
+        <SkillUploadList items={items} onRemove={onRemove} t={t} uploading={uploading} />
+      </div>
+      <div className="dialog-actions">
+        <button disabled={uploading} onClick={onClose} type="button">
+          {t('skills.cancel')}
+        </button>
+        <button
+          className="button--primary"
+          disabled={uploading || !items.some((item) => item.status === 'waiting' || item.status === 'error')}
+          onClick={() => void onUpload()}
+          type="button"
+        >
+          {t('skills.confirmUpload')}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+function LocalSkillsList({
+  busy,
+  error,
+  isReadonly,
+  items,
+  loading,
+  onDelete,
+  onDownload,
+  onOpen,
+  onToggle,
+  runtime,
+  sandboxReady,
+  sourceLabel,
+  sourceType,
+  t,
+}: {
+  busy: Set<string>;
+  error: string;
+  isReadonly: (item: JsonObject) => boolean;
+  items: JsonObject[];
+  loading: boolean;
+  onDelete: (item: JsonObject) => Promise<void>;
+  onDownload: (item: JsonObject) => Promise<void>;
+  onOpen: (item: JsonObject) => Promise<void>;
+  onToggle: (item: JsonObject) => Promise<void>;
+  runtime: string;
+  sandboxReady: boolean;
+  sourceLabel: (item: JsonObject) => string;
+  sourceType: (item: JsonObject) => string;
+  t: ModuleText;
+}) {
+  const { t: commonText } = useTranslation();
+  return (
+    <>
+      {runtime === 'sandbox' && !sandboxReady && (
+        <div className="extension-warning is-info">
+          <MdiIcon name="mdi-information-outline" />
+          {t('skills.sandboxDiscoveryPending')}
+        </div>
+      )}
+      <SectionState error={error} loading={loading} />
+      {!loading && !items.length && (
+        <div className="legacy-resource-empty">
+          <MdiIcon name="mdi-folder-open" />
+          <p>{t('skills.empty')}</p>
+          <small>{t('skills.emptyHint')}</small>
+        </div>
+      )}
+      <div className="legacy-resource-list">
+        {items.map((item, index) => {
+          const name = recordId(item, 'name', 'skill_name', 'id') || `skill-${index}`;
+          const active = (item.active ?? item.enabled) !== false;
+          return (
+            <article className="legacy-resource-item" key={name} onClick={() => void onOpen(item)}>
+              <div className="legacy-resource-item__content">
+                <header>
+                  <h3>{name}</h3>
+                  <span className={`skill-source is-${sourceType(item)}`}>{sourceLabel(item)}</span>
+                </header>
+                <p>{String(item.description || t('skills.noDescription'))}</p>
+                <small>
+                  <MdiIcon name="mdi-file-document" />
+                  {t('skills.path')}: {String(item.path || '')}
+                </small>
+              </div>
+              <div className="legacy-resource-item__actions">
+                <button
+                  aria-label={t('skills.download')}
+                  disabled={busy.has(name) || isReadonly(item)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onDownload(item);
+                  }}
+                  type="button"
+                >
+                  <MdiIcon name="mdi-download-outline" />
+                </button>
+                <button
+                  aria-label={commonText('core.common.itemCard.delete')}
+                  disabled={busy.has(name) || isReadonly(item)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onDelete(item);
+                  }}
+                  type="button"
+                >
+                  <MdiIcon name="mdi-delete-outline" />
+                </button>
+                <label className="config-toggle" onClick={(event) => event.stopPropagation()}>
+                  <input
+                    checked={active}
+                    disabled={busy.has(name) || sourceType(item) === 'sandbox_only'}
+                    onChange={() => void onToggle(item)}
+                    type="checkbox"
+                  />
+                </label>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function skillSourceType(item: JsonObject) {
+  return String(item.source_type || 'local_only');
+}
+
+function isReadonlySkill(item: JsonObject) {
+  return ['sandbox_only', 'plugin'].includes(skillSourceType(item));
 }
 
 function apiEnvelope(response: unknown): JsonObject {

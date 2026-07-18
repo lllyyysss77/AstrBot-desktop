@@ -430,118 +430,31 @@ function Documents({
 
   return (
     <section className="knowledge-documents">
-      <div className="knowledge-documents__toolbar">
-        <button className="button--primary" onClick={() => setUploadOpen(true)} type="button">
-          <MdiIcon name="mdi-cloud-upload" />
-          {t('documents.upload')}
-        </button>
-        <label>
-          <MdiIcon name="mdi-magnify" />
-          <input
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
-            placeholder={t('documents.title')}
-            value={search}
-          />
-        </label>
-      </div>
-      {progress && (
-        <div className="knowledge-upload-progress">
-          <MdiIcon className="mdi-spin" name="mdi-loading" />
-          <span>{progress}</span>
-        </div>
-      )}
-      <div className="knowledge-table">
-        <table>
-          <thead>
-            <tr>
-              <th>{t('documents.name')}</th>
-              <th>{t('documents.type')}</th>
-              <th>{t('documents.size')}</th>
-              <th>{t('documents.chunks')}</th>
-              <th>{t('documents.createdAt')}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => {
-              const id = documentId(item);
-              return (
-                <tr key={id}>
-                  <td>
-                    <Link to={`/knowledge-base/${encodeURIComponent(kbId)}/document/${encodeURIComponent(id)}`}>
-                      <MdiIcon name={fileIcon(String(item.file_type || documentName(item)))} />
-                      <span>{documentName(item)}</span>
-                    </Link>
-                  </td>
-                  <td>{String(item.file_type || t('documents.unknownType'))}</td>
-                  <td>{formatFileSize(item.file_size ?? item.size, t('overview.notSet'))}</td>
-                  <td>{chunkCount(item)}</td>
-                  <td>{formatKnowledgeDate(item.created_at, undefined, t('overview.notSet'))}</td>
-                  <td>
-                    <button
-                      aria-label={t('documents.delete')}
-                      className="button--danger"
-                      onClick={() => void remove(item)}
-                      title={t('documents.delete')}
-                      type="button"
-                    >
-                      <MdiIcon name="mdi-delete-outline" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {loading && (
-          <div className="knowledge-table__state">
-            <MdiIcon className="mdi-spin" name="mdi-loading" />
-          </div>
-        )}
-        {!loading && !items.length && (
-          <div className="knowledge-table__state">
-            <MdiIcon name="mdi-file-document-outline" />
-            <span>{t('documents.empty')}</span>
-          </div>
-        )}
-      </div>
-      {total > pageSize && (
-        <div className="pagination">
-          <select
-            onChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setPage(1);
-            }}
-            value={pageSize}
-          >
-            {[10, 20, 50].map((size) => (
-              <option key={size}>{size}</option>
-            ))}
-          </select>
-          <button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} type="button">
-            ‹
-          </button>
-          <span>
-            {page}/{Math.ceil(total / pageSize)}
-          </span>
-          <button disabled={page * pageSize >= total} onClick={() => setPage((value) => value + 1)} type="button">
-            ›
-          </button>
-        </div>
-      )}
+      <KnowledgeDocumentsToolbar
+        onSearchChange={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+        onUpload={() => setUploadOpen(true)}
+        progress={progress}
+        search={search}
+        t={t}
+      />
+      <KnowledgeDocumentList
+        items={items}
+        kbId={kbId}
+        loading={loading}
+        onDelete={remove}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        page={page}
+        pageSize={pageSize}
+        t={t}
+        total={total}
+      />
       <Dialog onOpenChange={setUploadOpen} open={uploadOpen} title={t('upload.title')}>
         <div className="knowledge-upload">
-          <nav>
-            <button aria-pressed={mode === 'file'} onClick={() => setMode('file')} type="button">
-              {t('upload.fileUpload')}
-            </button>
-            <button aria-pressed={mode === 'url'} onClick={() => setMode('url')} type="button">
-              {t('upload.fromUrl')} <small>{t('upload.beta')}</small>
-            </button>
-          </nav>
+          <KnowledgeUploadModeTabs mode={mode} onChange={setMode} t={t} />
           {mode === 'file' ? (
             <>
               <button
@@ -675,31 +588,243 @@ function Documents({
               value={uploadSettings.max_retries}
             />
           </div>
-          <DialogActions>
-            <DialogCancel disabled={uploading}>{t('upload.cancel')}</DialogCancel>
-            <Button
-              disabled={uploading || (mode === 'file' ? !files.length : !url.trim())}
-              onClick={() => void upload()}
-              variant="primary"
-            >
-              {uploading ? t('documents.uploading') : t('upload.submit')}
-            </Button>
-          </DialogActions>
+          <KnowledgeUploadActions
+            disabled={mode === 'file' ? !files.length : !url.trim()}
+            onUpload={upload}
+            t={t}
+            uploading={uploading}
+          />
         </div>
       </Dialog>
-      <Dialog onOpenChange={setTavilyOpen} open={tavilyOpen} title={t('upload.tavily.configure')}>
-        <label className="knowledge-url-field">
-          {t('upload.tavily.keyLabel')}
-          <input onChange={(event) => setTavilyKey(event.target.value)} type="password" value={tavilyKey} />
-        </label>
-        <DialogActions>
-          <Button onClick={() => setTavilyOpen(false)}>{t('upload.cancel')}</Button>
-          <Button disabled={!tavilyKey.trim()} onClick={() => void saveTavily()} variant="primary">
-            {t('settings.save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <TavilyKeyDialog
+        keyValue={tavilyKey}
+        onChange={setTavilyKey}
+        onClose={() => setTavilyOpen(false)}
+        onSave={saveTavily}
+        open={tavilyOpen}
+        t={t}
+      />
     </section>
+  );
+}
+
+function KnowledgeUploadModeTabs({
+  mode,
+  onChange,
+  t,
+}: {
+  mode: 'file' | 'url';
+  onChange: (mode: 'file' | 'url') => void;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <nav>
+      <button aria-pressed={mode === 'file'} onClick={() => onChange('file')} type="button">
+        {t('upload.fileUpload')}
+      </button>
+      <button aria-pressed={mode === 'url'} onClick={() => onChange('url')} type="button">
+        {t('upload.fromUrl')} <small>{t('upload.beta')}</small>
+      </button>
+    </nav>
+  );
+}
+
+function KnowledgeUploadActions({
+  disabled,
+  onUpload,
+  t,
+  uploading,
+}: {
+  disabled: boolean;
+  onUpload: () => Promise<void>;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  uploading: boolean;
+}) {
+  return (
+    <DialogActions>
+      <DialogCancel disabled={uploading}>{t('upload.cancel')}</DialogCancel>
+      <Button disabled={uploading || disabled} onClick={() => void onUpload()} variant="primary">
+        {uploading ? t('documents.uploading') : t('upload.submit')}
+      </Button>
+    </DialogActions>
+  );
+}
+
+function TavilyKeyDialog({
+  keyValue,
+  onChange,
+  onClose,
+  onSave,
+  open,
+  t,
+}: {
+  keyValue: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => Promise<void>;
+  open: boolean;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <Dialog onOpenChange={(nextOpen) => !nextOpen && onClose()} open={open} title={t('upload.tavily.configure')}>
+      <label className="knowledge-url-field">
+        {t('upload.tavily.keyLabel')}
+        <input onChange={(event) => onChange(event.target.value)} type="password" value={keyValue} />
+      </label>
+      <DialogActions>
+        <Button onClick={onClose}>{t('upload.cancel')}</Button>
+        <Button disabled={!keyValue.trim()} onClick={() => void onSave()} variant="primary">
+          {t('settings.save')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function KnowledgeDocumentsToolbar({
+  onSearchChange,
+  onUpload,
+  progress,
+  search,
+  t,
+}: {
+  onSearchChange: (value: string) => void;
+  onUpload: () => void;
+  progress: string;
+  search: string;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  return (
+    <>
+      <div className="knowledge-documents__toolbar">
+        <button className="button--primary" onClick={onUpload} type="button">
+          <MdiIcon name="mdi-cloud-upload" />
+          {t('documents.upload')}
+        </button>
+        <label>
+          <MdiIcon name="mdi-magnify" />
+          <input
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={t('documents.title')}
+            value={search}
+          />
+        </label>
+      </div>
+      {progress && (
+        <div className="knowledge-upload-progress">
+          <MdiIcon className="mdi-spin" name="mdi-loading" />
+          <span>{progress}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+function KnowledgeDocumentList({
+  items,
+  kbId,
+  loading,
+  onDelete,
+  onPageChange,
+  onPageSizeChange,
+  page,
+  pageSize,
+  t,
+  total,
+}: {
+  items: KnowledgeDocumentDto[];
+  kbId: string;
+  loading: boolean;
+  onDelete: (item: KnowledgeDocumentDto) => Promise<void>;
+  onPageChange: (page: number | ((current: number) => number)) => void;
+  onPageSizeChange: (size: number) => void;
+  page: number;
+  pageSize: number;
+  t: (key: string, options?: Record<string, unknown>) => string;
+  total: number;
+}) {
+  return (
+    <>
+      <div className="knowledge-table">
+        <table>
+          <thead>
+            <tr>
+              <th>{t('documents.name')}</th>
+              <th>{t('documents.type')}</th>
+              <th>{t('documents.size')}</th>
+              <th>{t('documents.chunks')}</th>
+              <th>{t('documents.createdAt')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const id = documentId(item);
+              return (
+                <tr key={id}>
+                  <td>
+                    <Link to={`/knowledge-base/${encodeURIComponent(kbId)}/document/${encodeURIComponent(id)}`}>
+                      <MdiIcon name={fileIcon(String(item.file_type || documentName(item)))} />
+                      <span>{documentName(item)}</span>
+                    </Link>
+                  </td>
+                  <td>{String(item.file_type || t('documents.unknownType'))}</td>
+                  <td>{formatFileSize(item.file_size ?? item.size, t('overview.notSet'))}</td>
+                  <td>{chunkCount(item)}</td>
+                  <td>{formatKnowledgeDate(item.created_at, undefined, t('overview.notSet'))}</td>
+                  <td>
+                    <button
+                      aria-label={t('documents.delete')}
+                      className="button--danger"
+                      onClick={() => void onDelete(item)}
+                      title={t('documents.delete')}
+                      type="button"
+                    >
+                      <MdiIcon name="mdi-delete-outline" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {loading && (
+          <div className="knowledge-table__state">
+            <MdiIcon className="mdi-spin" name="mdi-loading" />
+          </div>
+        )}
+        {!loading && !items.length && (
+          <div className="knowledge-table__state">
+            <MdiIcon name="mdi-file-document-outline" />
+            <span>{t('documents.empty')}</span>
+          </div>
+        )}
+      </div>
+      {total > pageSize && (
+        <div className="pagination">
+          <select
+            onChange={(event) => {
+              onPageSizeChange(Number(event.target.value));
+              onPageChange(1);
+            }}
+            value={pageSize}
+          >
+            {[10, 20, 50].map((size) => (
+              <option key={size}>{size}</option>
+            ))}
+          </select>
+          <button disabled={page <= 1} onClick={() => onPageChange((value) => value - 1)} type="button">
+            ‹
+          </button>
+          <span>
+            {page}/{Math.ceil(total / pageSize)}
+          </span>
+          <button disabled={page * pageSize >= total} onClick={() => onPageChange((value) => value + 1)} type="button">
+            ›
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

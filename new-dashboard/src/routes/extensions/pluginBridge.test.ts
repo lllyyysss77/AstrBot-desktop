@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { validPluginEndpoint } from '@/api/services';
-import { isTrustedPluginMessageOrigin, pluginMessageTargetOrigin } from './PluginPage';
+import { isTrustedPluginMessageOrigin, pluginMessageTargetOrigin } from './pluginBridge';
 
 describe('plugin page bridge endpoint validation', () => {
   it('normalizes a relative plugin endpoint', () => {
