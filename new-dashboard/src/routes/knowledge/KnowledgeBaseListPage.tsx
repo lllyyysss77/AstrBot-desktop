@@ -72,6 +72,9 @@ function ProviderSelect({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const selected = providers.find((provider) => String(provider.id) === value);
+  const portalContainer =
+    triggerRef.current?.closest<HTMLElement>('.headless-dialog__content') ??
+    (typeof document === 'undefined' ? null : document.body);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -117,7 +120,7 @@ function ProviderSelect({
         <MdiIcon name="mdi-chevron-down" />
       </button>
       {open &&
-        typeof document !== 'undefined' &&
+        portalContainer &&
         createPortal(
           <div className="knowledge-provider-select__menu" ref={menuRef} role="listbox" style={menuStyle}>
             {emptyLabel && (
@@ -148,7 +151,7 @@ function ProviderSelect({
               );
             })}
           </div>,
-          document.body,
+          portalContainer,
         )}
     </>
   );

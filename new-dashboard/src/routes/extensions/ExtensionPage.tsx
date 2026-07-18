@@ -500,7 +500,11 @@ function InstalledPlugins() {
           )}
         </label>
       </header>
-      {error && <div className="monitor-error">{error}</div>}
+      {error && (
+        <div className="monitor-error" role="alert">
+          {error}
+        </div>
+      )}
       {failed.length > 0 && (
         <section className="extension-failed">
           <h3>
@@ -538,7 +542,7 @@ function InstalledPlugins() {
         </section>
       )}
       {loading ? (
-        <div className="extension-state">
+        <div aria-label={e('status.loading')} className="extension-state" role="status">
           <MdiIcon className="mdi-spin" name="mdi-loading" />
         </div>
       ) : (

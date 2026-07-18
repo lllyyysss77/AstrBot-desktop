@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogClose } from '@/components/headless/Dialog';
@@ -57,7 +57,16 @@ function ConfirmHost() {
   const { t } = useTranslation();
   const current = useFeedbackStore((state) => state.confirmQueue[0]);
   const resolve = useFeedbackStore((state) => state.resolveConfirmation);
+  const returnFocus = useRef<HTMLElement | null>(null);
   if (!current) return null;
+  if (!returnFocus.current && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement)
+    returnFocus.current = document.activeElement;
+  const resolveCurrent = (confirmed: boolean) => {
+    const target = returnFocus.current;
+    returnFocus.current = null;
+    resolve(current.id, confirmed);
+    window.queueMicrotask(() => target?.focus());
+  };
   const title =
     current.title ?? (current.intent === 'warning' ? t('core.common.warning') : t('core.common.dialog.confirmTitle'));
   const confirmVariant =
@@ -66,17 +75,17 @@ function ConfirmHost() {
     <Dialog
       description={current.message}
       onOpenChange={(open) => {
-        if (!open) resolve(current.id, false);
+        if (!open) resolveCurrent(false);
       }}
       open
       title={title}
     >
       <DialogActions className="global-confirm__actions">
-        <DialogCancel autoFocus onClick={() => resolve(current.id, false)}>
+        <DialogCancel autoFocus onClick={() => resolveCurrent(false)}>
           {current.cancelLabel ?? t('core.common.cancel')}
         </DialogCancel>
         <DialogClose asChild>
-          <Button onClick={() => resolve(current.id, true)} variant={confirmVariant}>
+          <Button onClick={() => resolveCurrent(true)} variant={confirmVariant}>
             {current.confirmLabel ?? t('core.common.confirm')}
           </Button>
         </DialogClose>

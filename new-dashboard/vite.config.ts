@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   test: {
+    setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
@@ -17,10 +18,10 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.test.{ts,tsx}', 'src/api/generated/**', 'src/main.tsx', 'src/vite-env.d.ts'],
       thresholds: {
-        branches: 25,
-        functions: 35,
-        lines: 35,
-        statements: 35,
+        branches: 58,
+        functions: 43,
+        lines: 38,
+        statements: 38,
       },
     },
   },

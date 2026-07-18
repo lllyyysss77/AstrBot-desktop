@@ -7,6 +7,7 @@ import { routeLayout, routeMigrationManifest, type RouteLayout } from '@/routes/
 import { NotFoundPage } from '@/routes/NotFoundPage';
 import { BlankLayout } from '@/layouts/blank/BlankLayout';
 import { FullLayout } from '@/layouts/full/FullLayout';
+import { coreRouteModuleLoaders } from '@/app/coreRouteModules';
 
 const LoginPage = lazy(() => import('@/routes/auth/LoginPage'));
 const SetupPage = lazy(() => import('@/routes/auth/SetupPage'));
@@ -16,20 +17,21 @@ const StatsPage = lazy(() => import('@/routes/monitoring/StatsPage'));
 const ConsolePage = lazy(() => import('@/routes/monitoring/ConsolePage'));
 const TracePage = lazy(() => import('@/routes/monitoring/TracePage'));
 const ConversationPage = lazy(() => import('@/routes/monitoring/ConversationPage'));
-const SessionManagementPage = lazy(() => import('@/routes/monitoring/SessionManagementPage'));
 const PlatformPage = lazy(() => import('@/routes/configuration/PlatformPage'));
-const ProviderPage = lazy(() => import('@/routes/configuration/ProviderPage'));
 const ConfigPage = lazy(() => import('@/routes/configuration/ConfigPage'));
 const SettingsPage = lazy(() => import('@/routes/configuration/SettingsPage'));
 const PersonaPage = lazy(() => import('@/routes/configuration/PersonaPage'));
 const SubagentPage = lazy(() => import('@/routes/configuration/SubagentPage'));
 const CronPage = lazy(() => import('@/routes/configuration/CronPage'));
-const ExtensionPage = lazy(() => import('@/routes/extensions/ExtensionPage'));
 const PluginPage = lazy(() => import('@/routes/extensions/PluginPage'));
-const KnowledgeBaseListPage = lazy(() => import('@/routes/knowledge/KnowledgeBaseListPage'));
 const KnowledgeBaseDetailPage = lazy(() => import('@/routes/knowledge/KnowledgeBaseDetailPage'));
 const DocumentDetailPage = lazy(() => import('@/routes/knowledge/DocumentDetailPage'));
-const ChatPage = lazy(() => import('@/routes/chat/ChatPage'));
+
+const ChatPage = lazy(coreRouteModuleLoaders['/chat']);
+const ExtensionPage = lazy(coreRouteModuleLoaders['/extension']);
+const KnowledgeBaseListPage = lazy(coreRouteModuleLoaders['/knowledge-base']);
+const ProviderPage = lazy(coreRouteModuleLoaders['/providers']);
+const SessionManagementPage = lazy(coreRouteModuleLoaders['/session-management']);
 
 function RouteLoading() {
   const { t } = useTranslation();

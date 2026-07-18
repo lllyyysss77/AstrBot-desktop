@@ -1962,7 +1962,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
                 retryModels={providers.map((item) => ({ providerId: item.id, model: item.model }))}
                 streaming={sending}
               />
-              {error && <div className="monitor-error">{error}</div>}
+              {error && (
+                <div className="monitor-error" role="alert">
+                  {error}
+                </div>
+              )}
               <div ref={messageEnd} />
             </section>
             {!selectedProject && <footer className="chat-composer chat-composer--v2">{composerNode}</footer>}
