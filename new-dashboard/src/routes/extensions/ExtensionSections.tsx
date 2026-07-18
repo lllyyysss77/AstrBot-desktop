@@ -1255,15 +1255,15 @@ export function McpSection() {
     }
   };
   return (
-    <section className="extension-section legacy-resource-page">
+    <section className="extension-section resource-page">
       <SectionState error={error} loading={loading} />
       {!loading && !items.length && (
-        <div className="legacy-resource-empty">
+        <div className="resource-empty">
           <MdiIcon name="mdi-server-off" />
           <p>{m('mcpServers.empty')}</p>
         </div>
       )}
-      <div className="legacy-resource-list">
+      <div className="resource-list">
         {items.map((item, index) => {
           const name = recordId(item, 'name', 'server_name') || `server-${index}`;
           const itemTools = Array.isArray(item.tools) ? item.tools.map(String) : [];
@@ -1275,8 +1275,8 @@ export function McpSection() {
               ? `${String(item.command)} ${Array.isArray(item.args) ? item.args.map(String).join(' ') : ''}`.trim()
               : m('mcpServers.status.noConfig');
           return (
-            <article className="legacy-resource-item" key={name} onClick={() => open(item)}>
-              <div className="legacy-resource-item__content">
+            <article className="resource-list-item" key={name} onClick={() => open(item)}>
+              <div className="resource-list-item__content">
                 <h3>{name}</h3>
                 <p title={summary}>
                   <MdiIcon
@@ -1294,7 +1294,7 @@ export function McpSection() {
                 </p>
                 {itemTools.length ? (
                   <button
-                    className="legacy-resource-item__tools"
+                    className="resource-list-item__tools"
                     onClick={(event) => {
                       event.stopPropagation();
                       setTools({ name, tools: itemTools });
@@ -1311,7 +1311,7 @@ export function McpSection() {
                   </small>
                 )}
               </div>
-              <div className="legacy-resource-item__actions">
+              <div className="resource-list-item__actions">
                 <button
                   aria-label={m('mcpServers.buttons.delete')}
                   onClick={(event) => {
@@ -1461,7 +1461,7 @@ export function McpSection() {
 
 function McpFloatingActions({ onAdd, onSync, t }: { onAdd: () => void; onSync: () => void; t: ModuleText }) {
   return (
-    <div className="legacy-fab-stack">
+    <div className="resource-fab-stack">
       <button
         aria-label={t('mcpServers.buttons.sync')}
         onClick={onSync}
@@ -1819,7 +1819,7 @@ export function SkillsSection() {
     }
   };
   return (
-    <section className="extension-section legacy-resource-page skills-page-react">
+    <section className="extension-section resource-page skills-page-react">
       {neoEnabled && <SkillsModeTabs mode={mode} onChange={setMode} t={e} />}
       {mode === 'local' ? (
         <LocalSkillsList
@@ -1916,7 +1916,7 @@ function SkillsFloatingActions({
   t: ModuleText;
 }) {
   return (
-    <div className="legacy-fab-stack">
+    <div className="resource-fab-stack">
       <button
         aria-label={t('skills.refresh')}
         onClick={() => void onRefresh()}
@@ -2186,19 +2186,19 @@ function LocalSkillsList({
       )}
       <SectionState error={error} loading={loading} />
       {!loading && !items.length && (
-        <div className="legacy-resource-empty">
+        <div className="resource-empty">
           <MdiIcon name="mdi-folder-open" />
           <p>{t('skills.empty')}</p>
           <small>{t('skills.emptyHint')}</small>
         </div>
       )}
-      <div className="legacy-resource-list">
+      <div className="resource-list">
         {items.map((item, index) => {
           const name = recordId(item, 'name', 'skill_name', 'id') || `skill-${index}`;
           const active = (item.active ?? item.enabled) !== false;
           return (
-            <article className="legacy-resource-item" key={name} onClick={() => void onOpen(item)}>
-              <div className="legacy-resource-item__content">
+            <article className="resource-list-item" key={name} onClick={() => void onOpen(item)}>
+              <div className="resource-list-item__content">
                 <header>
                   <h3>{name}</h3>
                   <span className={`skill-source is-${sourceType(item)}`}>{sourceLabel(item)}</span>
@@ -2209,7 +2209,7 @@ function LocalSkillsList({
                   {t('skills.path')}: {String(item.path || '')}
                 </small>
               </div>
-              <div className="legacy-resource-item__actions">
+              <div className="resource-list-item__actions">
                 <button
                   aria-label={t('skills.download')}
                   disabled={busy.has(name) || isReadonly(item)}

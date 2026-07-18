@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CompatibleApiResponse, AuthSessionResponse } from '@/api/auth';
+import type { AuthSessionResponse } from '@/api/auth';
+import type { CompatibleApiResponse } from '@/api/compat';
 import { legacyUpgradeDetail, normalizeVersion, restartPollDecision, versionsMismatch } from './upgradeRecovery';
 
 function response(legacyFallback: boolean): CompatibleApiResponse<AuthSessionResponse> {

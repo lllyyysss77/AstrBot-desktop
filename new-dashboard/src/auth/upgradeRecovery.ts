@@ -1,5 +1,5 @@
-import type { CompatibleApiResponse, AuthSessionResponse } from '@/api/auth';
-import { recoveryApi } from '@/api/compat';
+import type { AuthSessionResponse } from '@/api/auth';
+import { recoveryApi, type CompatibleApiResponse } from '@/api/compat';
 import { sessionStorageKeys, storageKeys } from '@/config/storageKeys';
 
 export const UPGRADE_RECOVERY_EVENT = 'astrbot-upgrade-recovery';

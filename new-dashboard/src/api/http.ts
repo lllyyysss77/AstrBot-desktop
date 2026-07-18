@@ -110,10 +110,6 @@ export async function apiRequest<T>(
   return payload as ApiEnvelope<T>;
 }
 
-export function isLegacyFallbackError(error: unknown) {
-  return error instanceof ApiError && (error.status === 404 || error.message.toLowerCase().includes('missing api key'));
-}
-
 async function readResponsePayload(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return null;

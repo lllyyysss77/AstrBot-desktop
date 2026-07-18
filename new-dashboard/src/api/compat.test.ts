@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { publicApi, statsApi, updatesApi } from './compat';
+import {
+  compatibilityExitPlan,
+  compatibleRequest,
+  publicApi,
+  shouldFallbackToLegacy,
+  statsApi,
+  updatesApi,
+} from './compat';
+import { ApiError } from './http';
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -59,5 +67,38 @@ describe('legacy-compatible API groups', () => {
       '/api/v1/updates/progress/task%2Fid',
       '/api/update/progress?id=task%2Fid',
     ]);
+  });
+
+  it('only falls back for an unavailable v1 route or the old missing-key response', () => {
+    expect(shouldFallbackToLegacy(new ApiError('Not found', 404, null))).toBe(true);
+    expect(shouldFallbackToLegacy(new ApiError('Missing API key', 400, null))).toBe(true);
+    expect(shouldFallbackToLegacy(new ApiError('Unauthorized', 401, null))).toBe(false);
+    expect(shouldFallbackToLegacy(new ApiError('Server failure', 500, null))).toBe(false);
+    expect(shouldFallbackToLegacy(new TypeError('Network unavailable'))).toBe(false);
+  });
+
+  it('does not hide authorization or server failures with a legacy request', async () => {
+    for (const status of [401, 500]) {
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ message: 'Request failed' }, status));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(compatibleRequest('/api/v1/current', '/api/legacy')).rejects.toMatchObject({ status });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('attaches removal metadata to every runtime compatibility category', () => {
+    expect(compatibilityExitPlan.map(({ id }) => id)).toEqual([
+      'api-endpoint-fallback',
+      'legacy-recovery',
+      'legacy-storage',
+      'response-envelope',
+    ]);
+    expect(
+      compatibilityExitPlan.every(
+        ({ minimumBackendVersion, removalCondition, targetDashboardVersion }) =>
+          minimumBackendVersion && removalCondition && targetDashboardVersion,
+      ),
+    ).toBe(true);
   });
 });

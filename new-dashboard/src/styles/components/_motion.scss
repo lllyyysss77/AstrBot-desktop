@@ -1,4 +1,4 @@
-/* Vue's expand transition equivalent: the content stays mounted so closing animates too. */
+/* Shared expand/collapse transition; content stays mounted so closing animates too. */
 .expand-collapse {
   display: grid;
   grid-template-rows: 0fr;

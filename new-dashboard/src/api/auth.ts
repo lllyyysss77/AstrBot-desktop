@@ -1,4 +1,4 @@
-import { apiRequest, isLegacyFallbackError, type ApiEnvelope } from '@/api/http';
+import { compatibleRequest, type CompatibleApiResponse } from '@/api/compat';
 import type { TotpSetupRequest, UpdateAccountRequest } from '@/api/openapi';
 
 export type LoginRequest = {
@@ -28,11 +28,6 @@ export type SetupStatus = {
   skip_default_password_auth?: boolean;
 };
 
-export type CompatibleApiResponse<T> = {
-  data: ApiEnvelope<T>;
-  legacyFallback: boolean;
-};
-
 export const authApi = {
   login: (payload: LoginRequest) =>
     compatibleRequest<AuthSessionResponse>('/api/v1/auth/login', '/api/auth/login', jsonPost(payload)),
@@ -60,23 +55,7 @@ export const authApi = {
     ),
 };
 
-export async function compatibleRequest<T>(
-  primaryPath: string,
-  legacyPath: string,
-  init?: RequestInit,
-  legacyInit: RequestInit | undefined = init,
-): Promise<CompatibleApiResponse<T>> {
-  try {
-    const data = await apiRequest<T>(primaryPath, init);
-    if (data.status === 'error' && data.message?.toLowerCase().includes('missing api key')) {
-      return { data: await apiRequest<T>(legacyPath, legacyInit), legacyFallback: true };
-    }
-    return { data, legacyFallback: false };
-  } catch (error) {
-    if (!isLegacyFallbackError(error)) throw error;
-    return { data: await apiRequest<T>(legacyPath, legacyInit), legacyFallback: true };
-  }
-}
+export type { CompatibleApiResponse };
 
 function jsonRequest(payload: object, method = 'POST'): RequestInit {
   return { body: JSON.stringify(payload), method };

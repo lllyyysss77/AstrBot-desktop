@@ -1,6 +1,48 @@
 import type { GhproxyTestRequest, PipInstallRequest, UpdateRequest } from '@/api/openapi';
-import { compatibleRequest, type CompatibleApiResponse } from './auth';
-import { apiRequest } from './http';
+import { ApiError, apiRequest, type ApiEnvelope } from './http';
+
+export type CompatibleApiResponse<T> = {
+  data: ApiEnvelope<T>;
+  legacyFallback: boolean;
+};
+
+export type CompatibilityExitItem = {
+  id: 'api-endpoint-fallback' | 'legacy-recovery' | 'legacy-storage' | 'response-envelope';
+  minimumBackendVersion: string;
+  removalCondition: string;
+  targetDashboardVersion: string;
+};
+
+/**
+ * Runtime removal metadata. The complete inventory and verification procedure
+ * live in docs/dashboard-compatibility-exit-plan.md.
+ */
+export const compatibilityExitPlan: readonly CompatibilityExitItem[] = [
+  {
+    id: 'api-endpoint-fallback',
+    minimumBackendVersion: 'AstrBot Core 4.x compatibility baseline',
+    removalCondition: 'The supported Core floor exposes every registered v1 endpoint and fallback telemetry is zero.',
+    targetDashboardVersion: '2.0.0',
+  },
+  {
+    id: 'legacy-recovery',
+    minimumBackendVersion: 'AstrBot Core 4.x compatibility baseline',
+    removalCondition: 'Dashboard upgrades cannot leave an older Core process serving unversioned recovery routes.',
+    targetDashboardVersion: '2.0.0',
+  },
+  {
+    id: 'legacy-storage',
+    minimumBackendVersion: 'Not backend-dependent',
+    removalCondition: 'One stable release has migrated uiTheme and the Vue Dashboard rollback window is closed.',
+    targetDashboardVersion: '2.0.0',
+  },
+  {
+    id: 'response-envelope',
+    minimumBackendVersion: 'OpenAPI v1 response contract',
+    removalCondition: 'All enabled endpoints use one generated response shape and no legacy envelope remains.',
+    targetDashboardVersion: '2.0.0',
+  },
+] as const;
 
 export type VersionData = {
   change_pwd_hint?: boolean;
@@ -78,6 +120,32 @@ export const recoveryApi = {
   restart: (token: string, fetchImpl?: typeof fetch) =>
     legacyRecoveryRequest<Record<string, unknown>>('/api/stat/restart-core', token, { method: 'POST' }, fetchImpl),
 };
+
+function isMissingApiKeyMessage(message: string | null | undefined) {
+  return message?.toLowerCase().includes('missing api key') ?? false;
+}
+
+export function shouldFallbackToLegacy(error: unknown) {
+  return error instanceof ApiError && (error.status === 404 || isMissingApiKeyMessage(error.message));
+}
+
+export async function compatibleRequest<T>(
+  primaryPath: string,
+  legacyPath: string,
+  init?: RequestInit,
+  legacyInit: RequestInit | undefined = init,
+): Promise<CompatibleApiResponse<T>> {
+  try {
+    const data = await apiRequest<T>(primaryPath, init);
+    if (data.status === 'error' && isMissingApiKeyMessage(data.message)) {
+      return { data: await apiRequest<T>(legacyPath, legacyInit), legacyFallback: true };
+    }
+    return { data, legacyFallback: false };
+  } catch (error) {
+    if (!shouldFallbackToLegacy(error)) throw error;
+    return { data: await apiRequest<T>(legacyPath, legacyInit), legacyFallback: true };
+  }
+}
 
 function jsonRequest(payload: object): RequestInit {
   return { body: JSON.stringify(payload), method: 'POST' };

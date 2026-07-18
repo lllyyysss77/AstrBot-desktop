@@ -5,6 +5,8 @@
 旧版 `dashboard/` 仍作为只读的行为与样式参考保留，不属于新版运行时依赖。
 
 请从仓库根目录使用统一命令启动或构建，详见 [`../docs/dashboard-react-migration.md`](../docs/dashboard-react-migration.md)。
+迁移期 endpoint、存储和响应兼容层的删除条件见
+[`../docs/dashboard-compatibility-exit-plan.md`](../docs/dashboard-compatibility-exit-plan.md)。
 
 ## 外部服务与链接配置
 
