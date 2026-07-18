@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { annotatePluginUpdates, getSelectedGitHubProxy, pluginBatchUpdateFailures, pluginUpdateTargets } from './extensionActions';
+import {
+  annotatePluginUpdates,
+  getSelectedGitHubProxy,
+  pluginBatchUpdateFailures,
+  pluginUpdateTargets,
+} from './extensionActions';
 
 describe('extension actions', () => {
   it('updates only plugins that report an available update', () => {
-    expect(pluginUpdateTargets([
-      { name: 'alpha', has_update: true },
-      { name: 'beta', has_update: false },
-      { name: 'gamma', has_update: true },
-    ])).toEqual(['alpha', 'gamma']);
+    expect(
+      pluginUpdateTargets([
+        { name: 'alpha', has_update: true },
+        { name: 'beta', has_update: false },
+        { name: 'gamma', has_update: true },
+      ]),
+    ).toEqual(['alpha', 'gamma']);
   });
 
   it('uses the selected GitHub proxy only when proxy mode is enabled', () => {
@@ -34,18 +41,21 @@ describe('extension actions', () => {
       },
     });
     expect(result.envelope.status).toBe('ok');
-    expect(result.failures).toEqual([
-      { name: 'beta', status: 'error', message: 'network error' },
-    ]);
+    expect(result.failures).toEqual([{ name: 'beta', status: 'error', message: 'network error' }]);
   });
 
   it('detects updates from the plugin market bound to each installed plugin', () => {
-    const [plugin] = annotatePluginUpdates([{
-      install_source: { install_method: 'market', market_plugin_id: 'market-alpha', registry_url: '' },
-      name: 'alpha',
-      updates_enabled: true,
-      version: '1.2.0-beta',
-    }], new Map([['', [{ market_plugin_id: 'market-alpha', version: '1.2.0' }]]]));
+    const [plugin] = annotatePluginUpdates(
+      [
+        {
+          install_source: { install_method: 'market', market_plugin_id: 'market-alpha', registry_url: '' },
+          name: 'alpha',
+          updates_enabled: true,
+          version: '1.2.0-beta',
+        },
+      ],
+      new Map([['', [{ market_plugin_id: 'market-alpha', version: '1.2.0' }]]]),
+    );
     expect(plugin.has_update).toBe(true);
     expect(plugin.online_version).toBe('1.2.0');
   });

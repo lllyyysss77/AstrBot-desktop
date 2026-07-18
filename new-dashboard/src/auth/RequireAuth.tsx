@@ -15,11 +15,5 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (hasToken) return children;
 
-  return (
-    <Navigate
-      replace
-      state={{ returnUrl }}
-      to={`/auth/login?redirect=${encodeURIComponent(returnUrl)}`}
-    />
-  );
+  return <Navigate replace state={{ returnUrl }} to={`/auth/login?redirect=${encodeURIComponent(returnUrl)}`} />;
 }

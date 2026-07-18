@@ -7,10 +7,7 @@ type StreamRenderSchedulerOptions = {
   requestFrame?: (callback: FrameRequestCallback) => number;
 };
 
-export function createStreamRenderScheduler(
-  render: () => void,
-  options: StreamRenderSchedulerOptions = {},
-) {
+export function createStreamRenderScheduler(render: () => void, options: StreamRenderSchedulerOptions = {}) {
   const intervalMs = Math.max(0, options.intervalMs ?? DEFAULT_STREAM_RENDER_INTERVAL_MS);
   const now = options.now ?? (() => performance.now());
   const requestFrame = options.requestFrame ?? ((callback) => requestAnimationFrame(callback));

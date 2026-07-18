@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  ApiPayloadError,
-  decodeApiData,
-  expectRecord,
-  unwrapApiData,
-} from './response';
+import { ApiPayloadError, decodeApiData, expectRecord, unwrapApiData } from './response';
 
 describe('API response decoding', () => {
   it('unwraps generated-client Axios responses and raw envelopes', () => {
@@ -14,9 +9,11 @@ describe('API response decoding', () => {
   });
 
   it('rejects API error envelopes before they reach a page', () => {
-    expect(() => unwrapApiData({
-      data: { status: 'error', message: 'invalid config' },
-    })).toThrow('invalid config');
+    expect(() =>
+      unwrapApiData({
+        data: { status: 'error', message: 'invalid config' },
+      }),
+    ).toThrow('invalid config');
   });
 
   it('wraps parser failures with domain and payload context', () => {

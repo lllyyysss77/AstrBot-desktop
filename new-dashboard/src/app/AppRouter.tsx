@@ -33,7 +33,11 @@ const ChatPage = lazy(() => import('@/routes/chat/ChatPage'));
 
 function RouteLoading() {
   const { t } = useTranslation();
-  return <div className="route-loading" role="status">{t('core.common.loading')}</div>;
+  return (
+    <div className="route-loading" role="status">
+      {t('core.common.loading')}
+    </div>
+  );
 }
 
 function loading(element: React.ReactNode) {
@@ -96,15 +100,20 @@ const router = createHashRouter([
     children: routesForLayout('public-blank'),
   },
   {
-    element: <RequireAuth><BlankLayout /></RequireAuth>,
+    element: (
+      <RequireAuth>
+        <BlankLayout />
+      </RequireAuth>
+    ),
     children: routesForLayout('protected-blank'),
   },
   {
-    element: <RequireAuth><FullLayout /></RequireAuth>,
-    children: [
-      ...routesForLayout('protected-full'),
-      { path: '*', element: <NotFoundPage /> },
-    ],
+    element: (
+      <RequireAuth>
+        <FullLayout />
+      </RequireAuth>
+    ),
+    children: [...routesForLayout('protected-full'), { path: '*', element: <NotFoundPage /> }],
   },
 ]);
 

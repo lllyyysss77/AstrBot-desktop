@@ -121,36 +121,39 @@ const defaultLabels: Required<ChatComposerLabels> = {
  * Uploading, recording, configuration persistence and sending stay in the
  * parent. This component owns only input interaction and presentation.
  */
-export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer({
-  attachments = [],
-  commands = [],
-  commandSuggestionsLabel,
-  configs = [],
-  configId = 'default',
-  busy = false,
-  disabled = false,
-  isRecording = false,
-  isRunning = false,
-  labels: labelsOverride,
-  maxRowsHeight = 420,
-  onChange,
-  onClearReply,
-  onConfigChange,
-  onFiles,
-  onRemoveAttachment,
-  onSend,
-  onStartRecording,
-  onStop,
-  onStopRecording,
-  onToggleStreaming,
-  placeholder = '',
-  replyTo = null,
-  sendShortcut = 'enter',
-  streaming = true,
-  tokenUsage = null,
-  value,
-  wakePrefixes = ['/'],
-}, ref) {
+export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(function ChatComposer(
+  {
+    attachments = [],
+    commands = [],
+    commandSuggestionsLabel,
+    configs = [],
+    configId = 'default',
+    busy = false,
+    disabled = false,
+    isRecording = false,
+    isRunning = false,
+    labels: labelsOverride,
+    maxRowsHeight = 420,
+    onChange,
+    onClearReply,
+    onConfigChange,
+    onFiles,
+    onRemoveAttachment,
+    onSend,
+    onStartRecording,
+    onStop,
+    onStopRecording,
+    onToggleStreaming,
+    placeholder = '',
+    replyTo = null,
+    sendShortcut = 'enter',
+    streaming = true,
+    tokenUsage = null,
+    value,
+    wakePrefixes = ['/'],
+  },
+  ref,
+) {
   const labels = { ...defaultLabels, ...labelsOverride };
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -194,7 +197,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
       const command = item.displayCommand.slice(prefix.length).toLocaleLowerCase();
       if (!query) return item.reserved ? 0 : 1;
       if (command.startsWith(query)) return item.reserved ? 0 : 1;
-      if (`${command} ${item.pluginName || ''} ${item.description || ''}`.toLocaleLowerCase().includes(query)) return item.reserved ? 2 : 3;
+      if (`${command} ${item.pluginName || ''} ${item.description || ''}`.toLocaleLowerCase().includes(query))
+        return item.reserved ? 2 : 3;
       return 10;
     };
     return expanded.filter((item) => score(item) < 10).sort((a, b) => score(a) - score(b));
@@ -219,27 +223,38 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     return () => document.removeEventListener('pointerdown', close);
   }, [menuOpen]);
 
-  useEffect(() => () => {
-    if (recordTimerRef.current != null) window.clearTimeout(recordTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (recordTimerRef.current != null) window.clearTimeout(recordTimerRef.current);
+    },
+    [],
+  );
 
-  useImperativeHandle(ref, () => ({
-    focus: () => textareaRef.current?.focus(),
-    openFilePicker: () => fileInputRef.current?.click(),
-  }), []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      focus: () => textareaRef.current?.focus(),
+      openFilePicker: () => fileInputRef.current?.click(),
+    }),
+    [],
+  );
 
-  const chooseCommand = useCallback((command: string) => {
-    onChange(`${command} `);
-    setSelectedCommand(0);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [onChange]);
+  const chooseCommand = useCallback(
+    (command: string) => {
+      onChange(`${command} `);
+      setSelectedCommand(0);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    },
+    [onChange],
+  );
 
   const submit = useCallback(() => {
     if (canSend) onSend();
   }, [canSend, onSend]);
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (composingRef.current || event.nativeEvent.isComposing || Date.now() - lastCompositionEndRef.current < 40) return;
+    if (composingRef.current || event.nativeEvent.isComposing || Date.now() - lastCompositionEndRef.current < 40)
+      return;
     if (!suggestionsDismissed && suggestions.length) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
@@ -318,115 +333,230 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     forwardFiles(event.dataTransfer.files);
   };
 
-  return <footer
-    className="chat-composer-v2"
-    onDragEnter={dragEnter}
-    onDragLeave={dragLeave}
-    onDragOver={(event) => event.preventDefault()}
-    onDrop={drop}
-    ref={rootRef}
-  >
-    <div className={`chat-composer-v2__surface${multiline ? ' is-multiline' : ''}${attachments.length ? ' has-attachments' : ''}`}>
-      {dragging && <div className="chat-composer-v2__drop"><MdiIcon name="mdi-cloud-upload-outline" /><strong>{labels.dropToUpload}</strong></div>}
-      {replyTo && <div className="chat-composer-v2__reply">
-        <span><MdiIcon name="mdi-reply" /><q>{replyTo.selectedText || ''}</q></span>
-        <button aria-label={labels.clear} className="chat-composer-v2__icon-button" onClick={onClearReply} type="button"><MdiIcon name="mdi-close" /></button>
-      </div>}
-      {attachments.length > 0 && <div className="chat-composer-v2__attachments">
-        {attachments.map((attachment, index) => <div className={`chat-composer-v2__attachment${attachment.kind === 'image' ? ' is-image' : ''}`} key={attachment.id}>
-          {attachment.kind === 'image' && attachment.previewUrl
-            ? <img alt={attachment.name} src={attachment.previewUrl} />
-            : <span className="chat-composer-v2__attachment-icon"><MdiIcon name={attachment.kind === 'audio' ? 'mdi-microphone' : 'mdi-file-outline'} /></span>}
-          {attachment.kind !== 'image' && <span>{attachment.kind === 'audio' ? labels.recording : attachment.name}</span>}
-          <button aria-label={`${labels.clear} ${attachment.name}`} className="chat-composer-v2__remove" onClick={() => onRemoveAttachment?.(attachment, index)} type="button"><MdiIcon name="mdi-close" /></button>
-        </div>)}
-      </div>}
-      {!suggestionsDismissed && suggestions.length > 0 && <ul aria-label={commandSuggestionsLabel} className="chat-composer-v2__suggestions" role="listbox">
-        {suggestions.map((command, index) => <li key={`${command.command}-${command.displayCommand}`}>
-          <button
-            aria-selected={index === selectedCommand}
-            className={index === selectedCommand ? 'is-selected' : ''}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => chooseCommand(command.displayCommand)}
-            role="option"
-            type="button"
-          >
-            <strong>{command.displayCommand}</strong>
-            <span>{command.description || command.pluginName || ''}</span>
-          </button>
-        </li>)}
-      </ul>}
-      <div className="chat-composer-v2__row">
-        <div className="chat-composer-v2__left" ref={menuRef}>
-          <button aria-expanded={menuOpen} aria-haspopup="menu" aria-label={labels.upload} className="chat-composer-v2__icon-button" onClick={() => setMenuOpen((open) => !open)} type="button"><MdiIcon name="mdi-plus" /></button>
-          <div className="chat-composer-v2__menu" hidden={!menuOpen} role="menu">
-            <button disabled={actionsDisabled} onClick={() => { fileInputRef.current?.click(); setMenuOpen(false); }} role="menuitem" type="button"><MdiIcon name="mdi-file-upload-outline" />{labels.upload}</button>
-            {onConfigChange && <label className="chat-composer-v2__config">
-              <MdiIcon name="mdi-tune" /><span>{labels.config}</span>
-              <select aria-label={labels.config} disabled={actionsDisabled} onChange={(event) => onConfigChange(event.target.value)} value={configId}>
-                {configs.map((config) => <option key={config.id} value={config.id}>{config.name}</option>)}
-              </select>
-              {configs.find((config) => config.id === configId)?.description && <small>{configs.find((config) => config.id === configId)?.description}</small>}
-            </label>}
-            {onToggleStreaming && <button aria-pressed={streaming} onClick={onToggleStreaming} role="menuitem" type="button"><MdiIcon name="mdi-lightning-bolt" />{streaming ? labels.streamingEnabled : labels.streamingDisabled}</button>}
+  return (
+    <footer
+      className="chat-composer-v2"
+      onDragEnter={dragEnter}
+      onDragLeave={dragLeave}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={drop}
+      ref={rootRef}
+    >
+      <div
+        className={`chat-composer-v2__surface${multiline ? ' is-multiline' : ''}${attachments.length ? ' has-attachments' : ''}`}
+      >
+        {dragging && (
+          <div className="chat-composer-v2__drop">
+            <MdiIcon name="mdi-cloud-upload-outline" />
+            <strong>{labels.dropToUpload}</strong>
           </div>
-          <input
-            hidden
-            multiple
-            onChange={(event) => {
-              if (event.target.files) forwardFiles(event.target.files);
-              event.target.value = '';
-            }}
-            ref={fileInputRef}
-            type="file"
-          />
-        </div>
-        <div className="chat-composer-v2__field">
-          <textarea
-            aria-label={placeholder}
-            disabled={disabled}
-            onChange={(event) => {
-              setSuggestionsDismissed(false);
-              onChange(event.target.value);
-            }}
-            onCompositionEnd={(event) => {
-              composingRef.current = false;
-              lastCompositionEndRef.current = Date.now();
-              onChange(event.currentTarget.value);
-            }}
-            onCompositionStart={() => { composingRef.current = true; }}
-            onKeyDown={handleKeyDown}
-            onKeyUp={handleKeyUp}
-            onPaste={handlePaste}
-            placeholder={placeholder}
-            ref={textareaRef}
-            rows={1}
-            value={value}
-          />
-        </div>
-        <div className="chat-composer-v2__right">
-          {tokenUsage && <span
-            aria-label={tokenUsage.tooltip}
-            className="chat-composer-v2__token"
-            role="img"
-            style={{ '--chat-token-percent': `${Math.max(0, Math.min(100, tokenUsage.percent)) * 3.6}deg` } as CSSProperties}
-            tabIndex={0}
-            title={tokenUsage.tooltip}
-          />}
-          {(onStartRecording || onStopRecording) && <button
-            aria-label={isRecording ? labels.stopRecording : labels.startRecording}
-            aria-pressed={isRecording}
-            className={`chat-composer-v2__icon-button chat-composer-v2__record${isRecording ? ' is-recording' : ''}`}
-            disabled={actionsDisabled}
-            onClick={isRecording ? onStopRecording : onStartRecording}
-            title={isRecording ? labels.stopRecording : labels.startRecording}
-            type="button"
-          ><MdiIcon name={isRecording ? 'mdi-stop-circle' : 'mdi-microphone'} /></button>}
-          {isRunning
-            ? <button aria-label={labels.stopGenerating} className="chat-composer-v2__icon-button chat-composer-v2__send" onClick={onStop} title={labels.stopGenerating} type="button"><MdiIcon name="mdi-stop" /></button>
-            : <button aria-label={labels.send} className="chat-composer-v2__icon-button chat-composer-v2__send" disabled={!canSend} onClick={submit} title={labels.send} type="button"><MdiIcon name="mdi-arrow-up" /></button>}
+        )}
+        {replyTo && (
+          <div className="chat-composer-v2__reply">
+            <span>
+              <MdiIcon name="mdi-reply" />
+              <q>{replyTo.selectedText || ''}</q>
+            </span>
+            <button
+              aria-label={labels.clear}
+              className="chat-composer-v2__icon-button"
+              onClick={onClearReply}
+              type="button"
+            >
+              <MdiIcon name="mdi-close" />
+            </button>
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <div className="chat-composer-v2__attachments">
+            {attachments.map((attachment, index) => (
+              <div
+                className={`chat-composer-v2__attachment${attachment.kind === 'image' ? ' is-image' : ''}`}
+                key={attachment.id}
+              >
+                {attachment.kind === 'image' && attachment.previewUrl ? (
+                  <img alt={attachment.name} src={attachment.previewUrl} />
+                ) : (
+                  <span className="chat-composer-v2__attachment-icon">
+                    <MdiIcon name={attachment.kind === 'audio' ? 'mdi-microphone' : 'mdi-file-outline'} />
+                  </span>
+                )}
+                {attachment.kind !== 'image' && (
+                  <span>{attachment.kind === 'audio' ? labels.recording : attachment.name}</span>
+                )}
+                <button
+                  aria-label={`${labels.clear} ${attachment.name}`}
+                  className="chat-composer-v2__remove"
+                  onClick={() => onRemoveAttachment?.(attachment, index)}
+                  type="button"
+                >
+                  <MdiIcon name="mdi-close" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {!suggestionsDismissed && suggestions.length > 0 && (
+          <ul aria-label={commandSuggestionsLabel} className="chat-composer-v2__suggestions" role="listbox">
+            {suggestions.map((command, index) => (
+              <li key={`${command.command}-${command.displayCommand}`}>
+                <button
+                  aria-selected={index === selectedCommand}
+                  className={index === selectedCommand ? 'is-selected' : ''}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => chooseCommand(command.displayCommand)}
+                  role="option"
+                  type="button"
+                >
+                  <strong>{command.displayCommand}</strong>
+                  <span>{command.description || command.pluginName || ''}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="chat-composer-v2__row">
+          <div className="chat-composer-v2__left" ref={menuRef}>
+            <button
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-label={labels.upload}
+              className="chat-composer-v2__icon-button"
+              onClick={() => setMenuOpen((open) => !open)}
+              type="button"
+            >
+              <MdiIcon name="mdi-plus" />
+            </button>
+            <div className="chat-composer-v2__menu" hidden={!menuOpen} role="menu">
+              <button
+                disabled={actionsDisabled}
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setMenuOpen(false);
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <MdiIcon name="mdi-file-upload-outline" />
+                {labels.upload}
+              </button>
+              {onConfigChange && (
+                <label className="chat-composer-v2__config">
+                  <MdiIcon name="mdi-tune" />
+                  <span>{labels.config}</span>
+                  <select
+                    aria-label={labels.config}
+                    disabled={actionsDisabled}
+                    onChange={(event) => onConfigChange(event.target.value)}
+                    value={configId}
+                  >
+                    {configs.map((config) => (
+                      <option key={config.id} value={config.id}>
+                        {config.name}
+                      </option>
+                    ))}
+                  </select>
+                  {configs.find((config) => config.id === configId)?.description && (
+                    <small>{configs.find((config) => config.id === configId)?.description}</small>
+                  )}
+                </label>
+              )}
+              {onToggleStreaming && (
+                <button aria-pressed={streaming} onClick={onToggleStreaming} role="menuitem" type="button">
+                  <MdiIcon name="mdi-lightning-bolt" />
+                  {streaming ? labels.streamingEnabled : labels.streamingDisabled}
+                </button>
+              )}
+            </div>
+            <input
+              hidden
+              multiple
+              onChange={(event) => {
+                if (event.target.files) forwardFiles(event.target.files);
+                event.target.value = '';
+              }}
+              ref={fileInputRef}
+              type="file"
+            />
+          </div>
+          <div className="chat-composer-v2__field">
+            <textarea
+              aria-label={placeholder}
+              disabled={disabled}
+              onChange={(event) => {
+                setSuggestionsDismissed(false);
+                onChange(event.target.value);
+              }}
+              onCompositionEnd={(event) => {
+                composingRef.current = false;
+                lastCompositionEndRef.current = Date.now();
+                onChange(event.currentTarget.value);
+              }}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onKeyDown={handleKeyDown}
+              onKeyUp={handleKeyUp}
+              onPaste={handlePaste}
+              placeholder={placeholder}
+              ref={textareaRef}
+              rows={1}
+              value={value}
+            />
+          </div>
+          <div className="chat-composer-v2__right">
+            {tokenUsage && (
+              <span
+                aria-label={tokenUsage.tooltip}
+                className="chat-composer-v2__token"
+                role="img"
+                style={
+                  {
+                    '--chat-token-percent': `${Math.max(0, Math.min(100, tokenUsage.percent)) * 3.6}deg`,
+                  } as CSSProperties
+                }
+                tabIndex={0}
+                title={tokenUsage.tooltip}
+              />
+            )}
+            {(onStartRecording || onStopRecording) && (
+              <button
+                aria-label={isRecording ? labels.stopRecording : labels.startRecording}
+                aria-pressed={isRecording}
+                className={`chat-composer-v2__icon-button chat-composer-v2__record${isRecording ? ' is-recording' : ''}`}
+                disabled={actionsDisabled}
+                onClick={isRecording ? onStopRecording : onStartRecording}
+                title={isRecording ? labels.stopRecording : labels.startRecording}
+                type="button"
+              >
+                <MdiIcon name={isRecording ? 'mdi-stop-circle' : 'mdi-microphone'} />
+              </button>
+            )}
+            {isRunning ? (
+              <button
+                aria-label={labels.stopGenerating}
+                className="chat-composer-v2__icon-button chat-composer-v2__send"
+                onClick={onStop}
+                title={labels.stopGenerating}
+                type="button"
+              >
+                <MdiIcon name="mdi-stop" />
+              </button>
+            ) : (
+              <button
+                aria-label={labels.send}
+                className="chat-composer-v2__icon-button chat-composer-v2__send"
+                disabled={!canSend}
+                onClick={submit}
+                title={labels.send}
+                type="button"
+              >
+                <MdiIcon name="mdi-arrow-up" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  </footer>;
+    </footer>
+  );
 });

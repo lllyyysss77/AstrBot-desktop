@@ -26,7 +26,11 @@ export function AuthShell({ children, subtitle, title }: { children: ReactNode; 
                 onChange={(event) => void i18n.changeLanguage(event.target.value)}
                 value={i18n.language}
               >
-                {languages.map((language) => <option key={language.code} value={language.code}>{language.label}</option>)}
+                {languages.map((language) => (
+                  <option key={language.code} value={language.code}>
+                    {language.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label>

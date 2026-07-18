@@ -46,25 +46,31 @@ export function buildPluginNavigation(items: unknown[]): NavigationItem | null {
     if (!(item.activated ?? item.enabled)) return [];
     const pluginName = String(item.name || item.id || '').trim();
     const pages = Array.isArray(item.pages) ? item.pages : [];
-    const firstPage = pages.map((page) => {
-      if (page && typeof page === 'object') {
-        const record = page as { id?: unknown; name?: unknown; page_name?: unknown };
-        return String(record.name || record.page_name || record.id || '').trim();
-      }
-      return String(page || '').trim();
-    }).find(Boolean);
+    const firstPage = pages
+      .map((page) => {
+        if (page && typeof page === 'object') {
+          const record = page as { id?: unknown; name?: unknown; page_name?: unknown };
+          return String(record.name || record.page_name || record.id || '').trim();
+        }
+        return String(page || '').trim();
+      })
+      .find(Boolean);
     if (!pluginName || !firstPage) return [];
-    return [{
-      title: String(item.display_name || pluginName),
-      icon: 'mdi-puzzle' as const,
-      to: `/plugin-page/${encodeURIComponent(pluginName)}/${encodeURIComponent(firstPage)}`,
-    }];
+    return [
+      {
+        title: String(item.display_name || pluginName),
+        icon: 'mdi-puzzle' as const,
+        to: `/plugin-page/${encodeURIComponent(pluginName)}/${encodeURIComponent(firstPage)}`,
+      },
+    ];
   });
-  return children.length ? {
-    title: PLUGIN_WEBUI_GROUP_KEY,
-    icon: 'mdi-puzzle-outline',
-    children,
-  } : null;
+  return children.length
+    ? {
+        title: PLUGIN_WEBUI_GROUP_KEY,
+        icon: 'mdi-puzzle-outline',
+        children,
+      }
+    : null;
 }
 
 export function mergePluginNavigation(items: NavigationItem[], pluginItem: NavigationItem | null) {
@@ -81,22 +87,19 @@ export function navigationTargetActive(to: string | undefined, pathname: string,
 }
 
 export function navigationItemActive(item: NavigationItem, pathname: string, hash: string): boolean {
-  return navigationTargetActive(item.to, pathname, hash)
-    || Boolean(item.children?.some((child) => navigationItemActive(child, pathname, hash)));
+  return (
+    navigationTargetActive(item.to, pathname, hash) ||
+    Boolean(item.children?.some((child) => navigationItemActive(child, pathname, hash)))
+  );
 }
 
 type SidebarCustomization = { mainItems?: unknown; moreItems?: unknown };
 
 function stringKeys(value: unknown) {
-  return Array.isArray(value)
-    ? [...new Set(value.filter((item): item is string => typeof item === 'string'))]
-    : [];
+  return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string'))] : [];
 }
 
-export function resolveNavigationItems(
-  items: NavigationItem[],
-  customization: SidebarCustomization | null,
-) {
+export function resolveNavigationItems(items: NavigationItem[], customization: SidebarCustomization | null) {
   if (!customization) return items;
   const moreGroup = items.find((item) => item.title === MORE_GROUP_KEY);
   const allItems = new Map<string, NavigationItem>();
@@ -104,8 +107,7 @@ export function resolveNavigationItems(
   moreGroup?.children?.forEach((item) => allItems.set(item.title, item));
   const mainKeys = stringKeys(customization.mainItems).filter((key) => allItems.has(key));
   const mainSet = new Set(mainKeys);
-  const moreKeys = stringKeys(customization.moreItems)
-    .filter((key) => allItems.has(key) && !mainSet.has(key));
+  const moreKeys = stringKeys(customization.moreItems).filter((key) => allItems.has(key) && !mainSet.has(key));
   const used = new Set([...mainKeys, ...moreKeys]);
   const defaultMain = items.filter((item) => item.title !== MORE_GROUP_KEY);
   const defaultMore = moreGroup?.children ?? [];

@@ -8,6 +8,4 @@ const storedSecondary = localStorage.getItem('themeSecondary');
 if (storedPrimary) document.documentElement.style.setProperty('--astrbot-primary', storedPrimary);
 if (storedSecondary) document.documentElement.style.setProperty('--astrbot-secondary', storedSecondary);
 
-createRoot(document.getElementById('root')!).render(
-  <AppBootstrap />,
-);
+createRoot(document.getElementById('root')!).render(<AppBootstrap />);

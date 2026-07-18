@@ -19,7 +19,7 @@ export function readPlatformRuntime(value: unknown): PlatformRuntime {
     config: isRecord(data.config) ? data.config : {},
     metadata: isRecord(data.metadata) ? data.metadata : {},
     translations: isRecord(data.platform_i18n_translations)
-      ? data.platform_i18n_translations as Record<string, JsonObject>
+      ? (data.platform_i18n_translations as Record<string, JsonObject>)
       : undefined,
   };
 }
@@ -28,7 +28,7 @@ export function platformTemplates(metadata: JsonObject) {
   const group = isRecord(metadata.platform_group) ? metadata.platform_group : {};
   const groupMetadata = isRecord(group.metadata) ? group.metadata : {};
   const platform = isRecord(groupMetadata.platform) ? groupMetadata.platform : {};
-  return isRecord(platform.config_template) ? platform.config_template as Record<string, JsonObject> : {};
+  return isRecord(platform.config_template) ? (platform.config_template as Record<string, JsonObject>) : {};
 }
 
 export function platformFormMetadata(metadata: JsonObject) {
@@ -75,12 +75,14 @@ export function platformRoutes(routing: Record<string, string>, platformId: stri
   const routes = Object.entries(routing).flatMap(([umo, configId]) => {
     const parsed = parsePlatformUmo(umo);
     if (!parsed || parsed.platform !== platformId) return [];
-    return [{
-      configId,
-      messageType: parsed.messageType || '*',
-      sessionId: parsed.sessionId || '*',
-      sourceUmo: parsed.sessionId === '*' ? '' : umo,
-    }];
+    return [
+      {
+        configId,
+        messageType: parsed.messageType || '*',
+        sessionId: parsed.sessionId || '*',
+        sourceUmo: parsed.sessionId === '*' ? '' : umo,
+      },
+    ];
   });
   return routes.length ? routes : [emptyPlatformRoute()];
 }
@@ -91,10 +93,12 @@ export function replacePlatformRouting(
   platformId: string,
   routes: PlatformRouteDraft[],
 ) {
-  const next = Object.fromEntries(Object.entries(routing).filter(([umo]) => {
-    const parsed = parsePlatformUmo(umo);
-    return !parsed || (parsed.platform !== originalPlatformId && parsed.platform !== platformId);
-  }));
+  const next = Object.fromEntries(
+    Object.entries(routing).filter(([umo]) => {
+      const parsed = parsePlatformUmo(umo);
+      return !parsed || (parsed.platform !== originalPlatformId && parsed.platform !== platformId);
+    }),
+  );
   routes.forEach((route) => {
     if (!route.configId) return;
     next[`${platformId}:${route.messageType || '*'}:${route.sessionId || '*'}`] = route.configId;
@@ -134,7 +138,7 @@ function clone(value: JsonObject) {
 }
 
 function cloneValue<T>(value: T): T {
-  return value == null ? value : JSON.parse(JSON.stringify(value)) as T;
+  return value == null ? value : (JSON.parse(JSON.stringify(value)) as T);
 }
 
 function isRecord(value: unknown): value is JsonObject {

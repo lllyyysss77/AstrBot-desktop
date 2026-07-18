@@ -31,7 +31,7 @@ export const announcementApi = {
 };
 
 export const conversationFilesApi = {
-  export: (conversations: ConversationExportItem[], dependencies: RequestDependencies = {}) => (
+  export: (conversations: ConversationExportItem[], dependencies: RequestDependencies = {}) =>
     requestBlob(
       '/api/v1/conversations/export',
       {
@@ -40,24 +40,16 @@ export const conversationFilesApi = {
         method: 'POST',
       },
       dependencies,
-    )
-  ),
+    ),
 };
 
 export const backupFilesApi = {
-  download: (filename: string, dependencies: RequestDependencies = {}) => requestBlob(
-    `/api/v1/backups/${encodeURIComponent(filename)}`,
-    {},
-    dependencies,
-  ),
+  download: (filename: string, dependencies: RequestDependencies = {}) =>
+    requestBlob(`/api/v1/backups/${encodeURIComponent(filename)}`, {}, dependencies),
 };
 
 export const systemConfigApi = {
-  async update(
-    config: UnknownRecord,
-    twoFactorCode?: string,
-    dependencies: RequestDependencies = {},
-  ) {
+  async update(config: UnknownRecord, twoFactorCode?: string, dependencies: RequestDependencies = {}) {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     if (twoFactorCode) headers.set('X-2FA-Code', twoFactorCode);
     const response = await fetchWithAuth(
@@ -105,11 +97,11 @@ export function validPluginEndpoint(value: unknown) {
   if (typeof value !== 'string') throw new Error('Plugin endpoint must be a string.');
   const parts = value.trim().replace(/^\/+/, '').split('/');
   if (
-    !parts.length
-    || parts.some((part) => (
-      !part || part === '.' || part === '..'
-      || part.includes('\\') || part.includes('?') || part.includes('#')
-    ))
+    !parts.length ||
+    parts.some(
+      (part) =>
+        !part || part === '.' || part === '..' || part.includes('\\') || part.includes('?') || part.includes('#'),
+    )
   ) {
     throw new Error('Invalid plugin endpoint.');
   }
@@ -141,11 +133,7 @@ function queryString(params?: UnknownRecord) {
   return value ? `?${value}` : '';
 }
 
-async function requestBlob(
-  path: string,
-  init: RequestInit,
-  dependencies: RequestDependencies,
-) {
+async function requestBlob(path: string, init: RequestInit, dependencies: RequestDependencies) {
   const response = await fetchWithAuth(path, init, dependencies);
   if (!response.ok) {
     const payload = await responsePayload(response);

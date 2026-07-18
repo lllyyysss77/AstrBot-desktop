@@ -19,7 +19,10 @@ function LoadingIndicator() {
       className={`global-loading${progress == null ? ' global-loading--indeterminate' : ''}`}
       role="progressbar"
     >
-      <div className="global-loading__bar" style={progress == null ? undefined : { transform: `scaleX(${progress / 100})` }} />
+      <div
+        className="global-loading__bar"
+        style={progress == null ? undefined : { transform: `scaleX(${progress / 100})` }}
+      />
     </div>
   );
 }
@@ -35,9 +38,16 @@ function ToastViewport() {
   if (!current) return <div aria-live="polite" className="toast-viewport" />;
   return (
     <div aria-live={current.variant === 'error' ? 'assertive' : 'polite'} className="toast-viewport">
-      <div className={`global-toast global-toast--${current.variant}`} role={current.variant === 'error' ? 'alert' : 'status'}>
+      <div
+        className={`global-toast global-toast--${current.variant}`}
+        role={current.variant === 'error' ? 'alert' : 'status'}
+      >
         <span>{current.message}</span>
-        {current.closable && <button aria-label="Close notification" onClick={() => dismiss(current.id)} type="button">×</button>}
+        {current.closable && (
+          <button aria-label="Close notification" onClick={() => dismiss(current.id)} type="button">
+            ×
+          </button>
+        )}
       </div>
     </div>
   );
@@ -51,7 +61,9 @@ function ConfirmHost() {
   return (
     <Dialog
       description={current.message}
-      onOpenChange={(open) => { if (!open) resolve(current.id, false); }}
+      onOpenChange={(open) => {
+        if (!open) resolve(current.id, false);
+      }}
       open
       title={current.title ?? t('core.common.confirm', 'Confirm')}
     >
@@ -60,10 +72,7 @@ function ConfirmHost() {
           {current.cancelLabel ?? t('core.common.cancel', 'Cancel')}
         </DialogCancel>
         <DialogClose asChild>
-          <Button
-            onClick={() => resolve(current.id, true)}
-            variant={current.danger ? 'danger' : 'primary'}
-          >
+          <Button onClick={() => resolve(current.id, true)} variant={current.danger ? 'danger' : 'primary'}>
             {current.confirmLabel ?? t('core.common.confirm', 'Confirm')}
           </Button>
         </DialogClose>

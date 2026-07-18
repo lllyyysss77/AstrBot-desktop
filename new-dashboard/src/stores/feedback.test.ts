@@ -6,13 +6,16 @@ const initialState = useFeedbackStore.getState();
 
 describe('global feedback state', () => {
   beforeEach(() => {
-    useFeedbackStore.setState({
-      ...initialState,
-      confirmQueue: [],
-      loadingIds: new Set(),
-      loadingProgress: null,
-      toasts: [],
-    }, true);
+    useFeedbackStore.setState(
+      {
+        ...initialState,
+        confirmQueue: [],
+        loadingIds: new Set(),
+        loadingProgress: null,
+        toasts: [],
+      },
+      true,
+    );
   });
 
   it('queues and dismisses typed toast messages', () => {

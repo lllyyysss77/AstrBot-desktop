@@ -13,7 +13,8 @@ describe('legacy-compatible API groups', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('falls public version discovery back to the unversioned route', async () => {
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi
+      .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ message: 'Not found' }, 404))
       .mockResolvedValueOnce(jsonResponse({ data: { astrbot_version: '4.0.0' }, status: 'ok' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -21,14 +22,12 @@ describe('legacy-compatible API groups', () => {
     const response = await publicApi.versions();
 
     expect(response.data.data.astrbot_version).toBe('4.0.0');
-    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
-      '/api/v1/stats/versions',
-      '/api/stat/versions',
-    ]);
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/v1/stats/versions', '/api/stat/versions']);
   });
 
   it('preserves the legacy proxy test request body', async () => {
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi
+      .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ message: 'Not found' }, 404))
       .mockResolvedValueOnce(jsonResponse({ data: { latency: 25 }, status: 'ok' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -43,7 +42,8 @@ describe('legacy-compatible API groups', () => {
   });
 
   it('maps core update and progress calls to their legacy routes', async () => {
-    const fetchMock = vi.fn<typeof fetch>()
+    const fetchMock = vi
+      .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ message: 'Not found' }, 404))
       .mockResolvedValueOnce(jsonResponse({ data: {}, status: 'ok' }))
       .mockResolvedValueOnce(jsonResponse({ message: 'Not found' }, 404))

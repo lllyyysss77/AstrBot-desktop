@@ -4,7 +4,17 @@ import { aggregateProviderSeries, formatRunningTime, makeSparklinePoints } from 
 
 describe('stats model', () => {
   it('normalizes chart values into an SVG polyline', () => {
-    expect(makeSparklinePoints([[1, 10], [2, 20]], 100, 50, 0)).toBe('0.0,50.0 100.0,0.0');
+    expect(
+      makeSparklinePoints(
+        [
+          [1, 10],
+          [2, 20],
+        ],
+        100,
+        50,
+        0,
+      ),
+    ).toBe('0.0,50.0 100.0,0.0');
   });
 
   it('formats runtime counters', () => {

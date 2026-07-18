@@ -2,7 +2,7 @@
 
 interface AstrBotDesktopBridge {
   isDesktop?: boolean;
-  onTrayRestartBackend?: (callback: () => void | Promise<void>) => (() => void);
+  onTrayRestartBackend?: (callback: () => void | Promise<void>) => () => void;
   [key: string]: unknown;
 }
 

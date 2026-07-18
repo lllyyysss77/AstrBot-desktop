@@ -36,11 +36,7 @@ describe('monitoring data helpers', () => {
   });
 
   it('preserves multiline ASCII art whitespace inside the message', () => {
-    expect(
-      splitConsoleLog(
-        '[2026-07-17 10:49:35.419] [Core] [INFO] [AstrBot.main:212]:\n    ASTRBOT',
-      ),
-    ).toEqual({
+    expect(splitConsoleLog('[2026-07-17 10:49:35.419] [Core] [INFO] [AstrBot.main:212]:\n    ASTRBOT')).toEqual({
       prefix: '[2026-07-17 10:49:35.419] [Core]',
       level: '[INFO]',
       message: '[AstrBot.main:212]:\n    ASTRBOT',

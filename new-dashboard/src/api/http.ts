@@ -38,18 +38,14 @@ export type RequestDependencies = {
 
 function requestStorage(dependencies: RequestDependencies) {
   return dependencies.storage === undefined
-    ? (typeof window === 'undefined' ? null : window.localStorage)
+    ? typeof window === 'undefined'
+      ? null
+      : window.localStorage
     : dependencies.storage;
 }
 
-function authenticatedHeaders(
-  input: RequestInfo | URL,
-  init: RequestInit,
-  storage: Storage | null,
-) {
-  const inputHeaders = typeof Request !== 'undefined' && input instanceof Request
-    ? input.headers
-    : undefined;
+function authenticatedHeaders(input: RequestInfo | URL, init: RequestInit, storage: Storage | null) {
+  const inputHeaders = typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined;
   const headers = new Headers(init.headers ?? inputHeaders);
   const token = readAuthToken(storage);
   const locale = storage?.getItem('astrbot-locale');
@@ -85,12 +81,7 @@ export async function fetchWithAuth(
     headers: authenticatedHeaders(input, init, storage),
   });
   if (!dependencies.skipUnauthorizedHandling) {
-    expireUnauthorizedSession(
-      requestPath(input),
-      response.status,
-      storage,
-      dependencies.onUnauthorized,
-    );
+    expireUnauthorizedSession(requestPath(input), response.status, storage, dependencies.onUnauthorized);
   }
   return response;
 }
@@ -119,9 +110,7 @@ export async function apiRequest<T>(
 }
 
 export function isLegacyFallbackError(error: unknown) {
-  return error instanceof ApiError && (
-    error.status === 404 || error.message.toLowerCase().includes('missing api key')
-  );
+  return error instanceof ApiError && (error.status === 404 || error.message.toLowerCase().includes('missing api key'));
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {

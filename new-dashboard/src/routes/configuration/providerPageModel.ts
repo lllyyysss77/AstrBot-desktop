@@ -1,7 +1,8 @@
 import type { JsonObject } from './model';
 import type { ProviderCapability as ApiProviderCapability } from '@/api/generated/openapi-v1/types.gen';
 
-export type ProviderType = 'chat_completion' | 'agent_runner' | 'speech_to_text' | 'text_to_speech' | 'embedding' | 'rerank';
+export type ProviderType =
+  'chat_completion' | 'agent_runner' | 'speech_to_text' | 'text_to_speech' | 'embedding' | 'rerank';
 export type ProviderCapability = ApiProviderCapability;
 export type ProviderTestStatus = {
   error: string | null;
@@ -62,8 +63,7 @@ export function providerTypeOf(item: JsonObject): ProviderType | undefined {
   if (capability in CAPABILITY_TYPES) return CAPABILITY_TYPES[capability];
 
   const legacy = stringValue(item.type);
-  return LEGACY_PROVIDER_TYPES[legacy]
-    ?? PROVIDER_TABS.find((tab) => legacy.includes(tab.type))?.type;
+  return LEGACY_PROVIDER_TYPES[legacy] ?? PROVIDER_TABS.find((tab) => legacy.includes(tab.type))?.type;
 }
 
 export function recordsForType<T extends JsonObject>(items: T[], type: ProviderType): T[] {
@@ -96,19 +96,11 @@ export function providerSchemaData(payload: JsonObject) {
 }
 
 const BASIC_SOURCE_FIELDS = ['id', 'key', 'api_base'];
-const INTERNAL_SOURCE_FIELDS = new Set([
-  ...BASIC_SOURCE_FIELDS,
-  'enable',
-  'type',
-  'provider_type',
-  'provider',
-]);
+const INTERNAL_SOURCE_FIELDS = new Set([...BASIC_SOURCE_FIELDS, 'enable', 'type', 'provider_type', 'provider']);
 
 export function providerSourceSections(source: JsonObject) {
   const basic = Object.fromEntries(BASIC_SOURCE_FIELDS.map((key) => [key, source[key] ?? '']));
-  const advanced = Object.fromEntries(
-    Object.entries(source).filter(([key]) => !INTERNAL_SOURCE_FIELDS.has(key)),
-  );
+  const advanced = Object.fromEntries(Object.entries(source).filter(([key]) => !INTERNAL_SOURCE_FIELDS.has(key)));
   return { basic, advanced };
 }
 
@@ -148,7 +140,7 @@ export function providerFromTemplate(template: JsonObject) {
 export function mergeProviderWithTemplate(provider: JsonObject, template: JsonObject) {
   const mergeDefaults = (current: unknown, defaults: unknown): unknown => {
     if (!isObject(defaults)) return current === undefined ? cloneValue(defaults) : current;
-    const result: JsonObject = isObject(current) ? cloneValue(current) as JsonObject : {};
+    const result: JsonObject = isObject(current) ? (cloneValue(current) as JsonObject) : {};
     for (const [key, value] of Object.entries(defaults)) {
       result[key] = mergeDefaults(result[key], value);
     }
@@ -191,15 +183,37 @@ export function capabilityBadges(provider: JsonObject, metadata?: JsonObject) {
   const supportedInputs = Array.isArray(metadataModalities.input) ? metadataModalities.input.map(String) : [];
   const enabled = Array.isArray(provider.modalities) ? provider.modalities.map(String) : [];
   const definitions: Array<{ enabled: boolean; icon: `mdi-${string}`; key: string; supported: boolean }> = [
-    { key: 'image', icon: 'mdi-image-outline', supported: supportedInputs.includes('image'), enabled: enabled.includes('image') },
-    { key: 'audio', icon: 'mdi-music-note-outline', supported: supportedInputs.includes('audio'), enabled: enabled.includes('audio') },
-    { key: 'toolUse', icon: 'mdi-wrench-outline', supported: Boolean(metadata?.tool_call), enabled: enabled.includes('tool_use') },
-    { key: 'reasoning', icon: 'mdi-brain', supported: Boolean(metadata?.reasoning), enabled: Boolean(provider.reasoning) },
+    {
+      key: 'image',
+      icon: 'mdi-image-outline',
+      supported: supportedInputs.includes('image'),
+      enabled: enabled.includes('image'),
+    },
+    {
+      key: 'audio',
+      icon: 'mdi-music-note-outline',
+      supported: supportedInputs.includes('audio'),
+      enabled: enabled.includes('audio'),
+    },
+    {
+      key: 'toolUse',
+      icon: 'mdi-wrench-outline',
+      supported: Boolean(metadata?.tool_call),
+      enabled: enabled.includes('tool_use'),
+    },
+    {
+      key: 'reasoning',
+      icon: 'mdi-brain',
+      supported: Boolean(metadata?.reasoning),
+      enabled: Boolean(provider.reasoning),
+    },
   ];
-  return definitions.filter((item) => item.supported || item.enabled).map((item) => ({
-    ...item,
-    enabled: !metadata || item.enabled,
-  }));
+  return definitions
+    .filter((item) => item.supported || item.enabled)
+    .map((item) => ({
+      ...item,
+      enabled: !metadata || item.enabled,
+    }));
 }
 
 function uniqueSourceId(baseId: string, existingSources: JsonObject[]) {

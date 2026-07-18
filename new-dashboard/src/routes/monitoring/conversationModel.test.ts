@@ -4,7 +4,11 @@ import { conversationKey, parseConversationHistory, parseUmo } from './conversat
 
 describe('conversation model', () => {
   it('preserves colon characters in session IDs', () => {
-    expect(parseUmo('telegram:FriendMessage:user:1')).toEqual({ messageType: 'FriendMessage', platform: 'telegram', sessionId: 'user:1' });
+    expect(parseUmo('telegram:FriendMessage:user:1')).toEqual({
+      messageType: 'FriendMessage',
+      platform: 'telegram',
+      sessionId: 'user:1',
+    });
   });
 
   it('parses history JSON safely and creates composite keys', () => {

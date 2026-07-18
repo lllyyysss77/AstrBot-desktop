@@ -18,8 +18,7 @@
 .cron-filters select { width: 100%; min-width: 0; height: 42px; padding: 0 10px 0 0; border: 0; outline: 0; background: transparent; color: var(--astrbot-text); }
 .cron-filters label > .mdi { margin-left: 11px; font-size: 19px; }
 .cron-task-list { display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
-.cron-task { display: flex; min-width: 0; align-items: center; gap: 12px; padding: 15px 16px; border: 1px solid var(--astrbot-border); border-radius: 11px; background: var(--astrbot-surface); cursor: pointer; transition: border-color .15s ease, background-color .15s ease, transform .15s ease; }
-.cron-task { min-height: 104px; }
+.cron-task { display: flex; min-width: 0; min-height: 104px; align-items: center; gap: 12px; padding: 15px 16px; border: 1px solid var(--astrbot-border); border-radius: 11px; background: var(--astrbot-surface); cursor: pointer; transition: border-color .15s ease, background-color .15s ease, transform .15s ease; }
 .cron-task:hover { border-color: color-mix(in srgb, var(--astrbot-primary) 38%, var(--astrbot-border)); background: color-mix(in srgb, var(--astrbot-primary) 3%, var(--astrbot-surface)); transform: translateY(-1px); }
 .cron-task.is-disabled { opacity: .62; }
 .cron-task__body { min-width: 0; flex: 1; }

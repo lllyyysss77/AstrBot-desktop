@@ -122,7 +122,8 @@ function arrayValue(value: unknown, field: string) {
 }
 
 function requiredText(value: unknown, field: string) {
-  if (typeof value !== 'string' || !value) throw new ApiPayloadError(`Expected ${field} to be a non-empty string.`, value);
+  if (typeof value !== 'string' || !value)
+    throw new ApiPayloadError(`Expected ${field} to be a non-empty string.`, value);
   return value;
 }
 
@@ -205,12 +206,18 @@ export function initialSessionEditor(item: SessionRule): EditorState {
       tts_enabled: service.tts_enabled !== false,
     },
     providers: {
-      chat_completion: typeof item.rules.provider_perf_chat_completion === 'string'
-        ? item.rules.provider_perf_chat_completion : FOLLOW_CONFIG_VALUE,
-      speech_to_text: typeof item.rules.provider_perf_speech_to_text === 'string'
-        ? item.rules.provider_perf_speech_to_text : FOLLOW_CONFIG_VALUE,
-      text_to_speech: typeof item.rules.provider_perf_text_to_speech === 'string'
-        ? item.rules.provider_perf_text_to_speech : FOLLOW_CONFIG_VALUE,
+      chat_completion:
+        typeof item.rules.provider_perf_chat_completion === 'string'
+          ? item.rules.provider_perf_chat_completion
+          : FOLLOW_CONFIG_VALUE,
+      speech_to_text:
+        typeof item.rules.provider_perf_speech_to_text === 'string'
+          ? item.rules.provider_perf_speech_to_text
+          : FOLLOW_CONFIG_VALUE,
+      text_to_speech:
+        typeof item.rules.provider_perf_text_to_speech === 'string'
+          ? item.rules.provider_perf_text_to_speech
+          : FOLLOW_CONFIG_VALUE,
     },
     plugin: {
       disabled_plugins: stringList(plugin.disabled_plugins),

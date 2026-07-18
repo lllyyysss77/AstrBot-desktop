@@ -26,16 +26,10 @@ type MenuProps = {
 const MenuContext = createContext<{ close: (restoreFocus?: boolean) => void } | null>(null);
 
 function getItems(container: HTMLElement | null) {
-  return container
-    ? Array.from(container.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])'))
-    : [];
+  return container ? Array.from(container.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')) : [];
 }
 
-export function getNextMenuItemIndex(
-  key: string,
-  currentIndex: number,
-  itemCount: number,
-) {
+export function getNextMenuItemIndex(key: string, currentIndex: number, itemCount: number) {
   if (itemCount <= 0) return null;
   if (key === 'ArrowDown') return (currentIndex + 1) % itemCount;
   if (key === 'ArrowUp') return (currentIndex - 1 + itemCount) % itemCount;
@@ -86,13 +80,7 @@ export function Menu({ children, className = '', label, trigger }: MenuProps) {
       })}
       {open && (
         <MenuContext.Provider value={{ close }}>
-          <div
-            aria-label={label}
-            className="headless-menu__content"
-            onKeyDown={onKeyDown}
-            ref={contentRef}
-            role="menu"
-          >
+          <div aria-label={label} className="headless-menu__content" onKeyDown={onKeyDown} ref={contentRef} role="menu">
             {children}
           </div>
         </MenuContext.Provider>

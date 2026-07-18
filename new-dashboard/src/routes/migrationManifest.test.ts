@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { matchRoutes } from 'react-router-dom';
 
-import {
-  migratedRoutePaths,
-  routeLayout,
-  routeMigrationManifest,
-  routeRequiresAuth,
-} from './migrationManifest';
+import { migratedRoutePaths, routeLayout, routeMigrationManifest, routeRequiresAuth } from './migrationManifest';
 
 describe('route migration manifest', () => {
   it('contains each migrated route only once', () => {
@@ -86,12 +81,19 @@ describe('route migration manifest', () => {
 
   it.each([
     ['/extension/demo-plugin', '/extension/:pluginId', { pluginId: 'demo-plugin' }],
-    ['/plugin-page/demo-plugin/settings', '/plugin-page/:pluginName/:pageName', { pluginName: 'demo-plugin', pageName: 'settings' }],
+    [
+      '/plugin-page/demo-plugin/settings',
+      '/plugin-page/:pluginName/:pageName',
+      { pluginName: 'demo-plugin', pageName: 'settings' },
+    ],
     ['/knowledge-base/kb-1/document/doc-2', '/knowledge-base/:kbId/document/:docId', { kbId: 'kb-1', docId: 'doc-2' }],
     ['/chat/session-1', '/chat/:conversationId', { conversationId: 'session-1' }],
     ['/chatbox/session-2', '/chatbox/:conversationId', { conversationId: 'session-2' }],
   ])('preserves dynamic parameters for %s', (url, pattern, params) => {
-    const matches = matchRoutes(routeMigrationManifest.map((route) => ({ path: route.path })), url);
+    const matches = matchRoutes(
+      routeMigrationManifest.map((route) => ({ path: route.path })),
+      url,
+    );
     expect(matches?.at(-1)?.route.path).toBe(pattern);
     expect(matches?.at(-1)?.params).toEqual(params);
   });

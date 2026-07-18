@@ -8,19 +8,29 @@ const outputDir = path.resolve(import.meta.dirname, '..', 'src', 'api', 'generat
 const logDir = path.resolve(import.meta.dirname, '..', '.openapi-logs');
 const expectedOutputs = ['index.ts', 'sdk.gen.ts', 'types.gen.ts'];
 
-const result = spawnSync('pnpm', [
-  '--dir', dashboardDir,
-  'exec', 'openapi-ts',
-  '-i', 'openapi/openapi-v1.yaml',
-  '-o', outputDir,
-  '-c', '@hey-api/client-axios',
-  '-l', logDir,
-], {
-  cwd: dashboardDir,
-  encoding: 'utf8',
-  env: process.env,
-  shell: process.platform === 'win32',
-});
+const result = spawnSync(
+  'pnpm',
+  [
+    '--dir',
+    dashboardDir,
+    'exec',
+    'openapi-ts',
+    '-i',
+    'openapi/openapi-v1.yaml',
+    '-o',
+    outputDir,
+    '-c',
+    '@hey-api/client-axios',
+    '-l',
+    logDir,
+  ],
+  {
+    cwd: dashboardDir,
+    encoding: 'utf8',
+    env: process.env,
+    shell: process.platform === 'win32',
+  },
+);
 
 if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);

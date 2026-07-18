@@ -25,9 +25,7 @@ export function isConfigRecord(value: unknown): value is ConfigRecord {
 }
 
 export function getConfigValue(root: ConfigRecord, selector: string): unknown {
-  return selector.split('.').reduce<unknown>((value, key) => (
-    isConfigRecord(value) ? value[key] : undefined
-  ), root);
+  return selector.split('.').reduce<unknown>((value, key) => (isConfigRecord(value) ? value[key] : undefined), root);
 }
 
 export function setConfigValue(root: ConfigRecord, selector: string, value: unknown): ConfigRecord {
@@ -58,22 +56,26 @@ export function matchesConfigCondition(root: ConfigRecord, metadata: ConfigItemM
 
 export function configItemsForValue(metadata: ConfigGroupMetadata, value: ConfigRecord) {
   const inferred = inferConfigMetadata(value).items ?? {};
-  return Object.fromEntries(Object.keys(value)
-    .filter((key) => key !== 'hint')
-    .map((key) => [key, metadata.items?.[key] ?? inferred[key] ?? {}]));
+  return Object.fromEntries(
+    Object.keys(value)
+      .filter((key) => key !== 'hint')
+      .map((key) => [key, metadata.items?.[key] ?? inferred[key] ?? {}]),
+  );
 }
 
 export function inferConfigMetadata(value: ConfigRecord): ConfigGroupMetadata {
   return {
     type: 'object',
-    items: Object.fromEntries(Object.entries(value).map(([key, item]) => {
-      let type = 'string';
-      if (typeof item === 'boolean') type = 'bool';
-      else if (typeof item === 'number') type = Number.isInteger(item) ? 'int' : 'float';
-      else if (Array.isArray(item)) type = 'list';
-      else if (isConfigRecord(item)) type = 'dict';
-      else if (typeof item === 'string' && item.includes('\n')) type = 'text';
-      return [key, { description: key, type }];
-    })),
+    items: Object.fromEntries(
+      Object.entries(value).map(([key, item]) => {
+        let type = 'string';
+        if (typeof item === 'boolean') type = 'bool';
+        else if (typeof item === 'number') type = Number.isInteger(item) ? 'int' : 'float';
+        else if (Array.isArray(item)) type = 'list';
+        else if (isConfigRecord(item)) type = 'dict';
+        else if (typeof item === 'string' && item.includes('\n')) type = 'text';
+        return [key, { description: key, type }];
+      }),
+    ),
   };
 }

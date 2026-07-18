@@ -48,32 +48,38 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
   addToast: (message, options = {}) => {
     const id = nextId('toast');
     set((state) => ({
-      toasts: [...state.toasts, {
-        closable: options.closable ?? true,
-        id,
-        message,
-        timeout: options.timeout ?? 3000,
-        variant: options.variant ?? 'info',
-      }],
+      toasts: [
+        ...state.toasts,
+        {
+          closable: options.closable ?? true,
+          id,
+          message,
+          timeout: options.timeout ?? 3000,
+          variant: options.variant ?? 'info',
+        },
+      ],
     }));
     return id;
   },
-  dismissToast: (id) => set((state) => ({
-    toasts: state.toasts.filter((toast) => toast.id !== id),
-  })),
-  finishLoading: (id) => set((state) => {
-    const loadingIds = new Set(state.loadingIds);
-    loadingIds.delete(id);
-    return {
-      loadingIds,
-      loadingProgress: loadingIds.size ? state.loadingProgress : null,
-    };
-  }),
-  requestConfirmation: (options) => new Promise<boolean>((resolve) => {
+  dismissToast: (id) =>
     set((state) => ({
-      confirmQueue: [...state.confirmQueue, { ...options, id: nextId('confirm'), resolve }],
-    }));
-  }),
+      toasts: state.toasts.filter((toast) => toast.id !== id),
+    })),
+  finishLoading: (id) =>
+    set((state) => {
+      const loadingIds = new Set(state.loadingIds);
+      loadingIds.delete(id);
+      return {
+        loadingIds,
+        loadingProgress: loadingIds.size ? state.loadingProgress : null,
+      };
+    }),
+  requestConfirmation: (options) =>
+    new Promise<boolean>((resolve) => {
+      set((state) => ({
+        confirmQueue: [...state.confirmQueue, { ...options, id: nextId('confirm'), resolve }],
+      }));
+    }),
   resolveConfirmation: (id, confirmed) => {
     const request = get().confirmQueue.find((item) => item.id === id);
     if (!request) return;
@@ -82,9 +88,10 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
     }));
     request.resolve(confirmed);
   },
-  setLoadingProgress: (progress) => set({
-    loadingProgress: progress == null ? null : Math.min(100, Math.max(0, progress)),
-  }),
+  setLoadingProgress: (progress) =>
+    set({
+      loadingProgress: progress == null ? null : Math.min(100, Math.max(0, progress)),
+    }),
   startLoading: (providedId) => {
     const id = providedId ?? nextId('loading');
     set((state) => ({ loadingIds: new Set(state.loadingIds).add(id) }));
@@ -93,9 +100,8 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
 }));
 
 export const toast = Object.assign(
-  (message: string, options?: Partial<Omit<ToastMessage, 'id' | 'message'>>) => (
-    useFeedbackStore.getState().addToast(message, options)
-  ),
+  (message: string, options?: Partial<Omit<ToastMessage, 'id' | 'message'>>) =>
+    useFeedbackStore.getState().addToast(message, options),
   {
     error: (message: string) => useFeedbackStore.getState().addToast(message, { variant: 'error' }),
     info: (message: string) => useFeedbackStore.getState().addToast(message, { variant: 'info' }),
@@ -104,11 +110,8 @@ export const toast = Object.assign(
   },
 );
 
-export const confirmAction = (options: ConfirmOptions | string) => (
-  useFeedbackStore.getState().requestConfirmation(
-    typeof options === 'string' ? { message: options } : options,
-  )
-);
+export const confirmAction = (options: ConfirmOptions | string) =>
+  useFeedbackStore.getState().requestConfirmation(typeof options === 'string' ? { message: options } : options);
 
 export const loading = {
   finish: (id: string) => useFeedbackStore.getState().finishLoading(id),

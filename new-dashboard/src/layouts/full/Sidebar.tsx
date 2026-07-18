@@ -6,12 +6,7 @@ import { MdiIcon } from '@/components/icons/MdiIcon';
 import { ExpandCollapse } from '@/components/motion/ExpandCollapse';
 import { listPlugins } from '@/api/openapi';
 import { objectList, responseData } from '@/routes/configuration/model';
-import {
-  SIDEBAR_COLLAPSED_WIDTH,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MIN_WIDTH,
-  useLayoutStore,
-} from '@/stores/layout';
+import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, useLayoutStore } from '@/stores/layout';
 import {
   buildPluginNavigation,
   mergePluginNavigation,
@@ -38,21 +33,27 @@ function NavigationEntry({ item, mini }: { item: NavigationItem; mini: boolean }
         <button
           aria-expanded={open}
           className={`sidebar-nav__item sidebar-nav__group-button${groupActive ? ' sidebar-nav__item--active' : ''}`}
-          onClick={() => setOpenedGroups(
-            open ? openedGroups.filter((key) => key !== item.title) : [...openedGroups, item.title],
-          )}
+          onClick={() =>
+            setOpenedGroups(open ? openedGroups.filter((key) => key !== item.title) : [...openedGroups, item.title])
+          }
           title={mini ? t(item.title) : undefined}
           type="button"
         >
-          <span className="sidebar-nav__icon"><MdiIcon name={item.icon} /></span>
+          <span className="sidebar-nav__icon">
+            <MdiIcon name={item.icon} />
+          </span>
           {!mini && <span>{t(item.title)}</span>}
           {!mini && <MdiIcon className="sidebar-nav__chevron" name="mdi-chevron-down" />}
         </button>
-        {!mini && <ExpandCollapse className="sidebar-nav__children-motion" open={open}>
-          <ul className="sidebar-nav__children">
-            {item.children.map((child) => <NavigationEntry item={child} key={child.title} mini={false} />)}
-          </ul>
-        </ExpandCollapse>}
+        {!mini && (
+          <ExpandCollapse className="sidebar-nav__children-motion" open={open}>
+            <ul className="sidebar-nav__children">
+              {item.children.map((child) => (
+                <NavigationEntry item={child} key={child.title} mini={false} />
+              ))}
+            </ul>
+          </ExpandCollapse>
+        )}
       </li>
     );
   }
@@ -68,7 +69,9 @@ function NavigationEntry({ item, mini }: { item: NavigationItem; mini: boolean }
         title={mini ? t(item.title) : undefined}
         to={item.to ?? '/'}
       >
-        <span className="sidebar-nav__icon"><MdiIcon name={item.icon} /></span>
+        <span className="sidebar-nav__icon">
+          <MdiIcon name={item.icon} />
+        </span>
         {!mini && <span>{t(item.title)}</span>}
       </Link>
     </li>
@@ -146,9 +149,15 @@ export function Sidebar() {
   return (
     <>
       <button aria-label={t('core.common.close')} className="sidebar-backdrop" onClick={closeDrawer} type="button" />
-      <nav aria-label={t('core.navigation.title', 'Main navigation')} className={`sidebar${mini ? ' sidebar--mini' : ''}`} style={{ width }}>
+      <nav
+        aria-label={t('core.navigation.title', 'Main navigation')}
+        className={`sidebar${mini ? ' sidebar--mini' : ''}`}
+        style={{ width }}
+      >
         <ul className="sidebar-nav">
-          {items.map((item) => <NavigationEntry item={item} key={item.title} mini={mini} />)}
+          {items.map((item) => (
+            <NavigationEntry item={item} key={item.title} mini={mini} />
+          ))}
         </ul>
         {!mini && (
           <div className="sidebar-footer">
@@ -157,7 +166,8 @@ export function Sidebar() {
               className={location.pathname === '/settings' ? 'sidebar-nav__item--active' : undefined}
               to="/settings"
             >
-              <MdiIcon name="mdi-cog" />{t('core.navigation.settings')}
+              <MdiIcon name="mdi-cog" />
+              {t('core.navigation.settings')}
             </Link>
           </div>
         )}

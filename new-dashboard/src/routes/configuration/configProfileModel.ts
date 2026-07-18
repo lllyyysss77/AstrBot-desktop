@@ -8,7 +8,9 @@ export function normalizeConfigProfileName(value: string) {
 
 export function hasDuplicateConfigProfileName(options: ConfigProfileOption[], name: string, excludeId?: string) {
   const normalized = normalizeConfigProfileName(name).toLocaleLowerCase();
-  return options.some((option) => option.id !== excludeId && normalizeConfigProfileName(option.name).toLocaleLowerCase() === normalized);
+  return options.some(
+    (option) => option.id !== excludeId && normalizeConfigProfileName(option.name).toLocaleLowerCase() === normalized,
+  );
 }
 
 export function copiedConfigPayload(source: Record<string, unknown>): ConfigRecord {

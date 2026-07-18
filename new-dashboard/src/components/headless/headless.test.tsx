@@ -26,7 +26,9 @@ describe('headless interaction primitives', () => {
       </Popover>,
     );
     const dialog = renderToStaticMarkup(
-      <Dialog title="Confirm" trigger={<button>Open</button>}>Dialog content</Dialog>,
+      <Dialog title="Confirm" trigger={<button>Open</button>}>
+        Dialog content
+      </Dialog>,
     );
 
     expect(menu).toContain('aria-haspopup="menu"');

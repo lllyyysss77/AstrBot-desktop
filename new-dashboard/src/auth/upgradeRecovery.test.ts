@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CompatibleApiResponse, AuthSessionResponse } from '@/api/auth';
-import {
-  legacyUpgradeDetail,
-  normalizeVersion,
-  restartPollDecision,
-  versionsMismatch,
-} from './upgradeRecovery';
+import { legacyUpgradeDetail, normalizeVersion, restartPollDecision, versionsMismatch } from './upgradeRecovery';
 
 function response(legacyFallback: boolean): CompatibleApiResponse<AuthSessionResponse> {
   return {
@@ -19,10 +14,14 @@ function response(legacyFallback: boolean): CompatibleApiResponse<AuthSessionRes
 }
 
 function versionFetch(version: string, dashboardVersion: string) {
-  return async () => new Response(JSON.stringify({
-    data: { dashboard_version: dashboardVersion, version },
-    status: 'ok',
-  }), { headers: { 'content-type': 'application/json' }, status: 200 });
+  return async () =>
+    new Response(
+      JSON.stringify({
+        data: { dashboard_version: dashboardVersion, version },
+        status: 'ok',
+      }),
+      { headers: { 'content-type': 'application/json' }, status: 200 },
+    );
 }
 
 describe('upgrade recovery model', () => {
@@ -33,18 +32,13 @@ describe('upgrade recovery model', () => {
   });
 
   it('only blocks legacy fallback sessions with mismatched versions', async () => {
-    await expect(legacyUpgradeDetail(
-      response(false),
-      versionFetch('4.0.0', '4.1.0') as typeof fetch,
-    )).resolves.toBeNull();
-    await expect(legacyUpgradeDetail(
-      response(true),
-      versionFetch('4.1.0', 'v4.1.0') as typeof fetch,
-    )).resolves.toBeNull();
-    await expect(legacyUpgradeDetail(
-      response(true),
-      versionFetch('4.0.0', '4.1.0') as typeof fetch,
-    )).resolves.toEqual({
+    await expect(
+      legacyUpgradeDetail(response(false), versionFetch('4.0.0', '4.1.0') as typeof fetch),
+    ).resolves.toBeNull();
+    await expect(
+      legacyUpgradeDetail(response(true), versionFetch('4.1.0', 'v4.1.0') as typeof fetch),
+    ).resolves.toBeNull();
+    await expect(legacyUpgradeDetail(response(true), versionFetch('4.0.0', '4.1.0') as typeof fetch)).resolves.toEqual({
       blocking: true,
       dashboard_version: '4.1.0',
       version: '4.0.0',

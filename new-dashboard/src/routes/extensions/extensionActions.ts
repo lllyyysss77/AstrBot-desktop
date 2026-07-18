@@ -1,24 +1,39 @@
 import { isObject, type JsonObject } from '@/routes/configuration/model';
 
-export function getSelectedGitHubProxy(storage: Storage | null = typeof window === 'undefined' ? null : window.localStorage) {
+export function getSelectedGitHubProxy(
+  storage: Storage | null = typeof window === 'undefined' ? null : window.localStorage,
+) {
   if (!storage || storage.getItem('githubProxyRadioValue') !== '1') return '';
   return storage.getItem('selectedGitHubProxy') || '';
 }
 
 export function pluginUpdateTargets(items: JsonObject[]) {
-  return items.filter((item) => Boolean(item.has_update)).map((item) => String(item.name || item.id || '')).filter(Boolean);
+  return items
+    .filter((item) => Boolean(item.has_update))
+    .map((item) => String(item.name || item.id || ''))
+    .filter(Boolean);
 }
 
 function normalizeUrl(value: unknown) {
-  return String(value || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '').toLowerCase();
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '')
+    .toLowerCase();
 }
 
 function versionParts(value: unknown) {
-  return String(value || '').trim().replace(/^v/i, '').split(/[+-]/)[0].split('.').map((part) => Number.parseInt(part.match(/^\d+/)?.[0] || '0', 10));
+  return String(value || '')
+    .trim()
+    .replace(/^v/i, '')
+    .split(/[+-]/)[0]
+    .split('.')
+    .map((part) => Number.parseInt(part.match(/^\d+/)?.[0] || '0', 10));
 }
 
 function compareVersions(left: unknown, right: unknown) {
-  const leftParts = versionParts(left); const rightParts = versionParts(right);
+  const leftParts = versionParts(left);
+  const rightParts = versionParts(right);
   for (let index = 0; index < Math.max(leftParts.length, rightParts.length, 3); index += 1) {
     const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
     if (difference) return difference;
@@ -35,14 +50,18 @@ export function annotatePluginUpdates<T extends JsonObject>(items: T[], markets:
     const candidates = markets.get(registry) || [];
     const sourceId = String(source.market_plugin_id || '').trim();
     const sourceRepo = normalizeUrl(source.repo || item.repo);
-    const marketplaceName = String(item.marketplace_name || '').trim().toLowerCase();
-    const match = candidates.find((candidate) => (
-      sourceId && String(candidate.market_plugin_id || candidate.id || '').trim() === sourceId
-    ) || (
-      sourceRepo && normalizeUrl(candidate.repo || candidate.download_url) === sourceRepo
-    ) || (
-      marketplaceName && String(candidate.name || '').trim().toLowerCase() === marketplaceName
-    ));
+    const marketplaceName = String(item.marketplace_name || '')
+      .trim()
+      .toLowerCase();
+    const match = candidates.find(
+      (candidate) =>
+        (sourceId && String(candidate.market_plugin_id || candidate.id || '').trim() === sourceId) ||
+        (sourceRepo && normalizeUrl(candidate.repo || candidate.download_url) === sourceRepo) ||
+        (marketplaceName &&
+          String(candidate.name || '')
+            .trim()
+            .toLowerCase() === marketplaceName),
+    );
     if (!match) return next;
     const localVersion = String(item.version || '').trim();
     const onlineVersion = String(match.version || '').trim();
@@ -50,7 +69,8 @@ export function annotatePluginUpdates<T extends JsonObject>(items: T[], markets:
     const comparison = known ? compareVersions(localVersion, onlineVersion) : 0;
     return {
       ...next,
-      has_update: known && (comparison < 0 || comparison === 0 && localVersion.includes('-') && !onlineVersion.includes('-')),
+      has_update:
+        known && (comparison < 0 || (comparison === 0 && localVersion.includes('-') && !onlineVersion.includes('-'))),
       online_version: onlineVersion,
       update_market_plugin: match,
     };

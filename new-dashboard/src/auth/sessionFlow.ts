@@ -3,10 +3,7 @@ import { parseProviderSchema } from '@/api/domain';
 import { decodeApiData, expectRecord, optionalRecord } from '@/api/response';
 
 export function sessionNeedsPasswordSetup(session: AuthSession) {
-  return Boolean(
-    session.changePwdHint
-    || (session.md5PwdHint && !session.passwordUpgradeRequired),
-  );
+  return Boolean(session.changePwdHint || (session.md5PwdHint && !session.passwordUpgradeRequired));
 }
 
 export function sanitizeReturnUrl(value: string | null | undefined) {
@@ -28,14 +25,13 @@ export async function checkOnboardingCompleted(): Promise<boolean> {
 
     const providerResponse = await getProviderSchema();
     const providerData = decodeApiData(providerResponse, parseProviderSchema, 'provider schema');
-    const sourceTypes = new Map(
-      providerData.providerSources.map((source) => [source.id, source.provider_type]),
+    const sourceTypes = new Map(providerData.providerSources.map((source) => [source.id, source.provider_type]));
+    return providerData.providers.some(
+      (provider) =>
+        provider.provider_type === 'chat_completion' ||
+        sourceTypes.get(provider.provider_source_id || '') === 'chat_completion' ||
+        String(provider.type ?? '').includes('chat_completion'),
     );
-    return providerData.providers.some((provider) => (
-      provider.provider_type === 'chat_completion'
-      || sourceTypes.get(provider.provider_source_id || '') === 'chat_completion'
-      || String(provider.type ?? '').includes('chat_completion')
-    ));
   } catch {
     return false;
   }
@@ -47,6 +43,6 @@ export async function resolveAuthenticatedRoute(
   returnUrl?: string | null,
 ) {
   if (sessionNeedsPasswordSetup(session)) return '/auth/setup';
-  if (!await onboardingCheck()) return '/welcome';
+  if (!(await onboardingCheck())) return '/welcome';
   return sanitizeReturnUrl(returnUrl) ?? '/dashboard/default';
 }

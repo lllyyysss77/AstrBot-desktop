@@ -17,8 +17,13 @@ export type PersonaFormValue = {
 };
 
 export const emptyPersonaForm = (folderId: string | null): PersonaFormValue => ({
-  persona_id: '', system_prompt: '', custom_error_message: '', begin_dialogs: [],
-  tools: null, skills: null, folder_id: folderId,
+  persona_id: '',
+  system_prompt: '',
+  custom_error_message: '',
+  begin_dialogs: [],
+  tools: null,
+  skills: null,
+  folder_id: folderId,
 });
 
 export function personaFormValue(value: JsonObject, folderId: string | null): PersonaFormValue {
@@ -39,12 +44,15 @@ export function stringList(value: unknown): string[] {
 
 export function normalizeFolderTree(value: unknown): PersonaFolderNode[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(isObject).map((item) => ({
-    ...item,
-    folder_id: String(item.folder_id || item.id || ''),
-    name: String(item.name || item.folder_id || item.id || ''),
-    children: normalizeFolderTree(item.children),
-  })).filter((item) => item.folder_id);
+  return value
+    .filter(isObject)
+    .map((item) => ({
+      ...item,
+      folder_id: String(item.folder_id || item.id || ''),
+      name: String(item.name || item.folder_id || item.id || ''),
+      children: normalizeFolderTree(item.children),
+    }))
+    .filter((item) => item.folder_id);
 }
 
 export function findFolderPath(tree: PersonaFolderNode[], folderId: string | null): PersonaFolderNode[] {
@@ -58,7 +66,9 @@ export function findFolderPath(tree: PersonaFolderNode[], folderId: string | nul
 }
 
 export function flattenFolders(tree: PersonaFolderNode[], excludedId = ''): PersonaFolderNode[] {
-  return tree.flatMap((node) => node.folder_id === excludedId ? [] : [node, ...flattenFolders(node.children, excludedId)]);
+  return tree.flatMap((node) =>
+    node.folder_id === excludedId ? [] : [node, ...flattenFolders(node.children, excludedId)],
+  );
 }
 
 export function filterFolderTree(tree: PersonaFolderNode[], query: string): PersonaFolderNode[] {
@@ -97,6 +107,8 @@ export function exportPersonaRecord(value: JsonObject): JsonObject {
 
 export function personaExportFilename(value: JsonObject): string {
   const id = String(value.persona_id || value.id || 'persona').trim() || 'persona';
+  // Windows filename sanitization intentionally matches ASCII control characters.
+  // eslint-disable-next-line no-control-regex
   const safeId = id.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').replace(/[. ]+$/g, '') || 'persona';
   return `${safeId}.json`;
 }

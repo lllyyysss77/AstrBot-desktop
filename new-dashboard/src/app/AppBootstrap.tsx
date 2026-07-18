@@ -19,13 +19,14 @@ export function AppBootstrap() {
     let active = true;
 
     void detectDesktopRuntime().then(async (runtime) => {
-      const ready = !runtime.isDesktop || !runtime.bridge
-        ? true
-        : await waitForDesktopBackendReady({ bridge: runtime.bridge });
+      const ready =
+        !runtime.isDesktop || !runtime.bridge ? true : await waitForDesktopBackendReady({ bridge: runtime.bridge });
       if (active) setStatus(ready ? 'ready' : 'error');
     });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [attempt]);
 
   if (status === 'ready') return <App />;
@@ -44,7 +45,9 @@ export function AppBootstrap() {
       ) : (
         <>
           <p role="alert">AstrBot 后端启动超时。</p>
-          <button className="app-bootstrap__retry" type="button" onClick={retry}>重试</button>
+          <button className="app-bootstrap__retry" type="button" onClick={retry}>
+            重试
+          </button>
         </>
       )}
     </main>

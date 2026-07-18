@@ -5,10 +5,18 @@ import { responseData } from '@/api/response';
 import { fetchWithAuth } from '@/api/http';
 import { logIdentity, parseSseChunk, type LogItem } from './model';
 
-const delay = (milliseconds: number, signal: AbortSignal) => new Promise<void>((resolve) => {
-  const timer = window.setTimeout(resolve, milliseconds);
-  signal.addEventListener('abort', () => { window.clearTimeout(timer); resolve(); }, { once: true });
-});
+const delay = (milliseconds: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = window.setTimeout(resolve, milliseconds);
+    signal.addEventListener(
+      'abort',
+      () => {
+        window.clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
 
 export function useLogFeed(predicate: (log: LogItem) => boolean, maxItems = 300, reconnectKey = 0) {
   const [items, setItems] = useState<LogItem[]>([]);
@@ -77,9 +85,15 @@ export function useLogFeed(predicate: (log: LogItem) => boolean, maxItems = 300,
             buffer += decoder.decode(result.value, { stream: true });
             const parsed = parseSseChunk(buffer);
             buffer = parsed.remainder;
-            append(parsed.events.flatMap((event) => {
-              try { return [JSON.parse(event) as LogItem]; } catch { return []; }
-            }));
+            append(
+              parsed.events.flatMap((event) => {
+                try {
+                  return [JSON.parse(event) as LogItem];
+                } catch {
+                  return [];
+                }
+              }),
+            );
           }
         } catch {
           if (controller.signal.aborted) break;

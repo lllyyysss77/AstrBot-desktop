@@ -34,41 +34,30 @@ export type CompatibleApiResponse<T> = {
 };
 
 export const authApi = {
-  login: (payload: LoginRequest) => compatibleRequest<AuthSessionResponse>(
-    '/api/v1/auth/login',
-    '/api/auth/login',
-    jsonPost(payload),
-  ),
-  logout: () => compatibleRequest<Record<string, unknown>>(
-    '/api/v1/auth/logout',
-    '/api/auth/logout',
-    { method: 'POST' },
-  ),
-  setup: (payload: SetupRequest) => compatibleRequest<AuthSessionResponse>(
-    '/api/v1/auth/setup',
-    '/api/auth/setup',
-    jsonPost(payload),
-  ),
-  setupStatus: () => compatibleRequest<SetupStatus>(
-    '/api/v1/auth/setup-status',
-    '/api/auth/setup-status',
-  ),
-  setupTotp: (payload?: TotpSetupRequest) => compatibleRequest<Record<string, unknown>>(
-    '/api/v1/auth/totp/setup',
-    '/api/auth/totp/setup',
-    payload ? jsonRequest(payload) : { method: 'POST' },
-  ),
-  recoverTotp: () => compatibleRequest<Record<string, unknown>>(
-    '/api/v1/auth/totp/recovery',
-    '/api/auth/totp/recovery',
-    { method: 'POST' },
-  ),
-  updateAccount: (payload: UpdateAccountRequest) => compatibleRequest<Record<string, unknown>>(
-    '/api/v1/auth/account',
-    '/api/auth/account/edit',
-    jsonRequest(payload, 'PATCH'),
-    jsonRequest(payload),
-  ),
+  login: (payload: LoginRequest) =>
+    compatibleRequest<AuthSessionResponse>('/api/v1/auth/login', '/api/auth/login', jsonPost(payload)),
+  logout: () =>
+    compatibleRequest<Record<string, unknown>>('/api/v1/auth/logout', '/api/auth/logout', { method: 'POST' }),
+  setup: (payload: SetupRequest) =>
+    compatibleRequest<AuthSessionResponse>('/api/v1/auth/setup', '/api/auth/setup', jsonPost(payload)),
+  setupStatus: () => compatibleRequest<SetupStatus>('/api/v1/auth/setup-status', '/api/auth/setup-status'),
+  setupTotp: (payload?: TotpSetupRequest) =>
+    compatibleRequest<Record<string, unknown>>(
+      '/api/v1/auth/totp/setup',
+      '/api/auth/totp/setup',
+      payload ? jsonRequest(payload) : { method: 'POST' },
+    ),
+  recoverTotp: () =>
+    compatibleRequest<Record<string, unknown>>('/api/v1/auth/totp/recovery', '/api/auth/totp/recovery', {
+      method: 'POST',
+    }),
+  updateAccount: (payload: UpdateAccountRequest) =>
+    compatibleRequest<Record<string, unknown>>(
+      '/api/v1/auth/account',
+      '/api/auth/account/edit',
+      jsonRequest(payload, 'PATCH'),
+      jsonRequest(payload),
+    ),
 };
 
 export async function compatibleRequest<T>(

@@ -105,7 +105,9 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(() => {
     try {
       const value = JSON.parse(localStorage.getItem('chat.projectExpandedIds') || '[]');
-      return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item)) : []);
+      return new Set(
+        Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && Boolean(item)) : [],
+      );
     } catch {
       return new Set();
     }
@@ -164,7 +166,12 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const [threadDeleting, setThreadDeleting] = useState(false);
   const [threadDraft, setThreadDraft] = useState('');
   const [threadSending, setThreadSending] = useState(false);
-  const [threadSelection, setThreadSelection] = useState<{ message: ChatRecord; text: string; left: number; top: number } | null>(null);
+  const [threadSelection, setThreadSelection] = useState<{
+    message: ChatRecord;
+    text: string;
+    left: number;
+    top: number;
+  } | null>(null);
   const [renamingSession, setRenamingSession] = useState<ChatSession | null>(null);
   const [sessionTitleDraft, setSessionTitleDraft] = useState('');
   const [sessionTitleSaving, setSessionTitleSaving] = useState(false);
@@ -197,8 +204,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const shouldStickToBottomRef = useRef(true);
   const mediaUrlsRef = useRef<Record<string, string>>({});
   const current = useMemo(
-    () => sessions.find((item) => item.session_id === conversationId)
-      || Object.values(projectSessions).flat().find((item) => item.session_id === conversationId),
+    () =>
+      sessions.find((item) => item.session_id === conversationId) ||
+      Object.values(projectSessions)
+        .flat()
+        .find((item) => item.session_id === conversationId),
     [conversationId, projectSessions, sessions],
   );
   const isProviderWorkspace = conversationId === 'models';
@@ -206,26 +216,39 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     () => projects.find((project) => recordId(project, 'project_id', 'id') === selectedProjectId),
     [projects, selectedProjectId],
   );
-  const currentProvider = useMemo(() => providers.find((item) => item.id === provider) || providers[0], [provider, providers]);
+  const currentProvider = useMemo(
+    () => providers.find((item) => item.id === provider) || providers[0],
+    [provider, providers],
+  );
   const providerOverrideEnabled = !agentRunnerLoading && usesLocalProviderOverride(agentRunnerType);
   const currentLanguage = chatLanguageOptions.find((item) => item.code === i18n.language) || chatLanguageOptions[0];
-  const editingProjectForm = useMemo<ChatProjectForm | null>(() => editingProject ? {
-    description: String(editingProject.description || ''),
-    emoji: String(editingProject.emoji || '📁'),
-    title: String(editingProject.title || ''),
-    workspace_path: String(editingProject.workspace_path || ''),
-    workspace_type: (['custom', 'project', 'session'].includes(String(editingProject.workspace_type))
-      ? editingProject.workspace_type
-      : 'session') as ChatProjectForm['workspace_type'],
-  } : null, [editingProject]);
+  const editingProjectForm = useMemo<ChatProjectForm | null>(
+    () =>
+      editingProject
+        ? {
+            description: String(editingProject.description || ''),
+            emoji: String(editingProject.emoji || '📁'),
+            title: String(editingProject.title || ''),
+            workspace_path: String(editingProject.workspace_path || ''),
+            workspace_type: (['custom', 'project', 'session'].includes(String(editingProject.workspace_type))
+              ? editingProject.workspace_type
+              : 'session') as ChatProjectForm['workspace_type'],
+          }
+        : null,
+    [editingProject],
+  );
   const isDark = themeMode === 'dark' || (themeMode === 'system' && document.documentElement.dataset.theme === 'dark');
   const filteredProviders = useMemo(() => {
     const query = providerSearch.trim().toLowerCase();
-    return query ? providers.filter((item) => item.id.toLowerCase().includes(query) || item.model.toLowerCase().includes(query)) : providers;
+    return query
+      ? providers.filter((item) => item.id.toLowerCase().includes(query) || item.model.toLowerCase().includes(query))
+      : providers;
   }, [providerSearch, providers]);
   const tokenUsage = useMemo(() => {
     if (!providerOverrideEnabled) return null;
-    const latestStats = [...messages].reverse().find((message) => message.content.type !== 'user' && message.content.agentStats)?.content.agentStats;
+    const latestStats = [...messages]
+      .reverse()
+      .find((message) => message.content.type !== 'user' && message.content.agentStats)?.content.agentStats;
     const used = contextTokenCount(latestStats);
     const metadata = providerMetadata[currentProvider?.model || model];
     const limit = contextLimit(currentProvider, metadata);
@@ -243,16 +266,19 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   }, [currentProvider, messages, model, providerMetadata, providerOverrideEnabled, t]);
   const sending = pendingSessionSending || Boolean(conversationId && runningSessionIds.has(conversationId));
   const sidebarOpen = chatbox ? chatboxSidebarOpen : layoutChatSidebarOpen;
-  const setSidebarOpen = useCallback((open: boolean) => {
-    if (chatbox) setChatboxSidebarOpen(open);
-    else setLayoutChatSidebarOpen(open);
-  }, [chatbox, setLayoutChatSidebarOpen]);
+  const setSidebarOpen = useCallback(
+    (open: boolean) => {
+      if (chatbox) setChatboxSidebarOpen(open);
+      else setLayoutChatSidebarOpen(open);
+    },
+    [chatbox, setLayoutChatSidebarOpen],
+  );
   const unwrap = <T,>(response: unknown) => responseData<T>(response);
-  const sessionUmo = useCallback((sessionId: string, session?: ChatSession) => buildWebchatUmo(
-    sessionId,
-    String(session?.platform_id || 'webchat'),
-    Boolean(session?.is_group),
-  ), []);
+  const sessionUmo = useCallback(
+    (sessionId: string, session?: ChatSession) =>
+      buildWebchatUmo(sessionId, String(session?.platform_id || 'webchat'), Boolean(session?.is_group)),
+    [],
+  );
 
   const resolveAgentRunnerType = useCallback((nextConfigId: string) => {
     const normalized = nextConfigId || 'default';
@@ -275,55 +301,61 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     return request;
   }, []);
 
-  const loadAgentRunnerType = useCallback(async (nextConfigId: string) => {
-    const requestId = ++agentRunnerRequestIdRef.current;
-    setAgentRunnerLoading(true);
-    try {
-      const runnerType = await resolveAgentRunnerType(nextConfigId);
-      if (requestId === agentRunnerRequestIdRef.current) setAgentRunnerType(runnerType);
-      return runnerType;
-    } finally {
-      if (requestId === agentRunnerRequestIdRef.current) setAgentRunnerLoading(false);
-    }
-  }, [resolveAgentRunnerType]);
-
-  const applyConfig = useCallback(async (nextConfigId: string, sessionId = conversationId) => {
-    const releaseLock = acquireActionLock(configSaveLockRef.current);
-    if (!releaseLock) return false;
-    const normalized = nextConfigId || 'default';
-    const previous = configIdRef.current;
-    configIdRef.current = normalized;
-    setConfigId(normalized);
-    storeChatConfigId(normalized);
-    setConfigSaving(true);
-    try {
-      const runnerTypeRequest = loadAgentRunnerType(normalized);
-      if (sessionId) {
-        const session = sessions.find((item) => item.session_id === sessionId)
-          || Object.values(projectSessions).flat().find((item) => item.session_id === sessionId);
-        const umo = sessionUmo(sessionId, session);
-        await Promise.all([
-          upsertConfigRoute({ path: { umo }, body: { config_id: normalized } }),
-          runnerTypeRequest,
-        ]);
-        setConfigRoutes((entries) => [
-          ...entries.filter((entry) => entry.pattern !== umo),
-          ...(normalized === 'default' ? [] : [{ pattern: umo, configId: normalized }]),
-        ]);
+  const loadAgentRunnerType = useCallback(
+    async (nextConfigId: string) => {
+      const requestId = ++agentRunnerRequestIdRef.current;
+      setAgentRunnerLoading(true);
+      try {
+        const runnerType = await resolveAgentRunnerType(nextConfigId);
+        if (requestId === agentRunnerRequestIdRef.current) setAgentRunnerType(runnerType);
+        return runnerType;
+      } finally {
+        if (requestId === agentRunnerRequestIdRef.current) setAgentRunnerLoading(false);
       }
-      await runnerTypeRequest;
-      return true;
-    } catch (cause) {
-      configIdRef.current = previous;
-      setConfigId(previous);
-      storeChatConfigId(previous);
-      toast.error(errorMessage(cause, t('features.chat.config.applyFailed', 'Failed to apply configuration.')));
-      return false;
-    } finally {
-      releaseLock();
-      setConfigSaving(false);
-    }
-  }, [conversationId, loadAgentRunnerType, projectSessions, sessionUmo, sessions, t]);
+    },
+    [resolveAgentRunnerType],
+  );
+
+  const applyConfig = useCallback(
+    async (nextConfigId: string, sessionId = conversationId) => {
+      const releaseLock = acquireActionLock(configSaveLockRef.current);
+      if (!releaseLock) return false;
+      const normalized = nextConfigId || 'default';
+      const previous = configIdRef.current;
+      configIdRef.current = normalized;
+      setConfigId(normalized);
+      storeChatConfigId(normalized);
+      setConfigSaving(true);
+      try {
+        const runnerTypeRequest = loadAgentRunnerType(normalized);
+        if (sessionId) {
+          const session =
+            sessions.find((item) => item.session_id === sessionId) ||
+            Object.values(projectSessions)
+              .flat()
+              .find((item) => item.session_id === sessionId);
+          const umo = sessionUmo(sessionId, session);
+          await Promise.all([upsertConfigRoute({ path: { umo }, body: { config_id: normalized } }), runnerTypeRequest]);
+          setConfigRoutes((entries) => [
+            ...entries.filter((entry) => entry.pattern !== umo),
+            ...(normalized === 'default' ? [] : [{ pattern: umo, configId: normalized }]),
+          ]);
+        }
+        await runnerTypeRequest;
+        return true;
+      } catch (cause) {
+        configIdRef.current = previous;
+        setConfigId(previous);
+        storeChatConfigId(previous);
+        toast.error(errorMessage(cause, t('features.chat.config.applyFailed', 'Failed to apply configuration.')));
+        return false;
+      } finally {
+        releaseLock();
+        setConfigSaving(false);
+      }
+    },
+    [conversationId, loadAgentRunnerType, projectSessions, sessionUmo, sessions, t],
+  );
   const markSessionRunning = useCallback((sessionId: string, running: boolean) => {
     setRunningSessionIds((currentIds) => {
       const next = new Set(currentIds);
@@ -335,11 +367,13 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const loadSessions = useCallback(async () => {
     try {
-      setSessions(decodeApiData(
-        await listChatSessions({ query: { page: 1, page_size: 200 } }),
-        parseChatSessions,
-        'chat session list',
-      ));
+      setSessions(
+        decodeApiData(
+          await listChatSessions({ query: { page: 1, page_size: 200 } }),
+          parseChatSessions,
+          'chat session list',
+        ),
+      );
     } catch (cause) {
       setError(errorMessage(cause, 'Failed to load conversations.'));
     }
@@ -354,26 +388,29 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     }
   }, []);
 
-  const loadProjectSessions = useCallback(async (projectId: string) => {
-    setLoadingProjectIds((current) => new Set(current).add(projectId));
-    try {
-      const sessions = decodeApiData(
-        await listChatProjectSessions({ path: { project_id: projectId } }),
-        parseChatSessions,
-        'project chat session list',
-      );
-      setProjectSessions((current) => ({ ...current, [projectId]: sessions }));
-    } catch (cause) {
-      toast.error(errorMessage(cause, t('features.chat.project.loadFailed')));
-      setProjectSessions((current) => ({ ...current, [projectId]: [] }));
-    } finally {
-      setLoadingProjectIds((current) => {
-        const next = new Set(current);
-        next.delete(projectId);
-        return next;
-      });
-    }
-  }, [t]);
+  const loadProjectSessions = useCallback(
+    async (projectId: string) => {
+      setLoadingProjectIds((current) => new Set(current).add(projectId));
+      try {
+        const sessions = decodeApiData(
+          await listChatProjectSessions({ path: { project_id: projectId } }),
+          parseChatSessions,
+          'project chat session list',
+        );
+        setProjectSessions((current) => ({ ...current, [projectId]: sessions }));
+      } catch (cause) {
+        toast.error(errorMessage(cause, t('features.chat.project.loadFailed')));
+        setProjectSessions((current) => ({ ...current, [projectId]: [] }));
+      } finally {
+        setLoadingProjectIds((current) => {
+          const next = new Set(current);
+          next.delete(projectId);
+          return next;
+        });
+      }
+    },
+    [t],
+  );
 
   const loadProviders = useCallback(async () => {
     setProvidersLoading(true);
@@ -387,7 +424,9 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
         .filter((item) => (item.enable ?? item.enabled) !== false)
         .map((item) => ({ ...item, model: typeof item.model === 'string' ? item.model : '' }));
       setProviders(items);
-      setProviderMetadata(isObject(envelope.model_metadata) ? envelope.model_metadata as Record<string, JsonObject> : {});
+      setProviderMetadata(
+        isObject(envelope.model_metadata) ? (envelope.model_metadata as Record<string, JsonObject>) : {},
+      );
       const selected = items.find((item) => item.id === provider);
       if (selected?.model) setModel(selected.model);
     } catch (cause) {
@@ -453,8 +492,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   }, [expandedProjectIds, loadProjectSessions, loadingProjectIds, projectSessions, projects]);
   useEffect(() => {
     if (!conversationId) return;
-    const session = sessions.find((item) => item.session_id === conversationId)
-      || Object.values(projectSessions).flat().find((item) => item.session_id === conversationId);
+    const session =
+      sessions.find((item) => item.session_id === conversationId) ||
+      Object.values(projectSessions)
+        .flat()
+        .find((item) => item.session_id === conversationId);
     const resolved = resolveChatConfigId(configRoutes, sessionUmo(conversationId, session));
     configIdRef.current = resolved;
     setConfigId(resolved);
@@ -467,9 +509,9 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     void listCommands({ query: { config_id: configId === 'default' ? undefined : configId } })
       .then((response) => {
         const payload = unwrap<JsonObject>(response);
-        setWakePrefixes(Array.isArray(payload.wake_prefix) && payload.wake_prefix.length
-          ? payload.wake_prefix.map(String)
-          : ['/']);
+        setWakePrefixes(
+          Array.isArray(payload.wake_prefix) && payload.wake_prefix.length ? payload.wake_prefix.map(String) : ['/'],
+        );
         setCommands(flattenCommandSuggestions(objectList(payload, ['items', 'commands', 'data'])));
       })
       .catch(() => {
@@ -494,41 +536,46 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     void loadMessages();
   }, [conversationId, loadMessages]);
 
-  useEffect(() => () => {
-    activeStreamsRef.current.forEach((controller) => controller.abort());
-    activeStreamsRef.current.clear();
-    audioRecorderRef.current.cancel();
-    if (settingsSubmenuTimer.current != null) window.clearTimeout(settingsSubmenuTimer.current);
-    if (messageScrollFrame.current != null) window.cancelAnimationFrame(messageScrollFrame.current);
-    Object.values(mediaUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
-    mediaUrlsRef.current = {};
-  }, []);
+  useEffect(
+    () => () => {
+      activeStreamsRef.current.forEach((controller) => controller.abort());
+      activeStreamsRef.current.clear();
+      audioRecorderRef.current.cancel();
+      if (settingsSubmenuTimer.current != null) window.clearTimeout(settingsSubmenuTimer.current);
+      if (messageScrollFrame.current != null) window.cancelAnimationFrame(messageScrollFrame.current);
+      Object.values(mediaUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+      mediaUrlsRef.current = {};
+    },
+    [],
+  );
   useEffect(() => {
     const records = activeThread?.messages ? [...messages, ...activeThread.messages] : messages;
-    records.flatMap((message) => message.content.message).forEach((part) => {
-      if (!['image', 'record', 'audio', 'video', 'file'].includes(part.type)) return;
-      const key = mediaPartKey(part);
-      if (!key || mediaUrlsRef.current[key]) return;
-      const url = part.attachment_id
-        ? `/api/v1/files/${encodeURIComponent(part.attachment_id)}/content`
-        : part.stored_filename
-          ? `/api/v1/files/content?filename=${encodeURIComponent(part.stored_filename)}`
-          : '';
-      if (!url) return;
-      mediaUrlsRef.current[key] = '';
-      void fetchWithAuth(url)
-        .then((response) => {
-          if (!response.ok) throw new Error(String(response.status));
-          return response.blob();
-        })
-        .then((blob) => {
-          mediaUrlsRef.current[key] = URL.createObjectURL(blob);
-          setMediaVersion((version) => version + 1);
-        })
-        .catch(() => {
-          delete mediaUrlsRef.current[key];
-        });
-    });
+    records
+      .flatMap((message) => message.content.message)
+      .forEach((part) => {
+        if (!['image', 'record', 'audio', 'video', 'file'].includes(part.type)) return;
+        const key = mediaPartKey(part);
+        if (!key || mediaUrlsRef.current[key]) return;
+        const url = part.attachment_id
+          ? `/api/v1/files/${encodeURIComponent(part.attachment_id)}/content`
+          : part.stored_filename
+            ? `/api/v1/files/content?filename=${encodeURIComponent(part.stored_filename)}`
+            : '';
+        if (!url) return;
+        mediaUrlsRef.current[key] = '';
+        void fetchWithAuth(url)
+          .then((response) => {
+            if (!response.ok) throw new Error(String(response.status));
+            return response.blob();
+          })
+          .then((blob) => {
+            mediaUrlsRef.current[key] = URL.createObjectURL(blob);
+            setMediaVersion((version) => version + 1);
+          })
+          .catch(() => {
+            delete mediaUrlsRef.current[key];
+          });
+      });
   }, [activeThread?.messages, messages]);
   useEffect(() => {
     if (!shouldStickToBottomRef.current) return;
@@ -577,7 +624,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     await loadSessions();
     setSelectedProjectId('');
     pendingLocalSessionRef.current = id;
-    navigate(`${basePath}/${encodeURIComponent(id)}`);
+    void navigate(`${basePath}/${encodeURIComponent(id)}`);
     return id;
   };
 
@@ -592,7 +639,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     setRecording(false);
     setPendingSessionSending(false);
     setReplyTarget(null);
-    navigate(basePath);
+    void navigate(basePath);
     setSidebarOpen(false);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
@@ -615,12 +662,15 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const removeSession = async (session: ChatSession) => {
     const name = session.display_name || session.session_id;
-    if (!await confirmAction({
-      confirmLabel: t('features.chat.batch.delete'),
-      danger: true,
-      message: t('features.chat.conversation.confirmDelete', { name }),
-      title: t('features.chat.actions.deleteChat'),
-    })) return;
+    if (
+      !(await confirmAction({
+        confirmLabel: t('features.chat.batch.delete'),
+        danger: true,
+        message: t('features.chat.conversation.confirmDelete', { name }),
+        title: t('features.chat.actions.deleteChat'),
+      }))
+    )
+      return;
     try {
       await deleteChatSession({ path: { session_id: session.session_id } });
       if (conversationId === session.session_id) newChat();
@@ -682,12 +732,15 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     const projectId = recordId(project, 'project_id', 'id');
     if (!projectId || deletingProjectId) return;
     const title = String(project.title || t('features.chat.project.title'));
-    if (!await confirmAction({
-      confirmLabel: t('core.common.delete'),
-      danger: true,
-      message: t('features.chat.project.confirmDelete', { title }),
-      title: t('core.common.delete'),
-    })) return;
+    if (
+      !(await confirmAction({
+        confirmLabel: t('core.common.delete'),
+        danger: true,
+        message: t('features.chat.project.confirmDelete', { title }),
+        title: t('core.common.delete'),
+      }))
+    )
+      return;
     setDeletingProjectId(projectId);
     try {
       await deleteChatProject({ path: { project_id: projectId } });
@@ -747,7 +800,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     setRecording(false);
     setPendingSessionSending(false);
     setReplyTarget(null);
-    navigate(basePath);
+    void navigate(basePath);
     if (!projectSessions[projectId] && !loadingProjectIds.has(projectId)) void loadProjectSessions(projectId);
     setSidebarOpen(false);
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -760,7 +813,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const selectSession = (sessionId: string) => {
     setSelectedProjectId('');
-    navigate(`${basePath}/${encodeURIComponent(sessionId)}`);
+    void navigate(`${basePath}/${encodeURIComponent(sessionId)}`);
     setSidebarOpen(false);
   };
 
@@ -780,7 +833,12 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       if (result.status !== 'available' || result.error) {
         throw new Error(result.error || t('features.provider.models.testError'));
       }
-      toast.success(t('features.provider.models.testSuccessWithLatency', { id: item.id, latency: Math.max(0, Math.round(performance.now() - startedAt)) }));
+      toast.success(
+        t('features.provider.models.testSuccessWithLatency', {
+          id: item.id,
+          latency: Math.max(0, Math.round(performance.now() - startedAt)),
+        }),
+      );
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.provider.models.testError')));
     } finally {
@@ -795,12 +853,15 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       const data = unwrap<JsonObject>(await uploadFile({ body: { file } }));
       const id = recordId(data, 'attachment_id', 'id');
       if (!id) throw new Error('Upload did not return an attachment ID.');
-      setFiles((currentFiles) => [...currentFiles, {
-        attachment_id: id,
-        filename: String(data.filename || data.original_name || file.name),
-        preview_url: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
-        type: stagedAttachmentType(data.type, file.type),
-      }]);
+      setFiles((currentFiles) => [
+        ...currentFiles,
+        {
+          attachment_id: id,
+          filename: String(data.filename || data.original_name || file.name),
+          preview_url: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+          type: stagedAttachmentType(data.type, file.type),
+        },
+      ]);
     } catch (cause) {
       toast.error(errorMessage(cause, 'Failed to upload file.'));
     } finally {
@@ -851,8 +912,16 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       ];
       const messageId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
       const createdAt = new Date().toISOString();
-      const user: ChatRecord = { id: `local-user-${messageId}`, created_at: createdAt, content: { type: 'user', message: outgoing } };
-      bot = { id: `local-bot-${messageId}`, created_at: createdAt, content: { type: 'bot', message: [], isLoading: true } };
+      const user: ChatRecord = {
+        id: `local-user-${messageId}`,
+        created_at: createdAt,
+        content: { type: 'user', message: outgoing },
+      };
+      bot = {
+        id: `local-bot-${messageId}`,
+        created_at: createdAt,
+        content: { type: 'bot', message: [], isLoading: true },
+      };
       shouldStickToBottomRef.current = true;
       setMessages((items) => {
         const next = [...items, user, bot!];
@@ -883,26 +952,32 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       const applyPayloads = (payloads: unknown[]) => {
         if (!bot) return;
         let changed = false;
-        payloads.forEach((payload) => { changed = appendStreamPayload(bot!, payload, user) || changed; });
+        payloads.forEach((payload) => {
+          changed = appendStreamPayload(bot!, payload, user) || changed;
+        });
         if (changed) streamRender?.schedule();
       };
       streamRender = createStreamRenderScheduler(() => {
         const cached = messageCacheRef.current[sessionId];
         if (activeConversationRef.current === sessionId && cached?.includes(bot!)) setMessages([...cached]);
       });
-      await runChatStream({
-        kind: 'send',
-        configId,
-        enableStreaming: streaming,
-        message: messagePayload,
-        messageId,
-        selectedModel: providerOverrideEnabled ? model : '',
-        selectedProvider: providerOverrideEnabled ? provider : '',
-        sessionId,
-        transport: transportMode,
-      }, abort.signal, {
-        onPayload: (payload) => applyPayloads([payload]),
-      });
+      await runChatStream(
+        {
+          kind: 'send',
+          configId,
+          enableStreaming: streaming,
+          message: messagePayload,
+          messageId,
+          selectedModel: providerOverrideEnabled ? model : '',
+          selectedProvider: providerOverrideEnabled ? provider : '',
+          sessionId,
+          transport: transportMode,
+        },
+        abort.signal,
+        {
+          onPayload: (payload) => applyPayloads([payload]),
+        },
+      );
       await loadSessions();
       if (targetProjectId) await loadProjectSessions(targetProjectId);
     } catch (cause) {
@@ -928,7 +1003,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       if (!sessionId || activeSessionRef.current === sessionId) activeSessionRef.current = '';
       if (sessionId) markSessionRunning(sessionId, false);
       setPendingSessionSending(false);
-      if (!sessionId || activeConversationRef.current === sessionId) requestAnimationFrame(() => inputRef.current?.focus());
+      if (!sessionId || activeConversationRef.current === sessionId)
+        requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -944,7 +1020,7 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       content: { type: 'bot', message: [], reasoning: '', isLoading: true },
     };
     setMessages((items) => {
-      const next = items.map((item, itemIndex) => itemIndex === index ? regenerated : item);
+      const next = items.map((item, itemIndex) => (itemIndex === index ? regenerated : item));
       messageCacheRef.current[conversationId] = next;
       return next;
     });
@@ -959,18 +1035,22 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     activeStreamsRef.current.set(conversationId, abort);
     activeSessionRef.current = conversationId;
     try {
-      await runChatStream({
-        kind: 'regenerate',
-        enableStreaming: streaming,
-        selectedModel: providerOverrideEnabled ? selectedModel : '',
-        selectedProvider: providerOverrideEnabled ? selectedProvider : '',
-        sessionId: conversationId,
-        targetMessageId: targetId,
-      }, abort.signal, {
-        onPayload: (payload) => {
-          if (appendStreamPayload(regenerated, payload)) streamRender.schedule();
+      await runChatStream(
+        {
+          kind: 'regenerate',
+          enableStreaming: streaming,
+          selectedModel: providerOverrideEnabled ? selectedModel : '',
+          selectedProvider: providerOverrideEnabled ? selectedProvider : '',
+          sessionId: conversationId,
+          targetMessageId: targetId,
         },
-      });
+        abort.signal,
+        {
+          onPayload: (payload) => {
+            if (appendStreamPayload(regenerated, payload)) streamRender.schedule();
+          },
+        },
+      );
       await loadSessions();
     } catch (cause) {
       if ((cause as Error)?.name !== 'AbortError') {
@@ -992,7 +1072,12 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
 
   const openMessageEdit = (message: ChatRecord) => {
     setEditingMessage(message);
-    setEditingDraft(message.content.message.filter((part) => part.type === 'plain').map((part) => part.text || '').join('\n'));
+    setEditingDraft(
+      message.content.message
+        .filter((part) => part.type === 'plain')
+        .map((part) => part.text || '')
+        .join('\n'),
+    );
   };
 
   const continueAfterEdit = async (source: ChatRecord, baseMessages: ChatRecord[]) => {
@@ -1013,20 +1098,24 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       if (activeConversationRef.current === conversationId) setMessages([...messageCacheRef.current[conversationId]]);
     });
     try {
-      await runChatStream({
-        kind: 'continue',
-        configId,
-        enableStreaming: streaming,
-        llmCheckpointId: String(source.llm_checkpoint_id || ''),
-        message: serializeChatParts(source.content.message),
-        selectedModel: providerOverrideEnabled ? model : '',
-        selectedProvider: providerOverrideEnabled ? provider : '',
-        sessionId: conversationId,
-      }, abort.signal, {
-        onPayload: (payload) => {
-          if (appendStreamPayload(bot, payload)) scheduler.schedule();
+      await runChatStream(
+        {
+          kind: 'continue',
+          configId,
+          enableStreaming: streaming,
+          llmCheckpointId: String(source.llm_checkpoint_id || ''),
+          message: serializeChatParts(source.content.message),
+          selectedModel: providerOverrideEnabled ? model : '',
+          selectedProvider: providerOverrideEnabled ? provider : '',
+          sessionId: conversationId,
         },
-      });
+        abort.signal,
+        {
+          onPayload: (payload) => {
+            if (appendStreamPayload(bot, payload)) scheduler.schedule();
+          },
+        },
+      );
     } catch (cause) {
       if ((cause as Error)?.name !== 'AbortError') {
         const message = errorMessage(cause, 'Failed to continue edited message.');
@@ -1049,19 +1138,23 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     if (originalIndex < 0) return;
     const content = {
       ...target.content,
-      message: target.content.message.map((part) => part.type === 'plain' ? { ...part, text: editingDraft.trim() } : part),
+      message: target.content.message.map((part) =>
+        part.type === 'plain' ? { ...part, text: editingDraft.trim() } : part,
+      ),
     };
     setSavingMessageEdit(true);
     try {
-      const payload = unwrap<JsonObject>(await updateChatMessage({
-        path: { session_id: conversationId, message_id: String(target.id) },
-        body: { content },
-      }));
+      const payload = unwrap<JsonObject>(
+        await updateChatMessage({
+          path: { session_id: conversationId, message_id: String(target.id) },
+          body: { content },
+        }),
+      );
       const updated = payload.message ? normalizeRecord(payload.message) : { ...target, content };
       const truncated = Boolean(payload.truncated_after_message);
       const next = truncated
         ? [...messages.slice(0, originalIndex), updated]
-        : messages.map((message, index) => index === originalIndex ? updated : message);
+        : messages.map((message, index) => (index === originalIndex ? updated : message));
       messageCacheRef.current[conversationId] = next;
       setMessages(next);
       setEditingMessage(null);
@@ -1096,13 +1189,15 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
   const createThreadFromSelection = async () => {
     if (!conversationId || !threadSelection?.message.id) return;
     try {
-      const thread = unwrap<ChatThread>(await createChatThread({
-        body: {
-          session_id: conversationId,
-          parent_message_id: threadSelection.message.id,
-          selected_text: threadSelection.text,
-        },
-      }));
+      const thread = unwrap<ChatThread>(
+        await createChatThread({
+          body: {
+            session_id: conversationId,
+            parent_message_id: threadSelection.message.id,
+            selected_text: threadSelection.text,
+          },
+        }),
+      );
       const existing = Array.isArray(threadSelection.message.threads) ? threadSelection.message.threads : [];
       threadSelection.message.threads = [...existing, thread];
       messageCacheRef.current[conversationId] = [...messages];
@@ -1126,9 +1221,11 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     try {
       const payload = unwrap<JsonObject>(await getChatThread({ path: { thread_id: thread.thread_id } }));
       const history = Array.isArray(payload.history) ? payload.history.map(normalizeRecord) : [];
-      setActiveThread((currentThread) => currentThread?.thread_id === thread.thread_id
-        ? { ...currentThread, ...payload, messages: history }
-        : currentThread);
+      setActiveThread((currentThread) =>
+        currentThread?.thread_id === thread.thread_id
+          ? { ...currentThread, ...payload, messages: history }
+          : currentThread,
+      );
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.chat.thread.loadFailed', 'Failed to load thread.')));
     }
@@ -1148,50 +1245,59 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
       created_at: new Date().toISOString(),
       content: { type: 'bot', message: [], isLoading: true },
     };
-    setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || []), user, bot] } : thread);
+    setActiveThread((thread) => (thread ? { ...thread, messages: [...(thread.messages || []), user, bot] } : thread));
     setThreadDraft('');
     setThreadSending(true);
     const abort = new AbortController();
     try {
-      await runChatStream({
-        kind: 'thread',
-        enableStreaming: streaming,
-        message: [{ type: 'plain', text }],
-        selectedModel: providerOverrideEnabled ? model : '',
-        selectedProvider: providerOverrideEnabled ? provider : '',
-        threadId,
-      }, abort.signal, {
-        onPayload: (payload) => {
-          if (appendStreamPayload(bot, payload, user)) {
-            setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
-          }
+      await runChatStream(
+        {
+          kind: 'thread',
+          enableStreaming: streaming,
+          message: [{ type: 'plain', text }],
+          selectedModel: providerOverrideEnabled ? model : '',
+          selectedProvider: providerOverrideEnabled ? provider : '',
+          threadId,
         },
-      });
+        abort.signal,
+        {
+          onPayload: (payload) => {
+            if (appendStreamPayload(bot, payload, user)) {
+              setActiveThread((thread) => (thread ? { ...thread, messages: [...(thread.messages || [])] } : thread));
+            }
+          },
+        },
+      );
     } catch (cause) {
       const message = errorMessage(cause, t('features.chat.thread.sendFailed', 'Failed to send thread message.'));
       bot.content.message.push({ type: 'plain', text: message });
       toast.error(message);
     } finally {
       bot.content.isLoading = false;
-      setActiveThread((thread) => thread ? { ...thread, messages: [...(thread.messages || [])] } : thread);
+      setActiveThread((thread) => (thread ? { ...thread, messages: [...(thread.messages || [])] } : thread));
       setThreadSending(false);
     }
   };
 
   const removeThread = async () => {
     if (!activeThread || threadDeleting) return;
-    if (!await confirmAction({
-      confirmLabel: t('core.common.delete'),
-      danger: true,
-      message: t('features.chat.thread.confirmDelete'),
-      title: t('features.chat.thread.delete'),
-    })) return;
+    if (
+      !(await confirmAction({
+        confirmLabel: t('core.common.delete'),
+        danger: true,
+        message: t('features.chat.thread.confirmDelete'),
+        title: t('features.chat.thread.delete'),
+      }))
+    )
+      return;
     setThreadDeleting(true);
     try {
       await deleteChatThread({ path: { thread_id: activeThread.thread_id } });
       messages.forEach((message) => {
         if (Array.isArray(message.threads)) {
-          message.threads = message.threads.filter((thread) => String((thread as JsonObject).thread_id) !== activeThread.thread_id);
+          message.threads = message.threads.filter(
+            (thread) => String((thread as JsonObject).thread_id) !== activeThread.thread_id,
+          );
         }
       });
       if (conversationId) messageCacheRef.current[conversationId] = [...messages];
@@ -1251,9 +1357,8 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     const type = String(selectedProject.workspace_type || 'session');
     if (type === 'session') return t('features.chat.project.workspace.session');
     const path = String(selectedProject.resolved_workspace_path || selectedProject.workspace_path || '').trim();
-    const label = type === 'custom'
-      ? t('features.chat.project.workspace.custom')
-      : t('features.chat.project.workspace.project');
+    const label =
+      type === 'custom' ? t('features.chat.project.workspace.custom') : t('features.chat.project.workspace.project');
     return path ? `${label} · ${path}` : label;
   }, [selectedProject, t]);
   const selectedProjectSessions = selectedProjectId ? projectSessions[selectedProjectId] || [] : [];
@@ -1267,7 +1372,9 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     { id: 'default', name: 'Default' },
     ...configs.flatMap((config, index) => {
       const id = recordId(config, 'id', 'conf_id') || `config-${index}`;
-      return id === 'default' ? [] : [{ id, name: String(config.name || id), description: String(config.description || '') }];
+      return id === 'default'
+        ? []
+        : [{ id, name: String(config.name || id), description: String(config.description || '') }];
     }),
   ];
   const composerCommands: ChatComposerCommand[] = commands.map((command) => ({
@@ -1278,354 +1385,704 @@ export default function ChatPage({ chatbox = false }: ChatPageProps) {
     pluginName: command.plugin_display_name ? String(command.plugin_display_name) : undefined,
     reserved: Boolean(command.reserved),
   }));
-  const sessionTitle = current?.display_name || (selectedProject ? String(selectedProject.title || t('features.chat.project.title')) : t('features.chat.conversation.newConversation'));
+  const sessionTitle =
+    current?.display_name ||
+    (selectedProject
+      ? String(selectedProject.title || t('features.chat.project.title'))
+      : t('features.chat.conversation.newConversation'));
   const modelTitle = provider || t('features.chat.models.default');
   const modelMeta = currentProvider?.model || model;
   const runnerConfigTitle = composerConfigs.find((config) => config.id === configId)?.name || configId;
   const emptyChat = !selectedProject && !loading && !messages.length;
-  const composerNode = <ChatComposer
-    attachments={composerAttachments}
-    commands={composerCommands}
-    commandSuggestionsLabel={t('features.chat.commandSuggestion.label')}
-    configs={composerConfigs}
-    configId={configId}
-    busy={uploading || configSaving || agentRunnerLoading}
-    isRecording={recording}
-    isRunning={sending}
-    labels={{
-      clear: t('features.chat.input.clear'),
-      config: t('features.chat.config.title'),
-      dropToUpload: t('features.chat.input.dropToUpload'),
-      recording: t('features.chat.voice.recording'),
-      send: t('features.chat.input.send'),
-      startRecording: t('features.chat.voice.startRecording'),
-      stopGenerating: t('features.chat.input.stopGenerating'),
-      stopRecording: t('features.chat.voice.stop'),
-      streamingDisabled: t('features.chat.streaming.disabled'),
-      streamingEnabled: t('features.chat.streaming.enabled'),
-      upload: t('features.chat.input.upload'),
-    }}
-    onChange={setDraft}
-    onClearReply={() => setReplyTarget(null)}
-    onConfigChange={(nextConfigId) => void applyConfig(nextConfigId)}
-    onFiles={(selectedFiles) => void uploadFiles(selectedFiles)}
-    onRemoveAttachment={(attachment) => setFiles((items) => {
-      const removed = items.find((item) => item.attachment_id === attachment.id);
-      if (removed?.preview_url) URL.revokeObjectURL(removed.preview_url);
-      return items.filter((item) => item.attachment_id !== attachment.id);
-    })}
-    onSend={() => void send()}
-    onStartRecording={() => void toggleRecording()}
-    onStop={() => void stop()}
-    onStopRecording={() => void toggleRecording()}
-    onToggleStreaming={() => setStreaming((value) => !value)}
-    placeholder={t('features.chat.input.placeholder')}
-    ref={inputRef}
-    replyTo={replyTarget?.id == null ? null : {
-      messageId: replyTarget.id,
-      selectedText: plainMessageText(replyTarget).slice(0, 80),
-    }}
-    sendShortcut="enter"
-    streaming={streaming}
-    tokenUsage={tokenUsage}
-    value={draft}
-    wakePrefixes={wakePrefixes}
-  />;
+  const composerNode = (
+    <ChatComposer
+      attachments={composerAttachments}
+      commands={composerCommands}
+      commandSuggestionsLabel={t('features.chat.commandSuggestion.label')}
+      configs={composerConfigs}
+      configId={configId}
+      busy={uploading || configSaving || agentRunnerLoading}
+      isRecording={recording}
+      isRunning={sending}
+      labels={{
+        clear: t('features.chat.input.clear'),
+        config: t('features.chat.config.title'),
+        dropToUpload: t('features.chat.input.dropToUpload'),
+        recording: t('features.chat.voice.recording'),
+        send: t('features.chat.input.send'),
+        startRecording: t('features.chat.voice.startRecording'),
+        stopGenerating: t('features.chat.input.stopGenerating'),
+        stopRecording: t('features.chat.voice.stop'),
+        streamingDisabled: t('features.chat.streaming.disabled'),
+        streamingEnabled: t('features.chat.streaming.enabled'),
+        upload: t('features.chat.input.upload'),
+      }}
+      onChange={setDraft}
+      onClearReply={() => setReplyTarget(null)}
+      onConfigChange={(nextConfigId) => void applyConfig(nextConfigId)}
+      onFiles={(selectedFiles) => void uploadFiles(selectedFiles)}
+      onRemoveAttachment={(attachment) =>
+        setFiles((items) => {
+          const removed = items.find((item) => item.attachment_id === attachment.id);
+          if (removed?.preview_url) URL.revokeObjectURL(removed.preview_url);
+          return items.filter((item) => item.attachment_id !== attachment.id);
+        })
+      }
+      onSend={() => void send()}
+      onStartRecording={() => void toggleRecording()}
+      onStop={() => void stop()}
+      onStopRecording={() => void toggleRecording()}
+      onToggleStreaming={() => setStreaming((value) => !value)}
+      placeholder={t('features.chat.input.placeholder')}
+      ref={inputRef}
+      replyTo={
+        replyTarget?.id == null
+          ? null
+          : {
+              messageId: replyTarget.id,
+              selectedText: plainMessageText(replyTarget).slice(0, 80),
+            }
+      }
+      sendShortcut="enter"
+      streaming={streaming}
+      tokenUsage={tokenUsage}
+      value={draft}
+      wakePrefixes={wakePrefixes}
+    />
+  );
 
-  return <div className={`chat-shell ${chatbox ? 'chat-shell--box' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
-    <aside className={`chat-sessions ${sidebarOpen ? 'is-open' : ''}`}>
-      <div className="chat-sessions__brand">
-        <div className="chat-sessions__brand-title"><ChatLogo /><span><strong>AstrBot</strong><small>ChatUI</small></span></div>
-        <button aria-label={t('features.chat.accessibility.toggleSidebar')} className="chat-sessions__collapse" onClick={() => setSidebarCollapsed((value) => !value)} title={t('features.chat.accessibility.toggleSidebar')} type="button"><span className="chat-sessions__collapse-normal"><PanelLeftIcon /></span><span className="chat-sessions__rail-stack"><ChatLogo /><PanelLeftIcon /></span></button>
-        <button aria-label={t('features.chat.accessibility.closeConversations')} className="chat-sessions__close" onClick={() => setSidebarOpen(false)} type="button"><MdiIcon name="mdi-close" /></button>
-      </div>
-      <nav className="chat-sessions__actions">
-        <Link title={t('features.chat.actions.providerConfig')} to={`${basePath}/models`}><BoxIcon /><span>{t('features.chat.actions.providerConfig')}</span></Link>
-        <button onClick={newChat} title={t('features.chat.actions.newChat')} type="button"><SquarePenIcon /><span>{t('features.chat.actions.newChat')}</span></button>
-      </nav>
-      <div className="chat-sessions__content">
-        <section className="chat-project-list">
-          <div className="chat-section-header"><span>{t('features.chat.project.title')}</span><button aria-label={t('features.chat.project.create')} onClick={openCreateProject} title={t('features.chat.project.create')} type="button"><PlusIcon /></button></div>
-          {projects.map((project, index) => {
-            const projectId = recordId(project, 'project_id', 'id');
-            const expanded = expandedProjectIds.has(projectId);
-            return <div className="chat-project-group" key={projectId || `project-${index}`}>
-              <div
-                aria-expanded={expanded}
-                className={`chat-project-row ${selectedProjectId === projectId ? 'is-active' : ''}`}
-                onClick={() => selectProjectRow(projectId)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    selectProjectRow(projectId);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
+  return (
+    <div className={`chat-shell ${chatbox ? 'chat-shell--box' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
+      <aside className={`chat-sessions ${sidebarOpen ? 'is-open' : ''}`}>
+        <div className="chat-sessions__brand">
+          <div className="chat-sessions__brand-title">
+            <ChatLogo />
+            <span>
+              <strong>AstrBot</strong>
+              <small>ChatUI</small>
+            </span>
+          </div>
+          <button
+            aria-label={t('features.chat.accessibility.toggleSidebar')}
+            className="chat-sessions__collapse"
+            onClick={() => setSidebarCollapsed((value) => !value)}
+            title={t('features.chat.accessibility.toggleSidebar')}
+            type="button"
+          >
+            <span className="chat-sessions__collapse-normal">
+              <PanelLeftIcon />
+            </span>
+            <span className="chat-sessions__rail-stack">
+              <ChatLogo />
+              <PanelLeftIcon />
+            </span>
+          </button>
+          <button
+            aria-label={t('features.chat.accessibility.closeConversations')}
+            className="chat-sessions__close"
+            onClick={() => setSidebarOpen(false)}
+            type="button"
+          >
+            <MdiIcon name="mdi-close" />
+          </button>
+        </div>
+        <nav className="chat-sessions__actions">
+          <Link title={t('features.chat.actions.providerConfig')} to={`${basePath}/models`}>
+            <BoxIcon />
+            <span>{t('features.chat.actions.providerConfig')}</span>
+          </Link>
+          <button onClick={newChat} title={t('features.chat.actions.newChat')} type="button">
+            <SquarePenIcon />
+            <span>{t('features.chat.actions.newChat')}</span>
+          </button>
+        </nav>
+        <div className="chat-sessions__content">
+          <section className="chat-project-list">
+            <div className="chat-section-header">
+              <span>{t('features.chat.project.title')}</span>
+              <button
+                aria-label={t('features.chat.project.create')}
+                onClick={openCreateProject}
+                title={t('features.chat.project.create')}
+                type="button"
               >
-                <span>{String(project.emoji || '📁')}</span>
-                <span className="chat-project-row__title">
-                  <strong>{String(project.title || t('features.chat.project.title'))}</strong>
-                  <MdiIcon name={expanded ? 'mdi-chevron-down' : 'mdi-chevron-right'} />
-                </span>
-                <span className="chat-project-row__actions" onClick={(event) => event.stopPropagation()}>
-                  <button aria-label={t('features.chat.project.edit')} onClick={() => openEditProject(project)} title={t('features.chat.project.edit')} type="button"><PencilIcon /></button>
-                  <button aria-label={t('core.common.delete')} disabled={!projectId || deletingProjectId === projectId} onClick={() => void removeProject(project)} title={t('core.common.delete')} type="button"><TrashIcon /></button>
-                </span>
-              </div>
-              {expanded && <div className="chat-project-session-list">
-                {loadingProjectIds.has(projectId)
-                  ? <div className="chat-project-session-empty">{t('features.chat.project.loadingSessions')}</div>
-                  : projectSessions[projectId]?.length
-                    ? projectSessions[projectId].map((session) => <div
-                        className={`chat-project-session-row ${session.session_id === conversationId ? 'is-active' : ''}`}
-                        key={session.session_id}
+                <PlusIcon />
+              </button>
+            </div>
+            {projects.map((project, index) => {
+              const projectId = recordId(project, 'project_id', 'id');
+              const expanded = expandedProjectIds.has(projectId);
+              return (
+                <div className="chat-project-group" key={projectId || `project-${index}`}>
+                  <div
+                    aria-expanded={expanded}
+                    className={`chat-project-row ${selectedProjectId === projectId ? 'is-active' : ''}`}
+                    onClick={() => selectProjectRow(projectId)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        selectProjectRow(projectId);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <span>{String(project.emoji || '📁')}</span>
+                    <span className="chat-project-row__title">
+                      <strong>{String(project.title || t('features.chat.project.title'))}</strong>
+                      <MdiIcon name={expanded ? 'mdi-chevron-down' : 'mdi-chevron-right'} />
+                    </span>
+                    <span className="chat-project-row__actions" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        aria-label={t('features.chat.project.edit')}
+                        onClick={() => openEditProject(project)}
+                        title={t('features.chat.project.edit')}
+                        type="button"
                       >
-                        <button onClick={() => selectSession(session.session_id)} type="button">{session.display_name?.trim() || t('features.chat.conversation.newConversation')}</button>
-                        <span onClick={(event) => event.stopPropagation()}>
-                          <button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} title={t('features.chat.conversation.editDisplayName')} type="button"><PencilIcon /></button>
-                          <button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} title={t('features.chat.actions.deleteChat')} type="button"><TrashIcon /></button>
-                        </span>
-                        {runningSessionIds.has(session.session_id) && <MdiIcon className="chat-project-session-progress" name="mdi-loading" />}
-                      </div>)
-                    : <div className="chat-project-session-empty">{t('features.chat.project.noSessions')}</div>}
-              </div>}
-            </div>;
-          })}
-        </section>
-        <div className="chat-session-list">
-          <div className="chat-session-list__label">{t('features.chat.conversation.title')}</div>
-          {sessions.map((session) => <div className={session.session_id === conversationId ? 'is-active' : ''} key={session.session_id}>
-            <button onClick={() => selectSession(session.session_id)} type="button"><span>{session.display_name || session.session_id}</span>{runningSessionIds.has(session.session_id) && <MdiIcon className="chat-session-progress" name="mdi-loading" />}</button>
-            <div><button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} title={t('features.chat.conversation.editDisplayName')} type="button"><PencilIcon /></button><button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} title={t('features.chat.actions.deleteChat')} type="button"><TrashIcon /></button></div>
-          </div>)}
-        </div>
-      </div>
-      <div className="chat-sessions__footer">
-        <details className="chat-settings-menu" onToggle={(event) => { if (!event.currentTarget.open) setSettingsSubmenu(null); }} ref={settingsMenuRef}>
-          <summary className="chat-sessions__settings"><MdiIcon name="mdi-cog-outline" /><span className="chat-sessions__settings-label">{t('core.common.settings')}</span></summary>
-          <div className="chat-settings-menu__panel">
-            <div className="chat-settings-menu__item-wrap" onMouseEnter={() => openSettingsSubmenu('transport')} onMouseLeave={scheduleSettingsSubmenuClose}>
-              <button className={settingsSubmenu === 'transport' ? 'is-active' : ''} onClick={() => setSettingsSubmenu((value) => value === 'transport' ? null : 'transport')} type="button"><MdiIcon name="mdi-connection" /><span>{t('features.chat.transport.title')}</span><small>{t(`features.chat.transport.${transportMode}`)}</small><MdiIcon name="mdi-chevron-right" /></button>
-              {settingsSubmenu === 'transport' && <div className="chat-settings-submenu" onMouseEnter={() => openSettingsSubmenu('transport')} onMouseLeave={scheduleSettingsSubmenuClose}>
-                {(['sse', 'websocket'] as const).map((mode) => <button className={transportMode === mode ? 'is-active' : ''} key={mode} onClick={() => { setTransportMode(mode); setSettingsSubmenu(null); }} type="button"><span>{t(`features.chat.transport.${mode}`)}</span>{transportMode === mode && <MdiIcon name="mdi-check" />}</button>)}
-              </div>}
-            </div>
-            <div className="chat-settings-menu__item-wrap" onMouseEnter={() => openSettingsSubmenu('language')} onMouseLeave={scheduleSettingsSubmenuClose}>
-              <button className={settingsSubmenu === 'language' ? 'is-active' : ''} onClick={() => setSettingsSubmenu((value) => value === 'language' ? null : 'language')} type="button"><MdiIcon name="mdi-translate" /><span>{t('core.common.language')}</span><small>{currentLanguage.label}</small><MdiIcon name="mdi-chevron-right" /></button>
-              {settingsSubmenu === 'language' && <div className="chat-settings-submenu chat-settings-submenu--language" onMouseEnter={() => openSettingsSubmenu('language')} onMouseLeave={scheduleSettingsSubmenuClose}>
-                {chatLanguageOptions.map((language) => <button className={i18n.language === language.code ? 'is-active' : ''} key={language.code} onClick={() => { void i18n.changeLanguage(language.code); setSettingsSubmenu(null); }} type="button"><small>{language.flag}</small><span>{language.label}</span>{i18n.language === language.code && <MdiIcon name="mdi-check" />}</button>)}
-              </div>}
-            </div>
-            <button onClick={toggleTheme} type="button"><MdiIcon name={isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'} /><span>{t(`features.chat.modes.${isDark ? 'lightMode' : 'darkMode'}`)}</span></button>
-          </div>
-        </details>
-      </div>
-    </aside>
-    {sidebarOpen && <button aria-label={t('features.chat.accessibility.closeConversations')} className="chat-sidebar-backdrop" onClick={() => setSidebarOpen(false)} type="button" />}
-    <main className={`chat-main ${emptyChat && !isProviderWorkspace ? 'is-empty-chat' : ''} ${selectedProject ? 'is-project-workspace' : ''} ${isProviderWorkspace ? 'is-provider-workspace' : ''} ${reasoningTarget || selectedRefs || activeThread ? 'has-detail-panel' : ''}`}>
-      <header className="chat-toolbar">
-        <button aria-label={t('features.chat.accessibility.openConversations')} className="chat-toolbar__sidebar-open" onClick={() => setSidebarOpen(true)} type="button"><MdiIcon name="mdi-menu" /></button>
-        {providerOverrideEnabled ? <details className="chat-model-menu" onToggle={(event) => { if (event.currentTarget.open) void loadProviders(); }} ref={modelMenuRef}>
-          <summary><span><strong>{modelTitle}</strong>{modelMeta && modelMeta !== modelTitle && <em>{modelMeta}</em>}<MdiIcon name="mdi-chevron-down" /></span><small>{sessionTitle}</small></summary>
-          <div className="chat-model-menu__panel">
-            <label className="chat-model-search"><MdiIcon name="mdi-magnify" /><input aria-label={t('features.chat.accessibility.searchModels')} onChange={(event) => setProviderSearch(event.target.value)} placeholder={t('features.chat.accessibility.searchModels')} value={providerSearch} /></label>
-            <div className="chat-model-list">
-              {filteredProviders.map((item) => {
-                const selected = item.id === provider;
-                const metadata = providerMetadata[item.model];
-                return <div className={selected ? 'is-selected' : ''} key={item.id}>
-                  <button className="chat-model-list__copy" onClick={() => selectProvider(item)} type="button"><strong>{item.id}</strong><small><span>{item.model}</span><span className="chat-model-badges">{providerCapabilityBadges(item, metadata).map((badge) => <span className={badge.enabled ? '' : 'is-disabled'} key={badge.key} title={t(`features.provider.models.metadata.${badge.enabled ? 'enabled' : 'supportedDisabled'}`, { capability: t(`features.provider.models.metadata.${badge.key}`) })}><MdiIcon name={badge.icon} /></span>)}{formatContextLimit(item, metadata) && <b title={t('features.provider.models.metadata.context', { tokens: formatContextLimit(item, metadata) })}>{formatContextLimit(item, metadata)}</b>}</span></small></button>
-                  <span className="chat-model-list__actions"><button aria-label={t('features.provider.models.testButton')} className={testingProvider === item.id ? 'is-loading' : ''} disabled={Boolean(testingProvider)} onClick={() => void testProvider(item)} title={t('features.provider.models.testButton')} type="button"><MdiIcon name="mdi-connection" /></button>{selected && <MdiIcon name="mdi-check" />}</span>
-                </div>;
-              })}
-              {providersLoading && <div className="chat-model-list__empty">{t('features.chat.models.loading')}</div>}
-              {!providersLoading && !filteredProviders.length && <div className="chat-model-list__empty">{t('features.chat.actions.noAvailableModels')}</div>}
-            </div>
-          </div>
-        </details> : <div className="chat-model-menu chat-model-menu--runner"><span><strong>{runnerConfigTitle}</strong></span><small>{sessionTitle}</small></div>}
-      </header>
-      {isProviderWorkspace ? <section className="chat-provider-workspace"><ProviderPage /></section> : <><section
-        aria-live="polite"
-        className="chat-messages"
-        onScroll={(event) => {
-          const target = event.currentTarget;
-          shouldStickToBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
-          setThreadSelection(null);
-        }}
-        ref={messagesRef}
-      >
-        {loading && <div className="monitor-loading">{t('core.common.loading')}</div>}
-        {selectedProject && <div className="chat-project-workspace">
-          <header className="chat-project-workspace__header">
-            <h1><span>{String(selectedProject.emoji || '📁')}</span>{String(selectedProject.title || t('features.chat.project.title'))}</h1>
-            {Boolean(selectedProject.description) && <p>{String(selectedProject.description)}</p>}
-            <small><MdiIcon name="mdi-folder-cog-outline" />{selectedProjectWorkspace}</small>
-          </header>
-          <div className="chat-project-composer">{composerNode}</div>
-          <div className="chat-project-workspace__sessions">
-            {loadingProjectIds.has(selectedProjectId)
-              ? <div className="chat-project-workspace__empty">{t('features.chat.project.loadingSessions')}</div>
-              : selectedProjectSessions.length
-                ? selectedProjectSessions.map((session) => <article className="chat-project-workspace__session" key={session.session_id}>
-                    <button onClick={() => selectSession(session.session_id)} type="button">
-                      <strong>{session.display_name?.trim() || t('features.chat.conversation.newConversation')}</strong>
-                      <small>{formatProjectSessionDate(session.updated_at || session.created_at, i18n.language)}</small>
-                    </button>
-                    <div>
-                      <button aria-label={t('features.chat.conversation.editDisplayName')} onClick={() => void renameSession(session)} title={t('features.chat.conversation.editDisplayName')} type="button"><PencilIcon /></button>
-                      <button aria-label={t('features.chat.actions.deleteChat')} onClick={() => void removeSession(session)} title={t('features.chat.actions.deleteChat')} type="button"><TrashIcon /></button>
+                        <PencilIcon />
+                      </button>
+                      <button
+                        aria-label={t('core.common.delete')}
+                        disabled={!projectId || deletingProjectId === projectId}
+                        onClick={() => void removeProject(project)}
+                        title={t('core.common.delete')}
+                        type="button"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </span>
+                  </div>
+                  {expanded && (
+                    <div className="chat-project-session-list">
+                      {loadingProjectIds.has(projectId) ? (
+                        <div className="chat-project-session-empty">{t('features.chat.project.loadingSessions')}</div>
+                      ) : projectSessions[projectId]?.length ? (
+                        projectSessions[projectId].map((session) => (
+                          <div
+                            className={`chat-project-session-row ${session.session_id === conversationId ? 'is-active' : ''}`}
+                            key={session.session_id}
+                          >
+                            <button onClick={() => selectSession(session.session_id)} type="button">
+                              {session.display_name?.trim() || t('features.chat.conversation.newConversation')}
+                            </button>
+                            <span onClick={(event) => event.stopPropagation()}>
+                              <button
+                                aria-label={t('features.chat.conversation.editDisplayName')}
+                                onClick={() => void renameSession(session)}
+                                title={t('features.chat.conversation.editDisplayName')}
+                                type="button"
+                              >
+                                <PencilIcon />
+                              </button>
+                              <button
+                                aria-label={t('features.chat.actions.deleteChat')}
+                                onClick={() => void removeSession(session)}
+                                title={t('features.chat.actions.deleteChat')}
+                                type="button"
+                              >
+                                <TrashIcon />
+                              </button>
+                            </span>
+                            {runningSessionIds.has(session.session_id) && (
+                              <MdiIcon className="chat-project-session-progress" name="mdi-loading" />
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="chat-project-session-empty">{t('features.chat.project.noSessions')}</div>
+                      )}
                     </div>
-                  </article>)
-                : <div className="chat-project-workspace__empty"><MdiIcon name="mdi-message-outline" /><span>{t('features.chat.project.noSessions')}</span></div>}
-          </div>
-        </div>}
-        {emptyChat && !error && <div className="chat-empty"><h1>{t('features.chat.welcome.title')}</h1></div>}
-        <ChatMessageList
-          enableEdit={!sending}
-          enableRetry={!sending}
-          editingMessageId={editingMessage?.id ?? null}
-          editingValue={editingDraft}
-          editSaving={savingMessageEdit}
-          messages={messages}
-          labels={{
-            assistant: t('features.chat.message.assistant'),
-            cachedTokens: t('features.chat.stats.cachedTokens'),
-            cancel: t('core.common.cancel'),
-            completed: t('core.status.completed'),
-            copy: t('features.chat.actions.copy'),
-            download: t('features.chat.input.download', 'Download'),
-            duration: t('features.chat.stats.duration'),
-            edit: t('core.common.edit'),
-            inputTokens: t('features.chat.stats.inputTokens'),
-            outputTokens: t('features.chat.stats.outputTokens'),
-            reasoning: t('features.chat.reasoning.thinking'),
-            references: t('features.chat.refs.title'),
-            replyTo: t('features.chat.reply.replyTo'),
-            retry: t('features.chat.actions.retry'),
-            running: t('features.chat.toolStatus.running'),
-            save: t('core.common.save'),
-            threads: t('features.chat.thread.title'),
-            ttft: t('features.chat.stats.ttft'),
-          }}
-          onEdit={openMessageEdit}
-          onEditValueChange={setEditingDraft}
-          onCancelEdit={() => setEditingMessage(null)}
-          onDownload={(part) => downloadMessagePart(part)}
-          onOpenImage={(url, part) => url && setImagePreview({
-            name: String(part.filename || part.stored_filename || t('features.chat.attachment.image', 'Image')),
-            url,
-          })}
-          onOpenReasoning={(message) => {
-            setSelectedRefs(null);
-            setActiveThread(null);
-            setReasoningTarget(message);
-          }}
-          onOpenRefs={(refs) => {
-            setReasoningTarget(null);
-            setActiveThread(null);
-            setSelectedRefs({ used: refs });
-          }}
-          onOpenThread={(thread) => void openThread(thread as ChatThread)}
-          onReplyClick={(messageId) => scrollToMessage(messageId)}
-          onRetry={(message) => void regenerate(message)}
-          onRetryWithModel={(message, providerId, modelName) => void regenerate(message, providerId, modelName)}
-          onSaveEdit={() => void saveMessageEdit()}
-          onSelectText={selectMessageText}
-          resolvePartUrl={(part) => mediaUrlsRef.current[mediaPartKey(part)] || ''}
-          retryModels={providers.map((item) => ({ providerId: item.id, model: item.model }))}
-          streaming={sending}
-        />
-        {error && <div className="monitor-error">{error}</div>}
-        <div ref={messageEnd} />
-      </section>
-      {!selectedProject && <footer className="chat-composer chat-composer--v2">{composerNode}</footer>}</>}
-      {threadSelection && <button
-        className="chat-thread-selection"
-        onClick={() => void createThreadFromSelection()}
-        style={{ left: threadSelection.left, top: threadSelection.top }}
-        type="button"
-      >{t('features.chat.thread.askInThread', 'Ask in thread')}</button>}
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open && !sessionTitleSaving) {
-            setRenamingSession(null);
-            setSessionTitleDraft('');
-          }
-        }}
-        open={renamingSession !== null}
-        title={t('features.chat.conversation.editDisplayName')}
-      >
-        <div className="chat-session-rename-dialog">
-          <input
-            autoFocus
-            onChange={(event) => setSessionTitleDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                void saveSessionTitle();
-              }
-            }}
-            placeholder={t('features.chat.conversation.displayName')}
-            value={sessionTitleDraft}
-          />
-          <div className="dialog-actions">
-            <button
-              disabled={sessionTitleSaving}
-              onClick={() => {
-                setRenamingSession(null);
-                setSessionTitleDraft('');
-              }}
-              type="button"
-            >{t('core.common.cancel')}</button>
-            <button
-              className="button--primary"
-              disabled={sessionTitleSaving || !sessionTitleDraft.trim()}
-              onClick={() => void saveSessionTitle()}
-              type="button"
-            >{t('core.common.save')}</button>
+                  )}
+                </div>
+              );
+            })}
+          </section>
+          <div className="chat-session-list">
+            <div className="chat-session-list__label">{t('features.chat.conversation.title')}</div>
+            {sessions.map((session) => (
+              <div className={session.session_id === conversationId ? 'is-active' : ''} key={session.session_id}>
+                <button onClick={() => selectSession(session.session_id)} type="button">
+                  <span>{session.display_name || session.session_id}</span>
+                  {runningSessionIds.has(session.session_id) && (
+                    <MdiIcon className="chat-session-progress" name="mdi-loading" />
+                  )}
+                </button>
+                <div>
+                  <button
+                    aria-label={t('features.chat.conversation.editDisplayName')}
+                    onClick={() => void renameSession(session)}
+                    title={t('features.chat.conversation.editDisplayName')}
+                    type="button"
+                  >
+                    <PencilIcon />
+                  </button>
+                  <button
+                    aria-label={t('features.chat.actions.deleteChat')}
+                    onClick={() => void removeSession(session)}
+                    title={t('features.chat.actions.deleteChat')}
+                    type="button"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </Dialog>
-      <ChatDetailPanels
-        activeThread={activeThread}
-        imagePreview={imagePreview}
-        onCloseImage={() => setImagePreview(null)}
-        onCloseReasoning={() => setReasoningTarget(null)}
-        onCloseReferences={() => setSelectedRefs(null)}
-        onCloseThread={() => setActiveThread(null)}
-        onDeleteThread={() => void removeThread()}
-        onDownload={(part) => downloadMessagePart(part)}
-        onOpenImage={(url, part) => url && setImagePreview({
-          name: String(part.filename || part.stored_filename || t('features.chat.attachment.image', 'Image')),
-          url,
-        })}
-        onSendThread={() => void sendThreadMessage()}
-        onThreadDraftChange={setThreadDraft}
-        reasoningTarget={reasoningTarget}
-        referenceData={selectedRefs}
-        resolvePartUrl={(part) => mediaUrlsRef.current[mediaPartKey(part)] || ''}
-        threadDeleting={threadDeleting}
-        threadDraft={threadDraft}
-        threadMessagesRef={threadMessagesRef}
-        threadSending={threadSending}
-      />
-      <ChatProjectDialog
-        error={projectError}
-        onOpenChange={(open) => {
-          setProjectDialogOpen(open);
-          if (!open) {
-            setProjectError('');
-            setEditingProject(null);
+        <div className="chat-sessions__footer">
+          <details
+            className="chat-settings-menu"
+            onToggle={(event) => {
+              if (!event.currentTarget.open) setSettingsSubmenu(null);
+            }}
+            ref={settingsMenuRef}
+          >
+            <summary className="chat-sessions__settings">
+              <MdiIcon name="mdi-cog-outline" />
+              <span className="chat-sessions__settings-label">{t('core.common.settings')}</span>
+            </summary>
+            <div className="chat-settings-menu__panel">
+              <div
+                className="chat-settings-menu__item-wrap"
+                onMouseEnter={() => openSettingsSubmenu('transport')}
+                onMouseLeave={scheduleSettingsSubmenuClose}
+              >
+                <button
+                  className={settingsSubmenu === 'transport' ? 'is-active' : ''}
+                  onClick={() => setSettingsSubmenu((value) => (value === 'transport' ? null : 'transport'))}
+                  type="button"
+                >
+                  <MdiIcon name="mdi-connection" />
+                  <span>{t('features.chat.transport.title')}</span>
+                  <small>{t(`features.chat.transport.${transportMode}`)}</small>
+                  <MdiIcon name="mdi-chevron-right" />
+                </button>
+                {settingsSubmenu === 'transport' && (
+                  <div
+                    className="chat-settings-submenu"
+                    onMouseEnter={() => openSettingsSubmenu('transport')}
+                    onMouseLeave={scheduleSettingsSubmenuClose}
+                  >
+                    {(['sse', 'websocket'] as const).map((mode) => (
+                      <button
+                        className={transportMode === mode ? 'is-active' : ''}
+                        key={mode}
+                        onClick={() => {
+                          setTransportMode(mode);
+                          setSettingsSubmenu(null);
+                        }}
+                        type="button"
+                      >
+                        <span>{t(`features.chat.transport.${mode}`)}</span>
+                        {transportMode === mode && <MdiIcon name="mdi-check" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div
+                className="chat-settings-menu__item-wrap"
+                onMouseEnter={() => openSettingsSubmenu('language')}
+                onMouseLeave={scheduleSettingsSubmenuClose}
+              >
+                <button
+                  className={settingsSubmenu === 'language' ? 'is-active' : ''}
+                  onClick={() => setSettingsSubmenu((value) => (value === 'language' ? null : 'language'))}
+                  type="button"
+                >
+                  <MdiIcon name="mdi-translate" />
+                  <span>{t('core.common.language')}</span>
+                  <small>{currentLanguage.label}</small>
+                  <MdiIcon name="mdi-chevron-right" />
+                </button>
+                {settingsSubmenu === 'language' && (
+                  <div
+                    className="chat-settings-submenu chat-settings-submenu--language"
+                    onMouseEnter={() => openSettingsSubmenu('language')}
+                    onMouseLeave={scheduleSettingsSubmenuClose}
+                  >
+                    {chatLanguageOptions.map((language) => (
+                      <button
+                        className={i18n.language === language.code ? 'is-active' : ''}
+                        key={language.code}
+                        onClick={() => {
+                          void i18n.changeLanguage(language.code);
+                          setSettingsSubmenu(null);
+                        }}
+                        type="button"
+                      >
+                        <small>{language.flag}</small>
+                        <span>{language.label}</span>
+                        {i18n.language === language.code && <MdiIcon name="mdi-check" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={toggleTheme} type="button">
+                <MdiIcon name={isDark ? 'mdi-white-balance-sunny' : 'mdi-weather-night'} />
+                <span>{t(`features.chat.modes.${isDark ? 'lightMode' : 'darkMode'}`)}</span>
+              </button>
+            </div>
+          </details>
+        </div>
+      </aside>
+      {sidebarOpen && (
+        <button
+          aria-label={t('features.chat.accessibility.closeConversations')}
+          className="chat-sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+          type="button"
+        />
+      )}
+      <main
+        className={`chat-main ${emptyChat && !isProviderWorkspace ? 'is-empty-chat' : ''} ${selectedProject ? 'is-project-workspace' : ''} ${isProviderWorkspace ? 'is-provider-workspace' : ''} ${reasoningTarget || selectedRefs || activeThread ? 'has-detail-panel' : ''}`}
+      >
+        <header className="chat-toolbar">
+          <button
+            aria-label={t('features.chat.accessibility.openConversations')}
+            className="chat-toolbar__sidebar-open"
+            onClick={() => setSidebarOpen(true)}
+            type="button"
+          >
+            <MdiIcon name="mdi-menu" />
+          </button>
+          {providerOverrideEnabled ? (
+            <details
+              className="chat-model-menu"
+              onToggle={(event) => {
+                if (event.currentTarget.open) void loadProviders();
+              }}
+              ref={modelMenuRef}
+            >
+              <summary>
+                <span>
+                  <strong>{modelTitle}</strong>
+                  {modelMeta && modelMeta !== modelTitle && <em>{modelMeta}</em>}
+                  <MdiIcon name="mdi-chevron-down" />
+                </span>
+                <small>{sessionTitle}</small>
+              </summary>
+              <div className="chat-model-menu__panel">
+                <label className="chat-model-search">
+                  <MdiIcon name="mdi-magnify" />
+                  <input
+                    aria-label={t('features.chat.accessibility.searchModels')}
+                    onChange={(event) => setProviderSearch(event.target.value)}
+                    placeholder={t('features.chat.accessibility.searchModels')}
+                    value={providerSearch}
+                  />
+                </label>
+                <div className="chat-model-list">
+                  {filteredProviders.map((item) => {
+                    const selected = item.id === provider;
+                    const metadata = providerMetadata[item.model];
+                    return (
+                      <div className={selected ? 'is-selected' : ''} key={item.id}>
+                        <button className="chat-model-list__copy" onClick={() => selectProvider(item)} type="button">
+                          <strong>{item.id}</strong>
+                          <small>
+                            <span>{item.model}</span>
+                            <span className="chat-model-badges">
+                              {providerCapabilityBadges(item, metadata).map((badge) => (
+                                <span
+                                  className={badge.enabled ? '' : 'is-disabled'}
+                                  key={badge.key}
+                                  title={t(
+                                    `features.provider.models.metadata.${badge.enabled ? 'enabled' : 'supportedDisabled'}`,
+                                    { capability: t(`features.provider.models.metadata.${badge.key}`) },
+                                  )}
+                                >
+                                  <MdiIcon name={badge.icon} />
+                                </span>
+                              ))}
+                              {formatContextLimit(item, metadata) && (
+                                <b
+                                  title={t('features.provider.models.metadata.context', {
+                                    tokens: formatContextLimit(item, metadata),
+                                  })}
+                                >
+                                  {formatContextLimit(item, metadata)}
+                                </b>
+                              )}
+                            </span>
+                          </small>
+                        </button>
+                        <span className="chat-model-list__actions">
+                          <button
+                            aria-label={t('features.provider.models.testButton')}
+                            className={testingProvider === item.id ? 'is-loading' : ''}
+                            disabled={Boolean(testingProvider)}
+                            onClick={() => void testProvider(item)}
+                            title={t('features.provider.models.testButton')}
+                            type="button"
+                          >
+                            <MdiIcon name="mdi-connection" />
+                          </button>
+                          {selected && <MdiIcon name="mdi-check" />}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {providersLoading && (
+                    <div className="chat-model-list__empty">{t('features.chat.models.loading')}</div>
+                  )}
+                  {!providersLoading && !filteredProviders.length && (
+                    <div className="chat-model-list__empty">{t('features.chat.actions.noAvailableModels')}</div>
+                  )}
+                </div>
+              </div>
+            </details>
+          ) : (
+            <div className="chat-model-menu chat-model-menu--runner">
+              <span>
+                <strong>{runnerConfigTitle}</strong>
+              </span>
+              <small>{sessionTitle}</small>
+            </div>
+          )}
+        </header>
+        {isProviderWorkspace ? (
+          <section className="chat-provider-workspace">
+            <ProviderPage />
+          </section>
+        ) : (
+          <>
+            <section
+              aria-live="polite"
+              className="chat-messages"
+              onScroll={(event) => {
+                const target = event.currentTarget;
+                shouldStickToBottomRef.current = target.scrollHeight - target.scrollTop - target.clientHeight < 80;
+                setThreadSelection(null);
+              }}
+              ref={messagesRef}
+            >
+              {loading && <div className="monitor-loading">{t('core.common.loading')}</div>}
+              {selectedProject && (
+                <div className="chat-project-workspace">
+                  <header className="chat-project-workspace__header">
+                    <h1>
+                      <span>{String(selectedProject.emoji || '📁')}</span>
+                      {String(selectedProject.title || t('features.chat.project.title'))}
+                    </h1>
+                    {Boolean(selectedProject.description) && <p>{String(selectedProject.description)}</p>}
+                    <small>
+                      <MdiIcon name="mdi-folder-cog-outline" />
+                      {selectedProjectWorkspace}
+                    </small>
+                  </header>
+                  <div className="chat-project-composer">{composerNode}</div>
+                  <div className="chat-project-workspace__sessions">
+                    {loadingProjectIds.has(selectedProjectId) ? (
+                      <div className="chat-project-workspace__empty">{t('features.chat.project.loadingSessions')}</div>
+                    ) : selectedProjectSessions.length ? (
+                      selectedProjectSessions.map((session) => (
+                        <article className="chat-project-workspace__session" key={session.session_id}>
+                          <button onClick={() => selectSession(session.session_id)} type="button">
+                            <strong>
+                              {session.display_name?.trim() || t('features.chat.conversation.newConversation')}
+                            </strong>
+                            <small>
+                              {formatProjectSessionDate(session.updated_at || session.created_at, i18n.language)}
+                            </small>
+                          </button>
+                          <div>
+                            <button
+                              aria-label={t('features.chat.conversation.editDisplayName')}
+                              onClick={() => void renameSession(session)}
+                              title={t('features.chat.conversation.editDisplayName')}
+                              type="button"
+                            >
+                              <PencilIcon />
+                            </button>
+                            <button
+                              aria-label={t('features.chat.actions.deleteChat')}
+                              onClick={() => void removeSession(session)}
+                              title={t('features.chat.actions.deleteChat')}
+                              type="button"
+                            >
+                              <TrashIcon />
+                            </button>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="chat-project-workspace__empty">
+                        <MdiIcon name="mdi-message-outline" />
+                        <span>{t('features.chat.project.noSessions')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {emptyChat && !error && (
+                <div className="chat-empty">
+                  <h1>{t('features.chat.welcome.title')}</h1>
+                </div>
+              )}
+              <ChatMessageList
+                enableEdit={!sending}
+                enableRetry={!sending}
+                editingMessageId={editingMessage?.id ?? null}
+                editingValue={editingDraft}
+                editSaving={savingMessageEdit}
+                messages={messages}
+                labels={{
+                  assistant: t('features.chat.message.assistant'),
+                  cachedTokens: t('features.chat.stats.cachedTokens'),
+                  cancel: t('core.common.cancel'),
+                  completed: t('core.status.completed'),
+                  copy: t('features.chat.actions.copy'),
+                  download: t('features.chat.input.download', 'Download'),
+                  duration: t('features.chat.stats.duration'),
+                  edit: t('core.common.edit'),
+                  inputTokens: t('features.chat.stats.inputTokens'),
+                  outputTokens: t('features.chat.stats.outputTokens'),
+                  reasoning: t('features.chat.reasoning.thinking'),
+                  references: t('features.chat.refs.title'),
+                  replyTo: t('features.chat.reply.replyTo'),
+                  retry: t('features.chat.actions.retry'),
+                  running: t('features.chat.toolStatus.running'),
+                  save: t('core.common.save'),
+                  threads: t('features.chat.thread.title'),
+                  ttft: t('features.chat.stats.ttft'),
+                }}
+                onEdit={openMessageEdit}
+                onEditValueChange={setEditingDraft}
+                onCancelEdit={() => setEditingMessage(null)}
+                onDownload={(part) => downloadMessagePart(part)}
+                onOpenImage={(url, part) =>
+                  url &&
+                  setImagePreview({
+                    name: String(part.filename || part.stored_filename || t('features.chat.attachment.image', 'Image')),
+                    url,
+                  })
+                }
+                onOpenReasoning={(message) => {
+                  setSelectedRefs(null);
+                  setActiveThread(null);
+                  setReasoningTarget(message);
+                }}
+                onOpenRefs={(refs) => {
+                  setReasoningTarget(null);
+                  setActiveThread(null);
+                  setSelectedRefs({ used: refs });
+                }}
+                onOpenThread={(thread) => void openThread(thread as ChatThread)}
+                onReplyClick={(messageId) => scrollToMessage(messageId)}
+                onRetry={(message) => void regenerate(message)}
+                onRetryWithModel={(message, providerId, modelName) => void regenerate(message, providerId, modelName)}
+                onSaveEdit={() => void saveMessageEdit()}
+                onSelectText={selectMessageText}
+                resolvePartUrl={(part) => mediaUrlsRef.current[mediaPartKey(part)] || ''}
+                retryModels={providers.map((item) => ({ providerId: item.id, model: item.model }))}
+                streaming={sending}
+              />
+              {error && <div className="monitor-error">{error}</div>}
+              <div ref={messageEnd} />
+            </section>
+            {!selectedProject && <footer className="chat-composer chat-composer--v2">{composerNode}</footer>}
+          </>
+        )}
+        {threadSelection && (
+          <button
+            className="chat-thread-selection"
+            onClick={() => void createThreadFromSelection()}
+            style={{ left: threadSelection.left, top: threadSelection.top }}
+            type="button"
+          >
+            {t('features.chat.thread.askInThread', 'Ask in thread')}
+          </button>
+        )}
+        <Dialog
+          onOpenChange={(open) => {
+            if (!open && !sessionTitleSaving) {
+              setRenamingSession(null);
+              setSessionTitleDraft('');
+            }
+          }}
+          open={renamingSession !== null}
+          title={t('features.chat.conversation.editDisplayName')}
+        >
+          <div className="chat-session-rename-dialog">
+            <input
+              autoFocus
+              onChange={(event) => setSessionTitleDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void saveSessionTitle();
+                }
+              }}
+              placeholder={t('features.chat.conversation.displayName')}
+              value={sessionTitleDraft}
+            />
+            <div className="dialog-actions">
+              <button
+                disabled={sessionTitleSaving}
+                onClick={() => {
+                  setRenamingSession(null);
+                  setSessionTitleDraft('');
+                }}
+                type="button"
+              >
+                {t('core.common.cancel')}
+              </button>
+              <button
+                className="button--primary"
+                disabled={sessionTitleSaving || !sessionTitleDraft.trim()}
+                onClick={() => void saveSessionTitle()}
+                type="button"
+              >
+                {t('core.common.save')}
+              </button>
+            </div>
+          </div>
+        </Dialog>
+        <ChatDetailPanels
+          activeThread={activeThread}
+          imagePreview={imagePreview}
+          onCloseImage={() => setImagePreview(null)}
+          onCloseReasoning={() => setReasoningTarget(null)}
+          onCloseReferences={() => setSelectedRefs(null)}
+          onCloseThread={() => setActiveThread(null)}
+          onDeleteThread={() => void removeThread()}
+          onDownload={(part) => downloadMessagePart(part)}
+          onOpenImage={(url, part) =>
+            url &&
+            setImagePreview({
+              name: String(part.filename || part.stored_filename || t('features.chat.attachment.image', 'Image')),
+              url,
+            })
           }
-        }}
-        onSave={(form) => void saveProject(form)}
-        open={projectDialogOpen}
-        project={editingProjectForm}
-        saving={projectSaving}
-      />
-    </main>
-  </div>;
+          onSendThread={() => void sendThreadMessage()}
+          onThreadDraftChange={setThreadDraft}
+          reasoningTarget={reasoningTarget}
+          referenceData={selectedRefs}
+          resolvePartUrl={(part) => mediaUrlsRef.current[mediaPartKey(part)] || ''}
+          threadDeleting={threadDeleting}
+          threadDraft={threadDraft}
+          threadMessagesRef={threadMessagesRef}
+          threadSending={threadSending}
+        />
+        <ChatProjectDialog
+          error={projectError}
+          onOpenChange={(open) => {
+            setProjectDialogOpen(open);
+            if (!open) {
+              setProjectError('');
+              setEditingProject(null);
+            }
+          }}
+          onSave={(form) => void saveProject(form)}
+          open={projectDialogOpen}
+          project={editingProjectForm}
+          saving={projectSaving}
+        />
+      </main>
+    </div>
+  );
 }
 
 function plainMessageText(message: ChatRecord) {
@@ -1647,11 +2104,6 @@ function formatProjectSessionDate(value: unknown, locale: string) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
-}
-
-function readTokenCount(value: unknown) {
-  const count = Number(value || 0);
-  return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
 function contextLimit(provider?: ProviderConfig, metadata?: JsonObject) {
@@ -1678,15 +2130,38 @@ function formatUsagePercent(value: number) {
 
 function providerCapabilityBadges(provider: ProviderConfig, metadata?: JsonObject) {
   const modalities = metadata?.modalities;
-  const metadataModalities = isObject(modalities) && Array.isArray(modalities.input) ? modalities.input.map(String) : [];
+  const metadataModalities =
+    isObject(modalities) && Array.isArray(modalities.input) ? modalities.input.map(String) : [];
   const enabledModalities = Array.isArray(provider.modalities) ? provider.modalities.map(String) : [];
   const definitions: Array<{ key: string; icon: `mdi-${string}`; supported: boolean; enabled: boolean }> = [
-    { key: 'image', icon: 'mdi-image-outline', supported: metadataModalities.includes('image'), enabled: enabledModalities.includes('image') },
-    { key: 'audio', icon: 'mdi-music-note-outline', supported: metadataModalities.includes('audio'), enabled: enabledModalities.includes('audio') },
-    { key: 'toolUse', icon: 'mdi-wrench-outline', supported: Boolean(metadata?.tool_call), enabled: enabledModalities.includes('tool_use') },
-    { key: 'reasoning', icon: 'mdi-brain', supported: Boolean(metadata?.reasoning), enabled: Boolean(provider.reasoning) },
+    {
+      key: 'image',
+      icon: 'mdi-image-outline',
+      supported: metadataModalities.includes('image'),
+      enabled: enabledModalities.includes('image'),
+    },
+    {
+      key: 'audio',
+      icon: 'mdi-music-note-outline',
+      supported: metadataModalities.includes('audio'),
+      enabled: enabledModalities.includes('audio'),
+    },
+    {
+      key: 'toolUse',
+      icon: 'mdi-wrench-outline',
+      supported: Boolean(metadata?.tool_call),
+      enabled: enabledModalities.includes('tool_use'),
+    },
+    {
+      key: 'reasoning',
+      icon: 'mdi-brain',
+      supported: Boolean(metadata?.reasoning),
+      enabled: Boolean(provider.reasoning),
+    },
   ];
-  return definitions.filter((item) => item.supported || item.enabled).map((item) => ({ ...item, enabled: !metadata || item.enabled }));
+  return definitions
+    .filter((item) => item.supported || item.enabled)
+    .map((item) => ({ ...item, enabled: !metadata || item.enabled }));
 }
 
 function formatContextLimit(provider: ProviderConfig, metadata?: JsonObject) {
@@ -1720,13 +2195,16 @@ function flattenCommandSuggestions(items: JsonObject[]) {
       result.push({ ...item, effective_command: command } as CommandSuggestion);
     }
     const aliases = Array.isArray(item.aliases) ? item.aliases : item.alias ? [item.alias] : [];
-    aliases.map(String).filter(Boolean).forEach((alias) => {
-      const aliasCommand = parent ? `${parent} ${alias}` : alias;
-      if (!seen.has(aliasCommand)) {
-        seen.add(aliasCommand);
-        result.push({ ...item, effective_command: aliasCommand } as CommandSuggestion);
-      }
-    });
+    aliases
+      .map(String)
+      .filter(Boolean)
+      .forEach((alias) => {
+        const aliasCommand = parent ? `${parent} ${alias}` : alias;
+        if (!seen.has(aliasCommand)) {
+          seen.add(aliasCommand);
+          result.push({ ...item, effective_command: aliasCommand } as CommandSuggestion);
+        }
+      });
   };
   items.forEach((item) => append(item));
   return result.sort((left, right) => Number(Boolean(right.reserved)) - Number(Boolean(left.reserved)));

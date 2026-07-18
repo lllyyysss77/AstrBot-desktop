@@ -17,11 +17,15 @@ export function parseSseChunk(buffer: string) {
   if (boundary < 0) return { events: [] as string[], remainder: normalized };
   const complete = normalized.slice(0, boundary);
   const remainder = normalized.slice(boundary + 2);
-  const events = complete.split('\n\n').map((block) => block
-    .split('\n')
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trimStart())
-    .join('\n'))
+  const events = complete
+    .split('\n\n')
+    .map((block) =>
+      block
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n'),
+    )
     .filter(Boolean);
   return { events, remainder };
 }
@@ -30,8 +34,12 @@ export function logIdentity(log: LogItem) {
   return `${log.time ?? ''}:${log.level ?? ''}:${log.type ?? ''}:${log.span_id ?? ''}:${log.action ?? ''}:${log.data ?? ''}`;
 }
 
+// Terminal escape matching intentionally includes ASCII control characters.
+// eslint-disable-next-line no-control-regex
 const ansiOscPattern = /\u001B\][^\u0007]*(?:\u0007|\u001B\\)/g;
+// eslint-disable-next-line no-control-regex
 const ansiCsiPattern = /(?:\u001B\[|\u009B|\uFFFD\[|\\u001b\[|\\x1b\[)[0-?]*[ -/]*[@-~]/gi;
+// eslint-disable-next-line no-control-regex
 const ansiCharsetPattern = /\u001B[()][0-2A-Z]/g;
 
 /**
@@ -42,10 +50,7 @@ const ansiCharsetPattern = /\u001B[()][0-2A-Z]/g;
  */
 export function cleanConsoleLog(value: unknown) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
-  return (text ?? '')
-    .replace(ansiOscPattern, '')
-    .replace(ansiCsiPattern, '')
-    .replace(ansiCharsetPattern, '');
+  return (text ?? '').replace(ansiOscPattern, '').replace(ansiCsiPattern, '').replace(ansiCharsetPattern, '');
 }
 
 export function splitConsoleLog(value: unknown) {

@@ -25,12 +25,17 @@ export default function SetupPage() {
   });
 
   useEffect(() => {
-    void authApi.setupStatus().then((response) => {
-      const status = response.data.data;
-      if (!status?.setup_required || (!hasToken && !status.skip_default_password_auth)) {
-        navigate('/auth/login', { replace: true });
-      }
-    }).catch(() => navigate('/auth/login', { replace: true }));
+    void authApi
+      .setupStatus()
+      .then((response) => {
+        const status = response.data.data;
+        if (!status?.setup_required || (!hasToken && !status.skip_default_password_auth)) {
+          void navigate('/auth/login', { replace: true });
+        }
+      })
+      .catch(() => {
+        void navigate('/auth/login', { replace: true });
+      });
   }, [hasToken, navigate]);
 
   const submit = form.handleSubmit(async (values) => {
@@ -50,18 +55,33 @@ export default function SetupPage() {
   return (
     <AuthShell subtitle={t('features.auth.setup.subtitle')} title={t('features.auth.setup.title')}>
       <form className="auth-form" onSubmit={submit}>
-        <label>{t('features.auth.setup.username')}<input autoComplete="username" {...form.register('username')} /></label>
+        <label>
+          {t('features.auth.setup.username')}
+          <input autoComplete="username" {...form.register('username')} />
+        </label>
         {form.formState.errors.username && <p className="field-error">{form.formState.errors.username.message}</p>}
-        <label>{t('features.auth.setup.password')}<input autoComplete="new-password" type="password" {...form.register('password')} /></label>
+        <label>
+          {t('features.auth.setup.password')}
+          <input autoComplete="new-password" type="password" {...form.register('password')} />
+        </label>
         {form.formState.errors.password && <p className="field-error">{form.formState.errors.password.message}</p>}
-        <label>{t('features.auth.setup.confirmPassword')}<input autoComplete="new-password" type="password" {...form.register('confirmPassword')} /></label>
-        {form.formState.errors.confirmPassword && <p className="field-error">{form.formState.errors.confirmPassword.message}</p>}
+        <label>
+          {t('features.auth.setup.confirmPassword')}
+          <input autoComplete="new-password" type="password" {...form.register('confirmPassword')} />
+        </label>
+        {form.formState.errors.confirmPassword && (
+          <p className="field-error">{form.formState.errors.confirmPassword.message}</p>
+        )}
         <small>{t('features.auth.setup.passwordHint')}</small>
         <button className="button--primary auth-form__submit" disabled={form.formState.isSubmitting} type="submit">
           {form.formState.isSubmitting ? '…' : t('features.auth.setup.submit')}
         </button>
       </form>
-      {apiError && <p className="auth-error" role="alert">{apiError}</p>}
+      {apiError && (
+        <p className="auth-error" role="alert">
+          {apiError}
+        </p>
+      )}
     </AuthShell>
   );
 }

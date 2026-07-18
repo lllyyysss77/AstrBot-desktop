@@ -35,41 +35,43 @@ export function MonacoEditor({
     let previousWidth = -1;
     let previousHeight = -1;
     let cleanup = () => {};
-    void import('./monacoRuntime').then(({ monaco }) => {
-      if (disposed || !containerRef.current) return;
-      const instance = monaco.editor.create(containerRef.current, {
-        automaticLayout: typeof ResizeObserver === 'undefined',
-        language,
-        minimap: { enabled: false },
-        theme,
-        value: valueRef.current,
-        ...options,
-      });
-      editorRef.current = instance;
-      const subscription = instance.onDidChangeModelContent(() => onChangeRef.current?.(instance.getValue()));
-      if (typeof ResizeObserver !== 'undefined') {
-        resizeObserver = new ResizeObserver(([entry]) => {
-          const width = Math.round(entry.contentRect.width);
-          const height = Math.round(entry.contentRect.height);
-          if (width === previousWidth && height === previousHeight) return;
-          previousWidth = width;
-          previousHeight = height;
-          if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
-          resizeFrame = window.requestAnimationFrame(() => {
-            resizeFrame = undefined;
-            instance.layout({ width, height });
-          });
+    void import('./monacoRuntime')
+      .then(({ monaco }) => {
+        if (disposed || !containerRef.current) return;
+        const instance = monaco.editor.create(containerRef.current, {
+          automaticLayout: typeof ResizeObserver === 'undefined',
+          language,
+          minimap: { enabled: false },
+          theme,
+          value: valueRef.current,
+          ...options,
         });
-        resizeObserver.observe(containerRef.current);
-      }
-      cleanup = () => {
-        resizeObserver?.disconnect();
-        if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
-        subscription.dispose();
-        instance.dispose();
-        editorRef.current = null;
-      };
-    }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
+        editorRef.current = instance;
+        const subscription = instance.onDidChangeModelContent(() => onChangeRef.current?.(instance.getValue()));
+        if (typeof ResizeObserver !== 'undefined') {
+          resizeObserver = new ResizeObserver(([entry]) => {
+            const width = Math.round(entry.contentRect.width);
+            const height = Math.round(entry.contentRect.height);
+            if (width === previousWidth && height === previousHeight) return;
+            previousWidth = width;
+            previousHeight = height;
+            if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
+            resizeFrame = window.requestAnimationFrame(() => {
+              resizeFrame = undefined;
+              instance.layout({ width, height });
+            });
+          });
+          resizeObserver.observe(containerRef.current);
+        }
+        cleanup = () => {
+          resizeObserver?.disconnect();
+          if (resizeFrame !== undefined) window.cancelAnimationFrame(resizeFrame);
+          subscription.dispose();
+          instance.dispose();
+          editorRef.current = null;
+        };
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
     return () => {
       disposed = true;
       cleanup();
@@ -94,6 +96,11 @@ export function MonacoEditor({
     void import('./monacoRuntime').then(({ monaco }) => monaco.editor.setTheme(theme));
   }, [theme]);
 
-  if (error) return <div className="monaco-editor-error" role="alert">{error}</div>;
+  if (error)
+    return (
+      <div className="monaco-editor-error" role="alert">
+        {error}
+      </div>
+    );
   return <div aria-label={ariaLabel} className={`monaco-editor-host ${className}`.trim()} ref={containerRef} />;
 }

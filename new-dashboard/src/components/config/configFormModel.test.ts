@@ -18,10 +18,9 @@ describe('configuration form model', () => {
   });
 
   it('evaluates metadata conditions against the configuration root', () => {
-    expect(matchesConfigCondition(
-      { dashboard: { ssl: { enable: true } } },
-      { condition: { 'dashboard.ssl.enable': true } },
-    )).toBe(true);
+    expect(
+      matchesConfigCondition({ dashboard: { ssl: { enable: true } } }, { condition: { 'dashboard.ssl.enable': true } }),
+    ).toBe(true);
   });
 
   it('infers useful controls for schema-less records', () => {
@@ -32,11 +31,16 @@ describe('configuration form model', () => {
   });
 
   it('selects only metadata fields present in the active template', () => {
-    const selected = configItemsForValue({ items: {
-      appid: { type: 'string' },
-      secret: { type: 'string' },
-      satori_api_base: { type: 'string' },
-    } }, { id: 'default', appid: '', secret: '', hint: 'ignored' });
+    const selected = configItemsForValue(
+      {
+        items: {
+          appid: { type: 'string' },
+          secret: { type: 'string' },
+          satori_api_base: { type: 'string' },
+        },
+      },
+      { id: 'default', appid: '', secret: '', hint: 'ignored' },
+    );
 
     expect(Object.keys(selected)).toEqual(['id', 'appid', 'secret']);
     expect(selected).not.toHaveProperty('satori_api_base');

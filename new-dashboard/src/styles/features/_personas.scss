@@ -41,7 +41,7 @@
 .persona-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .persona-card,
 .persona-folder-card { min-width: 0; border: 1px solid var(--astrbot-border); border-radius: 13px; background: var(--astrbot-surface); transition: border-color 150ms ease, transform 150ms ease; }
-.persona-folder-card { overflow: hidden; }
+.persona-folder-card { display: flex; min-height: 92px; align-items: center; overflow: hidden; }
 .persona-folder-card:hover { border-color: color-mix(in srgb, var(--astrbot-primary) 55%, var(--astrbot-border)); transform: translateY(-1px); }
 .persona-card { position: relative; height: 100%; cursor: grab; transition: background-color 160ms ease, opacity 200ms ease, transform 200ms ease; }
 .persona-card:hover,
@@ -62,15 +62,13 @@
 .persona-card__body { padding: 4px 18px 16px; }
 .persona-card__body > p { min-height: 59px; margin: 0 0 12px; overflow: hidden; color: color-mix(in srgb, var(--astrbot-text) 70%, transparent); display: -webkit-box; font-size: 14px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .persona-card__body > small { display: block; margin-top: 12px; color: color-mix(in srgb, var(--astrbot-text) 52%, transparent); font-size: 12px; }
-.persona-folder-card__main { width: 100%; padding: 16px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.persona-folder-card__main { display: flex; width: 100%; min-width: 0; flex: 1; align-items: center; gap: 12px; padding: 16px; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
 .persona-card__chips,
 .persona-view__chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .persona-card__chips span,
 .persona-view__chips span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 7px; border-radius: 999px; background: color-mix(in srgb, var(--astrbot-primary) 10%, transparent); color: color-mix(in srgb, var(--astrbot-primary) 82%, var(--astrbot-text)); font-size: 12px; }
 .persona-card__chips span.is-success { background: color-mix(in srgb, #20b85a 13%, transparent); color: color-mix(in srgb, #139347 88%, var(--astrbot-text)); }
 .persona-card__chips span.is-secondary { background: color-mix(in srgb, #7c4dff 12%, transparent); color: color-mix(in srgb, #6740d6 88%, var(--astrbot-text)); }
-.persona-folder-card { display: flex; min-height: 92px; align-items: center; }
-.persona-folder-card__main { display: flex; min-width: 0; flex: 1; align-items: center; gap: 12px; }
 .persona-folder-card__main > .mdi { color: var(--astrbot-primary); font-size: 35px; }
 .persona-folder-card__main span { display: grid; min-width: 0; gap: 5px; }
 .persona-folder-card__main small { overflow: hidden; color: color-mix(in srgb, var(--astrbot-text) 52%, transparent); text-overflow: ellipsis; white-space: nowrap; }

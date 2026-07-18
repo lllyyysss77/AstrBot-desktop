@@ -1,6 +1,14 @@
 import type { JsonObject } from '@/routes/configuration/model';
 
-export type KnowledgeImportSettings = { batch_size: number; chunk_overlap: number; chunk_size: number; cleaning_provider_id: string; enable_cleaning: boolean; max_retries: number; tasks_limit: number };
+export type KnowledgeImportSettings = {
+  batch_size: number;
+  chunk_overlap: number;
+  chunk_size: number;
+  cleaning_provider_id: string;
+  enable_cleaning: boolean;
+  max_retries: number;
+  tasks_limit: number;
+};
 
 export function knowledgeFileUploadBody(files: Array<Blob | File>, settings: KnowledgeImportSettings) {
   return Object.fromEntries([
@@ -26,12 +34,14 @@ export function knowledgeUrlImportBody(url: string, settings: KnowledgeImportSet
 }
 
 export function validKnowledgeImportSettings(settings: KnowledgeImportSettings) {
-  return settings.chunk_size > 0
-    && settings.chunk_overlap >= 0
-    && settings.chunk_overlap < settings.chunk_size
-    && settings.batch_size > 0
-    && settings.tasks_limit > 0
-    && settings.max_retries >= 0;
+  return (
+    settings.chunk_size > 0 &&
+    settings.chunk_overlap >= 0 &&
+    settings.chunk_overlap < settings.chunk_size &&
+    settings.batch_size > 0 &&
+    settings.tasks_limit > 0 &&
+    settings.max_retries >= 0
+  );
 }
 
 export function knowledgeBaseId(item: JsonObject) {
@@ -60,7 +70,10 @@ export function formatFileSize(value: unknown, fallback = '') {
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = bytes;
   let unit = 0;
-  while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
   return `${size >= 10 || unit === 0 ? Math.round(size) : size.toFixed(2)} ${units[unit]}`;
 }
 
@@ -85,9 +98,9 @@ export function taskIds(value: unknown) {
 
 export function scoreTone(score: unknown) {
   const value = Number(score);
-  if (value >= .8) return 'success';
-  if (value >= .6) return 'info';
-  if (value >= .4) return 'warning';
+  if (value >= 0.8) return 'success';
+  if (value >= 0.6) return 'info';
+  if (value >= 0.4) return 'warning';
   return 'error';
 }
 

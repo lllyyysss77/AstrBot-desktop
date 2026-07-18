@@ -12,8 +12,16 @@ export default function AboutPage() {
         <h1>{t(`${prefix}.title`)}</h1>
         <p>{t(`${prefix}.subtitle`)}</p>
         <div className="about-hero__actions">
-          <button className="button--primary" onClick={() => void openExternalUrl('https://github.com/AstrBotDevs/AstrBot')} type="button">{t(`${prefix}.starButton`)}</button>
-          <button onClick={() => void openExternalUrl('https://github.com/AstrBotDevs/AstrBot/issues')} type="button">{t(`${prefix}.issueButton`)}</button>
+          <button
+            className="button--primary"
+            onClick={() => void openExternalUrl('https://github.com/AstrBotDevs/AstrBot')}
+            type="button"
+          >
+            {t(`${prefix}.starButton`)}
+          </button>
+          <button onClick={() => void openExternalUrl('https://github.com/AstrBotDevs/AstrBot/issues')} type="button">
+            {t(`${prefix}.issueButton`)}
+          </button>
         </div>
       </section>
     </div>

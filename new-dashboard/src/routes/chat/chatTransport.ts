@@ -14,30 +14,30 @@ type ProviderSelection = {
 
 export type ChatStreamAction =
   | (ProviderSelection & {
-    configId?: string;
-    kind: 'send';
-    message: ChatPart[];
-    messageId: string;
-    sessionId: string;
-    transport: ChatTransportMode;
-  })
+      configId?: string;
+      kind: 'send';
+      message: ChatPart[];
+      messageId: string;
+      sessionId: string;
+      transport: ChatTransportMode;
+    })
   | (ProviderSelection & {
-    kind: 'regenerate';
-    sessionId: string;
-    targetMessageId: string;
-  })
+      kind: 'regenerate';
+      sessionId: string;
+      targetMessageId: string;
+    })
   | (ProviderSelection & {
-    configId?: string;
-    kind: 'continue';
-    llmCheckpointId?: string;
-    message: ChatPart[];
-    sessionId: string;
-  })
+      configId?: string;
+      kind: 'continue';
+      llmCheckpointId?: string;
+      message: ChatPart[];
+      sessionId: string;
+    })
   | (ProviderSelection & {
-    kind: 'thread';
-    message: ChatPart[];
-    threadId: string;
-  });
+      kind: 'thread';
+      message: ChatPart[];
+      threadId: string;
+    });
 
 export type ChatStreamCallbacks = {
   onAbort?: () => void;
@@ -128,15 +128,19 @@ async function readSseStream(
   dependencies: ChatTransportDependencies,
 ) {
   const request = sseRequest(action);
-  const response = await fetchWithAuth(request.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request.body),
-    signal,
-  }, {
-    fetch: dependencies.fetch,
-    storage: dependencies.storage,
-  });
+  const response = await fetchWithAuth(
+    request.endpoint,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request.body),
+      signal,
+    },
+    {
+      fetch: dependencies.fetch,
+      storage: dependencies.storage,
+    },
+  );
 
   const contentType = response.headers.get('content-type') || '';
   if (!response.ok || !response.body || !contentType.includes('text/event-stream')) {
@@ -153,7 +157,7 @@ async function readSseStream(
   const cancelReader = () => void reader.cancel().catch(() => undefined);
   signal.addEventListener('abort', cancelReader, { once: true });
   try {
-    while (true) {
+    for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -221,9 +225,12 @@ async function readWebSocketStream(
   onPayload: (payload: unknown) => void,
   dependencies: ChatTransportDependencies,
 ) {
-  const storage = dependencies.storage === undefined
-    ? (typeof window === 'undefined' ? null : window.localStorage)
-    : dependencies.storage;
+  const storage =
+    dependencies.storage === undefined
+      ? typeof window === 'undefined'
+        ? null
+        : window.localStorage
+      : dependencies.storage;
   const location = dependencies.location ?? window.location;
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const token = readAuthToken(storage);
@@ -252,17 +259,20 @@ async function readWebSocketStream(
       return;
     }
     signal.addEventListener('abort', handleAbort, { once: true });
-    socket.onopen = () => socket.send(JSON.stringify({
-      ct: 'chat',
-      t: 'send',
-      session_id: action.sessionId,
-      message_id: action.messageId,
-      message: action.message,
-      config_id: action.configId || undefined,
-      enable_streaming: action.enableStreaming,
-      selected_provider: action.selectedProvider || undefined,
-      selected_model: action.selectedModel || undefined,
-    }));
+    socket.onopen = () =>
+      socket.send(
+        JSON.stringify({
+          ct: 'chat',
+          t: 'send',
+          session_id: action.sessionId,
+          message_id: action.messageId,
+          message: action.message,
+          config_id: action.configId || undefined,
+          enable_streaming: action.enableStreaming,
+          selected_provider: action.selectedProvider || undefined,
+          selected_model: action.selectedModel || undefined,
+        }),
+      );
     socket.onmessage = (event) => {
       try {
         const payload = JSON.parse(String(event.data)) as JsonObject;

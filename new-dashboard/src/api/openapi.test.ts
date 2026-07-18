@@ -6,12 +6,18 @@ import { createOpenApiAxiosClient } from './openapi';
 
 function createStorage(values: Record<string, string>): Storage {
   return {
-    get length() { return Object.keys(values).length; },
+    get length() {
+      return Object.keys(values).length;
+    },
     clear: () => Object.keys(values).forEach((key) => delete values[key]),
     getItem: (key) => values[key] ?? null,
     key: (index) => Object.keys(values)[index] ?? null,
-    removeItem: (key) => { delete values[key]; },
-    setItem: (key, value) => { values[key] = value; },
+    removeItem: (key) => {
+      delete values[key];
+    },
+    setItem: (key, value) => {
+      values[key] = value;
+    },
   };
 }
 
@@ -44,12 +50,11 @@ describe('generated OpenAPI client', () => {
       statusText: 'OK',
     });
 
-    await expect(client.get('/api/v1/system-config', { adapter }))
-      .rejects.toMatchObject({
-        message: 'Configuration rejected.',
-        payload: { data: null, message: 'Configuration rejected.', status: 'error' },
-        status: 200,
-      });
+    await expect(client.get('/api/v1/system-config', { adapter })).rejects.toMatchObject({
+      message: 'Configuration rejected.',
+      payload: { data: null, message: 'Configuration rejected.', status: 'error' },
+      status: 200,
+    });
   });
 
   it('keeps success envelopes, blobs, and empty responses unchanged', async () => {
@@ -57,13 +62,17 @@ describe('generated OpenAPI client', () => {
     const success = { data: { id: 'one' }, status: 'ok' };
     const blob = new Blob(['content'], { type: 'text/plain' });
 
-    await expect(client.get('/success', { adapter: responseAdapter({ data: success }) }))
-      .resolves.toMatchObject({ data: success });
-    await expect(client.get('/blob', { adapter: responseAdapter({ data: blob }) }))
-      .resolves.toMatchObject({ data: blob });
-    await expect(client.get('/empty', {
-      adapter: responseAdapter({ data: undefined, status: 204, statusText: 'No Content' }),
-    })).resolves.toMatchObject({ data: undefined, status: 204 });
+    await expect(client.get('/success', { adapter: responseAdapter({ data: success }) })).resolves.toMatchObject({
+      data: success,
+    });
+    await expect(client.get('/blob', { adapter: responseAdapter({ data: blob }) })).resolves.toMatchObject({
+      data: blob,
+    });
+    await expect(
+      client.get('/empty', {
+        adapter: responseAdapter({ data: undefined, status: 204, statusText: 'No Content' }),
+      }),
+    ).resolves.toMatchObject({ data: undefined, status: 204 });
   });
 
   it('leaves explicitly accepted authentication challenges to the caller', async () => {
@@ -74,10 +83,16 @@ describe('generated OpenAPI client', () => {
       status: 'error',
     };
 
-    await expect(client.put('/api/v1/system-config', {}, {
-      adapter: responseAdapter({ data: challenge, status: 401, statusText: 'Unauthorized' }),
-      validateStatus: () => true,
-    })).resolves.toMatchObject({ data: challenge, status: 401 });
+    await expect(
+      client.put(
+        '/api/v1/system-config',
+        {},
+        {
+          adapter: responseAdapter({ data: challenge, status: 401, statusText: 'Unauthorized' }),
+          validateStatus: () => true,
+        },
+      ),
+    ).resolves.toMatchObject({ data: challenge, status: 401 });
   });
 });
 

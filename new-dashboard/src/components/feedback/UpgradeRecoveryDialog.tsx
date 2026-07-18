@@ -51,7 +51,8 @@ export function UpgradeRecoveryDialog() {
       void show((event as CustomEvent<UpgradeRecoveryDetail>).detail ?? {});
     };
     window.addEventListener(UPGRADE_RECOVERY_EVENT, handle);
-    void authApi.setupStatus()
+    void authApi
+      .setupStatus()
       .then(async (response) => {
         if (!response.legacyFallback) return;
         const versionResponse = await statsApi.version();
@@ -78,39 +79,36 @@ export function UpgradeRecoveryDialog() {
     setRestarting(true);
     setStatus(t('core.common.upgradeRecovery.restarting'));
     try {
-      initialStartTime.current = initialStartTime.current ?? await getLegacyStartTime();
+      initialStartTime.current = initialStartTime.current ?? (await getLegacyStartTime());
       await restartLegacyCore();
       setStatus(t('core.common.upgradeRecovery.waiting'));
       let attempts = 0;
       stopTimer();
       timer.current = window.setInterval(() => {
         attempts += 1;
-        void getLegacyStartTime().then((next) => {
-          const decision = restartPollDecision(
-            initialStartTime.current,
-            next,
-            attempts,
-            MAX_RESTART_ATTEMPTS,
-          );
-          if (decision === 'reloaded') {
-            stopTimer();
-            sessionStorage.removeItem(UPGRADE_RECOVERY_TOKEN_KEY);
-            const url = new URL(window.location.href);
-            url.searchParams.set('_r', Date.now().toString());
-            window.location.replace(url.toString());
-          } else if (decision === 'timeout') {
-            stopTimer();
-            setRestarting(false);
+        void getLegacyStartTime()
+          .then((next) => {
+            const decision = restartPollDecision(initialStartTime.current, next, attempts, MAX_RESTART_ATTEMPTS);
+            if (decision === 'reloaded') {
+              stopTimer();
+              sessionStorage.removeItem(UPGRADE_RECOVERY_TOKEN_KEY);
+              const url = new URL(window.location.href);
+              url.searchParams.set('_r', Date.now().toString());
+              window.location.replace(url.toString());
+            } else if (decision === 'timeout') {
+              stopTimer();
+              setRestarting(false);
               setStatus(t('core.common.upgradeRecovery.failed'));
             }
-          }).catch(() => {
+          })
+          .catch(() => {
             if (restartPollDecision(initialStartTime.current, null, attempts, MAX_RESTART_ATTEMPTS) === 'timeout') {
               stopTimer();
               setRestarting(false);
               setStatus(t('core.common.upgradeRecovery.failed'));
             }
           });
-        }, 1000);
+      }, 1000);
     } catch {
       setRestarting(false);
       setStatus(t('core.common.upgradeRecovery.failed'));
@@ -119,22 +117,34 @@ export function UpgradeRecoveryDialog() {
 
   return (
     <Dialog
-      onOpenChange={(open) => { if (!open) dismiss(); }}
+      onOpenChange={(open) => {
+        if (!open) dismiss();
+      }}
       open={detail !== null}
       title={t('core.common.upgradeRecovery.title')}
     >
       <div className="upgrade-recovery-dialog">
-        <p>{t('core.common.upgradeRecovery.description', {
-          coreVersion: displayVersion(detail?.version),
-          dashboardVersion: displayVersion(detail?.dashboard_version),
-        })}</p>
-        <div className="auth-warning"><MdiIcon name="mdi-alert" />{t('core.common.upgradeRecovery.hint')}</div>
+        <p>
+          {t('core.common.upgradeRecovery.description', {
+            coreVersion: displayVersion(detail?.version),
+            dashboardVersion: displayVersion(detail?.dashboard_version),
+          })}
+        </p>
+        <div className="auth-warning">
+          <MdiIcon name="mdi-alert" />
+          {t('core.common.upgradeRecovery.hint')}
+        </div>
         {restarting && <progress />}
         {status && <p aria-live="polite">{status}</p>}
         <DialogActions>
-          {!detail?.blocking && <Button disabled={restarting} onClick={dismiss}>{t('core.common.upgradeRecovery.laterButton')}</Button>}
+          {!detail?.blocking && (
+            <Button disabled={restarting} onClick={dismiss}>
+              {t('core.common.upgradeRecovery.laterButton')}
+            </Button>
+          )}
           <Button disabled={restarting} onClick={() => void restart()} variant="primary">
-            <MdiIcon name="mdi-restart" />{t('core.common.upgradeRecovery.restartButton')}
+            <MdiIcon name="mdi-restart" />
+            {t('core.common.upgradeRecovery.restartButton')}
           </Button>
         </DialogActions>
       </div>

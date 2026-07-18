@@ -1,12 +1,5 @@
-import type {
-  GhproxyTestRequest,
-  PipInstallRequest,
-  UpdateRequest,
-} from '@/api/openapi';
-import {
-  compatibleRequest,
-  type CompatibleApiResponse,
-} from './auth';
+import type { GhproxyTestRequest, PipInstallRequest, UpdateRequest } from '@/api/openapi';
+import { compatibleRequest, type CompatibleApiResponse } from './auth';
 import { apiRequest } from './http';
 
 export type VersionData = {
@@ -28,85 +21,62 @@ export type StartTimeData = {
 };
 
 export const publicApi = {
-  versions: () => legacyCompatibleRequest<PublicVersionData>(
-    '/api/v1/stats/versions',
-    '/api/stat/versions',
-  ),
+  versions: () => legacyCompatibleRequest<PublicVersionData>('/api/v1/stats/versions', '/api/stat/versions'),
 };
 
 export const statsApi = {
-  version: () => legacyCompatibleRequest<VersionData>(
-    '/api/v1/stats/version',
-    '/api/stat/version',
-  ),
-  testGhproxy: (payload: GhproxyTestRequest) => legacyCompatibleRequest<{ latency?: number }>(
-    '/api/v1/stats/ghproxy/test',
-    '/api/stat/test-ghproxy-connection',
-    jsonRequest(payload),
-  ),
-  startTime: () => legacyCompatibleRequest<StartTimeData>(
-    '/api/v1/stats/start-time',
-    '/api/stat/start-time',
-  ),
-  restart: () => legacyCompatibleRequest<Record<string, unknown>>(
-    '/api/v1/system/restart',
-    '/api/stat/restart-core',
-    { method: 'POST' },
-  ),
+  version: () => legacyCompatibleRequest<VersionData>('/api/v1/stats/version', '/api/stat/version'),
+  testGhproxy: (payload: GhproxyTestRequest) =>
+    legacyCompatibleRequest<{ latency?: number }>(
+      '/api/v1/stats/ghproxy/test',
+      '/api/stat/test-ghproxy-connection',
+      jsonRequest(payload),
+    ),
+  startTime: () => legacyCompatibleRequest<StartTimeData>('/api/v1/stats/start-time', '/api/stat/start-time'),
+  restart: () =>
+    legacyCompatibleRequest<Record<string, unknown>>('/api/v1/system/restart', '/api/stat/restart-core', {
+      method: 'POST',
+    }),
 };
 
 export const updatesApi = {
-  check: () => legacyCompatibleRequest<Record<string, unknown>>(
-    '/api/v1/updates/check',
-    '/api/update/check',
-  ),
+  check: () => legacyCompatibleRequest<Record<string, unknown>>('/api/v1/updates/check', '/api/update/check'),
   releases: (type?: 'core' | 'dashboard') => {
     const query = type ? `?type=${encodeURIComponent(type)}` : '';
-    return legacyCompatibleRequest<unknown[]>(
-      `/api/v1/updates/releases${query}`,
-      `/api/update/releases${query}`,
-    );
+    return legacyCompatibleRequest<unknown[]>(`/api/v1/updates/releases${query}`, `/api/update/releases${query}`);
   },
-  core: (payload?: UpdateRequest) => legacyCompatibleRequest<Record<string, unknown>>(
-    '/api/v1/updates/core',
-    '/api/update/do',
-    payload ? jsonRequest(payload) : { method: 'POST' },
-  ),
-  dashboard: (payload?: UpdateRequest) => legacyCompatibleRequest<Record<string, unknown>>(
-    '/api/v1/updates/dashboard',
-    '/api/update/dashboard',
-    payload ? jsonRequest(payload) : { method: 'POST' },
-  ),
-  progress: (taskId: string) => legacyCompatibleRequest<Record<string, unknown>>(
-    `/api/v1/updates/progress/${encodeURIComponent(taskId)}`,
-    `/api/update/progress?id=${encodeURIComponent(taskId)}`,
-  ),
-  installPip: (payload: PipInstallRequest) => legacyCompatibleRequest<Record<string, unknown>>(
-    '/api/v1/pip/install',
-    '/api/update/pip-install',
-    jsonRequest(payload),
-  ),
+  core: (payload?: UpdateRequest) =>
+    legacyCompatibleRequest<Record<string, unknown>>(
+      '/api/v1/updates/core',
+      '/api/update/do',
+      payload ? jsonRequest(payload) : { method: 'POST' },
+    ),
+  dashboard: (payload?: UpdateRequest) =>
+    legacyCompatibleRequest<Record<string, unknown>>(
+      '/api/v1/updates/dashboard',
+      '/api/update/dashboard',
+      payload ? jsonRequest(payload) : { method: 'POST' },
+    ),
+  progress: (taskId: string) =>
+    legacyCompatibleRequest<Record<string, unknown>>(
+      `/api/v1/updates/progress/${encodeURIComponent(taskId)}`,
+      `/api/update/progress?id=${encodeURIComponent(taskId)}`,
+    ),
+  installPip: (payload: PipInstallRequest) =>
+    legacyCompatibleRequest<Record<string, unknown>>(
+      '/api/v1/pip/install',
+      '/api/update/pip-install',
+      jsonRequest(payload),
+    ),
 };
 
 export const recoveryApi = {
-  version: (token: string, fetchImpl?: typeof fetch) => legacyRecoveryRequest<VersionData>(
-    '/api/stat/version',
-    token,
-    {},
-    fetchImpl,
-  ),
-  startTime: (token: string, fetchImpl?: typeof fetch) => legacyRecoveryRequest<StartTimeData>(
-    '/api/stat/start-time',
-    token,
-    {},
-    fetchImpl,
-  ),
-  restart: (token: string, fetchImpl?: typeof fetch) => legacyRecoveryRequest<Record<string, unknown>>(
-    '/api/stat/restart-core',
-    token,
-    { method: 'POST' },
-    fetchImpl,
-  ),
+  version: (token: string, fetchImpl?: typeof fetch) =>
+    legacyRecoveryRequest<VersionData>('/api/stat/version', token, {}, fetchImpl),
+  startTime: (token: string, fetchImpl?: typeof fetch) =>
+    legacyRecoveryRequest<StartTimeData>('/api/stat/start-time', token, {}, fetchImpl),
+  restart: (token: string, fetchImpl?: typeof fetch) =>
+    legacyRecoveryRequest<Record<string, unknown>>('/api/stat/restart-core', token, { method: 'POST' }, fetchImpl),
 };
 
 function jsonRequest(payload: object): RequestInit {
@@ -125,19 +95,10 @@ async function legacyCompatibleRequest<T>(
   return response;
 }
 
-async function legacyRecoveryRequest<T>(
-  path: string,
-  token: string,
-  init: RequestInit,
-  fetchImpl?: typeof fetch,
-) {
+async function legacyRecoveryRequest<T>(path: string, token: string, init: RequestInit, fetchImpl?: typeof fetch) {
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const response = await apiRequest<T>(
-    path,
-    { ...init, headers },
-    fetchImpl ? { fetch: fetchImpl } : {},
-  );
+  const response = await apiRequest<T>(path, { ...init, headers }, fetchImpl ? { fetch: fetchImpl } : {});
   if (response.status === 'error') throw new Error(response.message || 'Legacy recovery request failed.');
   return response.data;
 }

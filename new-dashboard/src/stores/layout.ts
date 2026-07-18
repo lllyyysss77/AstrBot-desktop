@@ -12,18 +12,13 @@ function readOpenedGroups(): string[] {
   if (typeof localStorage === 'undefined') return [];
   try {
     const value: unknown = JSON.parse(localStorage.getItem(SIDEBAR_OPENED_ITEMS_KEY) ?? '[]');
-    return Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string')
-      : [];
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   } catch {
     return [];
   }
 }
 
-export function resolveInitialThemeMode(
-  storedMode: string | null,
-  legacyTheme: string | null,
-): ThemeMode {
+export function resolveInitialThemeMode(storedMode: string | null, legacyTheme: string | null): ThemeMode {
   if (storedMode === 'light' || storedMode === 'dark' || storedMode === 'system') {
     return storedMode;
   }
@@ -34,10 +29,7 @@ export function resolveInitialThemeMode(
 
 function readThemeMode(): ThemeMode {
   if (typeof localStorage === 'undefined') return 'system';
-  return resolveInitialThemeMode(
-    localStorage.getItem('themeMode'),
-    localStorage.getItem('uiTheme'),
-  );
+  return resolveInitialThemeMode(localStorage.getItem('themeMode'), localStorage.getItem('uiTheme'));
 }
 
 export function clampSidebarWidth(width: number) {

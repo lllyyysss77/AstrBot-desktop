@@ -324,12 +324,17 @@
 .provider-source-config__section .dynamic-config__control > .dynamic-switch { width: 44px; margin-left: auto; }
 
 .provider-model-search {
-  width: 100%;
+  display: flex;
+  width: min(280px, 32vw);
   min-width: 0;
   min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 11px;
   border: 1px solid var(--provider-border);
   border-radius: 9px;
-  background: var(--provider-surface);
+  background: var(--provider-item-background);
   color: inherit;
 }
 
@@ -337,7 +342,6 @@
 .provider-models__header { align-items: center; margin-bottom: 13px; }
 .provider-models__header h3 { font-size: 20px; }
 .provider-models__actions { min-width: 0; flex: 1; justify-content: flex-end; }
-.provider-model-search { display: flex; width: min(280px, 32vw); align-items: center; gap: 8px; margin: 0; padding: 0 11px; background: var(--provider-item-background); }
 .provider-model-search > .mdi { color: color-mix(in srgb, var(--astrbot-text) 55%, transparent); font-size: 19px; }
 .provider-model-search input { width: 100%; min-width: 0; padding: 8px 0; border: 0; outline: 0; background: transparent; color: inherit; }
 

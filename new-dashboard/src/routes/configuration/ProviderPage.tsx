@@ -153,23 +153,30 @@ export default function ProviderPage() {
   const activeTab = PROVIDER_TABS.find((tab) => tab.type === activeType) ?? PROVIDER_TABS[0];
   const visibleSources = useMemo(() => recordsForType(providerSources, activeType), [activeType, providerSources]);
   const visibleProviders = useMemo(() => recordsForType(providers, activeType), [activeType, providers]);
-  const templateOptions = useMemo(() => sourceTemplatesForType(providerTemplates, activeType), [activeType, providerTemplates]);
-  const pickerTemplateOptions = useMemo(() => sourceTemplatesForType(providerTemplates, providerPickerType), [providerPickerType, providerTemplates]);
+  const templateOptions = useMemo(
+    () => sourceTemplatesForType(providerTemplates, activeType),
+    [activeType, providerTemplates],
+  );
+  const pickerTemplateOptions = useMemo(
+    () => sourceTemplatesForType(providerTemplates, providerPickerType),
+    [providerPickerType, providerTemplates],
+  );
   const sourceProviders = useMemo(
     () => providers.filter((provider) => String(provider.provider_source_id || '') === selectedSourceId),
     [providers, selectedSourceId],
   );
   const sourceIsDirty = Boolean(
-    selectedSource && editableSource
-      && (selectedSourceId === newSourceId || prettyJson(selectedSource) !== prettyJson(editableSource)),
+    selectedSource &&
+    editableSource &&
+    (selectedSourceId === newSourceId || prettyJson(selectedSource) !== prettyJson(editableSource)),
   );
   const sourceSections = useMemo(
-    () => editableSource ? providerSourceSections(editableSource) : null,
+    () => (editableSource ? providerSourceSections(editableSource) : null),
     [editableSource],
   );
   const sourceFieldMetadata = useMemo(() => {
     const items = isObject(providerSourceSchema.items) ? providerSourceSchema.items : {};
-    const item = (key: string) => isObject(items[key]) ? items[key] as JsonObject : {};
+    const item = (key: string) => (isObject(items[key]) ? (items[key] as JsonObject) : {});
     return {
       ...providerSourceSchema,
       items: {
@@ -190,12 +197,14 @@ export default function ProviderPage() {
     const items = isObject(metadata.items) ? metadata.items : {};
     const hiddenKeys = ['id', 'model'];
     if (String(selectedSource?.type || '') === 'googlegenai_chat_completion') hiddenKeys.push('custom_extra_body');
-    const nextItems = Object.fromEntries(Object.entries(items).map(([key, value]) => [
-      key,
-      hiddenKeys.includes(key) && isObject(value) ? { ...value, invisible: true } : value,
-    ]));
+    const nextItems = Object.fromEntries(
+      Object.entries(items).map(([key, value]) => [
+        key,
+        hiddenKeys.includes(key) && isObject(value) ? { ...value, invisible: true } : value,
+      ]),
+    );
     for (const key of hiddenKeys) {
-      const item = isObject(nextItems[key]) ? nextItems[key] as JsonObject : {};
+      const item = isObject(nextItems[key]) ? (nextItems[key] as JsonObject) : {};
       nextItems[key] = { ...item, invisible: true };
     }
     metadata.items = nextItems;
@@ -208,7 +217,7 @@ export default function ProviderPage() {
     const entries: Array<{ configured: boolean; metadata?: JsonObject; model: string; provider?: JsonObject }> = [
       ...sourceProviders.map((provider) => {
         const model = String(provider.model || recordId(provider, 'id'));
-        const metadata = isObject(modelMetadata[model]) ? modelMetadata[model] as JsonObject : undefined;
+        const metadata = isObject(modelMetadata[model]) ? (modelMetadata[model] as JsonObject) : undefined;
         return { configured: true, metadata, model, provider };
       }),
       ...availableModels
@@ -216,8 +225,13 @@ export default function ProviderPage() {
         .map((item) => ({ configured: false, metadata: item.metadata, model: item.name })),
     ];
     if (!query) return entries;
-    return entries.filter((entry) => entry.model.toLowerCase().includes(query)
-      || String(entry.provider?.id || '').toLowerCase().includes(query));
+    return entries.filter(
+      (entry) =>
+        entry.model.toLowerCase().includes(query) ||
+        String(entry.provider?.id || '')
+          .toLowerCase()
+          .includes(query),
+    );
   }, [availableModels, modelMetadata, modelSearch, sourceProviders]);
   const configuredModels = useMemo(() => mergedModels.filter((entry) => entry.configured), [mergedModels]);
   const unconfiguredModels = useMemo(() => mergedModels.filter((entry) => !entry.configured), [mergedModels]);
@@ -259,11 +273,15 @@ export default function ProviderPage() {
 
   const removeSource = async (source: JsonObject) => {
     const id = recordId(source, 'id');
-    if (!id || !await confirmAction({
-      danger: true,
-      title: t('features.provider.providerSources.delete'),
-      message: t('features.provider.providerSources.deleteConfirm', { id }),
-    })) return;
+    if (
+      !id ||
+      !(await confirmAction({
+        danger: true,
+        title: t('features.provider.providerSources.delete'),
+        message: t('features.provider.providerSources.deleteConfirm', { id }),
+      }))
+    )
+      return;
     if (id === newSourceId) {
       setProviderSources((current) => current.filter((item) => recordId(item, 'id') !== id));
       setSelectedSourceId('');
@@ -282,24 +300,33 @@ export default function ProviderPage() {
   const fetchModels = async () => {
     if (!selectedSourceId) return;
     const sourceId = recordId(editableSource ?? {}, 'id') || selectedSourceId;
-    if (sourceIsDirty && !await saveEditableSource()) return;
+    if (sourceIsDirty && !(await saveEditableSource())) return;
     setLoadingModels(true);
     try {
-      const payload = responseData<JsonObject>(await listProviderSourceModelsById({
-        query: { source_id: sourceId, capability: activeTab.capability },
-      }));
-      const metadata = isObject(payload?.model_metadata) ? payload.model_metadata as JsonObject : {};
+      const payload = responseData<JsonObject>(
+        await listProviderSourceModelsById({
+          query: { source_id: sourceId, capability: activeTab.capability },
+        }),
+      );
+      const metadata = isObject(payload?.model_metadata) ? (payload.model_metadata as JsonObject) : {};
       const models = Array.isArray(payload?.models) ? payload.models : [];
       setAvailableMetadata(metadata);
-      setAvailableModels(models.map((item) => {
-        if (isObject(item)) {
-          const name = String(item.name || item.model || '');
-          const inlineMetadata = isObject(item.metadata) ? item.metadata : undefined;
-          return { name, metadata: inlineMetadata ?? (isObject(metadata[name]) ? metadata[name] as JsonObject : undefined) };
-        }
-        const name = String(item);
-        return { name, metadata: isObject(metadata[name]) ? metadata[name] as JsonObject : undefined };
-      }).filter((item) => item.name));
+      setAvailableModels(
+        models
+          .map((item) => {
+            if (isObject(item)) {
+              const name = String(item.name || item.model || '');
+              const inlineMetadata = isObject(item.metadata) ? item.metadata : undefined;
+              return {
+                name,
+                metadata: inlineMetadata ?? (isObject(metadata[name]) ? (metadata[name] as JsonObject) : undefined),
+              };
+            }
+            const name = String(item);
+            return { name, metadata: isObject(metadata[name]) ? (metadata[name] as JsonObject) : undefined };
+          })
+          .filter((item) => item.name),
+      );
       if (!models.length) toast.info(t('features.provider.models.noModelsFound'));
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.provider.models.fetchError')));
@@ -372,10 +399,10 @@ export default function ProviderPage() {
   };
 
   const openProvider = (provider: JsonObject) => {
-    const templateEntry = Object.entries(providerTemplates).find(([, template]) => (
-      isObject(template) && String(template.type || '') === String(provider.type || '')
-    ));
-    const template = templateEntry && isObject(templateEntry[1]) ? templateEntry[1] as JsonObject : {};
+    const templateEntry = Object.entries(providerTemplates).find(
+      ([, template]) => isObject(template) && String(template.type || '') === String(provider.type || ''),
+    );
+    const template = templateEntry && isObject(templateEntry[1]) ? (templateEntry[1] as JsonObject) : {};
     setEditingProvider(mergeProviderWithTemplate(provider, template));
     setEditingProviderOriginalId(recordId(provider, 'id', 'provider_id'));
     setEditingProviderName(templateEntry?.[0] || recordId(provider, 'id', 'provider_id'));
@@ -395,7 +422,13 @@ export default function ProviderPage() {
       } else {
         await createProvider({ body: { config: editingProvider } });
       }
-      toast.success(t(editingProviderOriginalId ? 'features.provider.messages.success.update' : 'features.provider.messages.success.add'));
+      toast.success(
+        t(
+          editingProviderOriginalId
+            ? 'features.provider.messages.success.update'
+            : 'features.provider.messages.success.add',
+        ),
+      );
       setEditingProvider(null);
       setEditingProviderOriginalId('');
       await load();
@@ -419,11 +452,15 @@ export default function ProviderPage() {
 
   const removeProvider = async (provider: JsonObject) => {
     const id = recordId(provider, 'id', 'provider_id');
-    if (!id || !await confirmAction({
-      danger: true,
-      title: t('features.provider.models.title'),
-      message: t('features.provider.models.deleteConfirm', { id }),
-    })) return;
+    if (
+      !id ||
+      !(await confirmAction({
+        danger: true,
+        title: t('features.provider.models.title'),
+        message: t('features.provider.models.deleteConfirm', { id }),
+      }))
+    )
+      return;
     try {
       await deleteProviderById({ query: { provider_id: id } });
       toast.success(t('features.provider.models.deleteSuccess'));
@@ -475,10 +512,12 @@ export default function ProviderPage() {
         throw new Error(result.error || t('features.provider.models.testError'));
       }
       setProviderStatuses((current) => ({ ...current, [id]: result }));
-      toast.success(t('features.provider.models.testSuccessWithLatency', {
-        id,
-        latency: Math.max(0, Math.round(performance.now() - startedAt)),
-      }));
+      toast.success(
+        t('features.provider.models.testSuccessWithLatency', {
+          id,
+          latency: Math.max(0, Math.round(performance.now() - startedAt)),
+        }),
+      );
     } catch (cause) {
       const message = errorMessage(cause, t('features.provider.models.testError'));
       setProviderStatuses((current) => ({ ...current, [id]: { status: 'unavailable', error: message } }));
@@ -497,12 +536,15 @@ export default function ProviderPage() {
     }
     setDetectingEmbeddingDimension(true);
     try {
-      const data = responseData<JsonObject>(await getProviderEmbeddingDimensionById({
-        body: { provider_id: id, provider_config: editingProvider },
-      }));
+      const data = responseData<JsonObject>(
+        await getProviderEmbeddingDimensionById({
+          body: { provider_id: id, provider_config: editingProvider },
+        }),
+      );
       const dimension = Number(data?.embedding_dimensions);
-      if (!Number.isFinite(dimension) || dimension <= 0) throw new Error(t('features.provider.embeddingDimension.invalidResponse'));
-      setEditingProvider((current) => current ? { ...current, embedding_dimensions: dimension } : current);
+      if (!Number.isFinite(dimension) || dimension <= 0)
+        throw new Error(t('features.provider.embeddingDimension.invalidResponse'));
+      setEditingProvider((current) => (current ? { ...current, embedding_dimensions: dimension } : current));
       toast.success(t('features.provider.embeddingDimension.success', { dimension }));
     } catch (cause) {
       toast.error(errorMessage(cause, t('features.provider.embeddingDimension.error')));
@@ -548,13 +590,23 @@ export default function ProviderPage() {
             <div className="provider-source-panel__header">
               <h2>{t('features.provider.providerSources.title')}</h2>
               <details className="provider-source-add">
-                <summary><MdiIcon name="mdi-plus" />{t('features.provider.providerSources.add')}</summary>
+                <summary>
+                  <MdiIcon name="mdi-plus" />
+                  {t('features.provider.providerSources.add')}
+                </summary>
                 <div className="provider-source-add__menu">
                   {templateOptions.map(({ key, template }) => (
-                    <button key={key} onClick={(event) => {
-                      (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
-                      startSource(template);
-                    }} type="button"><ProviderMark provider={String(template.provider || '')} variant="menu" /><span>{key}</span></button>
+                    <button
+                      key={key}
+                      onClick={(event) => {
+                        (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
+                        startSource(template);
+                      }}
+                      type="button"
+                    >
+                      <ProviderMark provider={String(template.provider || '')} variant="menu" />
+                      <span>{key}</span>
+                    </button>
                   ))}
                 </div>
               </details>
@@ -568,27 +620,54 @@ export default function ProviderPage() {
                   <article className={active ? 'is-active' : ''} key={id}>
                     <button className="provider-source-list__select" onClick={() => selectSource(source)} type="button">
                       <ProviderMark provider={String(source.provider || '')} />
-                      <span><strong>{id}</strong><small>{String(source.api_base || source.provider || source.type || '')}</small></span>
+                      <span>
+                        <strong>{id}</strong>
+                        <small>{String(source.api_base || source.provider || source.type || '')}</small>
+                      </span>
                     </button>
-                    <button className="provider-source-list__delete" onClick={() => void removeSource(source)} title={t('features.provider.providerSources.delete')} type="button"><MdiIcon name="mdi-delete-outline" /></button>
+                    <button
+                      className="provider-source-list__delete"
+                      onClick={() => void removeSource(source)}
+                      title={t('features.provider.providerSources.delete')}
+                      type="button"
+                    >
+                      <MdiIcon name="mdi-delete-outline" />
+                    </button>
                   </article>
                 );
               })}
               {!visibleSources.length && (
-                <div className="provider-source-list__empty"><MdiIcon name="mdi-database-off" /><span>{t('features.provider.providerSources.empty')}</span></div>
+                <div className="provider-source-list__empty">
+                  <MdiIcon name="mdi-database-off" />
+                  <span>{t('features.provider.providerSources.empty')}</span>
+                </div>
               )}
             </div>
           </aside>
 
           <main className="provider-workbench__main">
             {!selectedSource || !editableSource ? (
-              <div className="provider-workbench__empty"><MdiIcon name="mdi-cursor-default-click" /><span>{t('features.provider.providerSources.selectHint')}</span></div>
+              <div className="provider-workbench__empty">
+                <MdiIcon name="mdi-cursor-default-click" />
+                <span>{t('features.provider.providerSources.selectHint')}</span>
+              </div>
             ) : (
               <div className="provider-source-config">
                 <header className="provider-source-config__header">
-                  <div><h2>{recordId(editableSource, 'id')}</h2><p>{String(editableSource.api_base || editableSource.provider || '')}</p></div>
+                  <div>
+                    <h2>{recordId(editableSource, 'id')}</h2>
+                    <p>{String(editableSource.api_base || editableSource.provider || '')}</p>
+                  </div>
                   <div className="provider-source-config__actions">
-                    <button className="provider-button provider-button--pill provider-button--tonal" disabled={!sourceIsDirty || savingSource} onClick={() => void saveEditableSource()} type="button"><MdiIcon name="mdi-content-save-outline" />{savingSource ? '…' : t('features.provider.providerSources.save')}</button>
+                    <button
+                      className="provider-button provider-button--pill provider-button--tonal"
+                      disabled={!sourceIsDirty || savingSource}
+                      onClick={() => void saveEditableSource()}
+                      type="button"
+                    >
+                      <MdiIcon name="mdi-content-save-outline" />
+                      {savingSource ? '…' : t('features.provider.providerSources.save')}
+                    </button>
                   </div>
                 </header>
 
@@ -625,40 +704,119 @@ export default function ProviderPage() {
 
                 <section className="provider-models">
                   <header className="provider-models__header">
-                    <div><h3>{t('features.provider.models.title')}</h3><p>{t('features.provider.models.available')} {availableModels.length}</p></div>
+                    <div>
+                      <h3>{t('features.provider.models.title')}</h3>
+                      <p>
+                        {t('features.provider.models.available')} {availableModels.length}
+                      </p>
+                    </div>
                     <div className="provider-models__actions">
-                      <label className="provider-model-search"><MdiIcon name="mdi-magnify" /><input onChange={(event) => setModelSearch(event.target.value)} placeholder={t('features.provider.models.searchPlaceholder')} value={modelSearch} /></label>
-                      <button className="provider-button provider-button--pill provider-button--tonal" disabled={loadingModels} onClick={() => void fetchModels()} type="button"><MdiIcon className={loadingModels ? 'is-spinning' : ''} name="mdi-download" />{t(sourceIsDirty ? 'features.provider.providerSources.saveAndFetchModels' : 'features.provider.providerSources.fetchModels')}</button>
-                      <button className="provider-button provider-button--pill provider-button--text" onClick={openManualModel} type="button"><MdiIcon name="mdi-pencil-plus" />{t('features.provider.models.manualAddButton')}</button>
+                      <label className="provider-model-search">
+                        <MdiIcon name="mdi-magnify" />
+                        <input
+                          onChange={(event) => setModelSearch(event.target.value)}
+                          placeholder={t('features.provider.models.searchPlaceholder')}
+                          value={modelSearch}
+                        />
+                      </label>
+                      <button
+                        className="provider-button provider-button--pill provider-button--tonal"
+                        disabled={loadingModels}
+                        onClick={() => void fetchModels()}
+                        type="button"
+                      >
+                        <MdiIcon className={loadingModels ? 'is-spinning' : ''} name="mdi-download" />
+                        {t(
+                          sourceIsDirty
+                            ? 'features.provider.providerSources.saveAndFetchModels'
+                            : 'features.provider.providerSources.fetchModels',
+                        )}
+                      </button>
+                      <button
+                        className="provider-button provider-button--pill provider-button--text"
+                        onClick={openManualModel}
+                        type="button"
+                      >
+                        <MdiIcon name="mdi-pencil-plus" />
+                        {t('features.provider.models.manualAddButton')}
+                      </button>
                     </div>
                   </header>
                   <div className="provider-models__sections">
                     <section className="provider-model-section">
-                      <div className="provider-model-section__heading"><h4>{t('features.provider.models.configured')}</h4><span>{configuredModels.length}</span></div>
+                      <div className="provider-model-section__heading">
+                        <h4>{t('features.provider.models.configured')}</h4>
+                        <span>{configuredModels.length}</span>
+                      </div>
                       <div className="provider-model-list">
-                        {configuredModels.map((entry) => entry.provider && <ProviderRow
-                          key={recordId(entry.provider, 'id') || entry.model}
-                          metadata={entry.metadata}
-                          onDelete={() => void removeProvider(entry.provider!)}
-                          onEdit={() => openModelEditor(entry.provider!, recordId(entry.provider!, 'id', 'provider_id'))}
-                          onTest={() => void testProvider(entry.provider!)}
-                          onToggle={() => void toggleProvider(entry.provider!)}
-                          provider={entry.provider}
-                          status={providerStatuses[recordId(entry.provider, 'id')]}
-                          testing={testing === recordId(entry.provider, 'id')}
-                          t={t}
-                        />)}
-                        {!configuredModels.length && <div className="provider-model-list__empty"><MdiIcon name="mdi-package-variant-closed" /><span>{t('features.provider.models.empty')}</span></div>}
+                        {configuredModels.map(
+                          (entry) =>
+                            entry.provider && (
+                              <ProviderRow
+                                key={recordId(entry.provider, 'id') || entry.model}
+                                metadata={entry.metadata}
+                                onDelete={() => void removeProvider(entry.provider!)}
+                                onEdit={() =>
+                                  openModelEditor(entry.provider!, recordId(entry.provider!, 'id', 'provider_id'))
+                                }
+                                onTest={() => void testProvider(entry.provider!)}
+                                onToggle={() => void toggleProvider(entry.provider!)}
+                                provider={entry.provider}
+                                status={providerStatuses[recordId(entry.provider, 'id')]}
+                                testing={testing === recordId(entry.provider, 'id')}
+                                t={t}
+                              />
+                            ),
+                        )}
+                        {!configuredModels.length && (
+                          <div className="provider-model-list__empty">
+                            <MdiIcon name="mdi-package-variant-closed" />
+                            <span>{t('features.provider.models.empty')}</span>
+                          </div>
+                        )}
                       </div>
                     </section>
                     <section className="provider-model-section">
-                      <div className="provider-model-section__heading"><h4>{t('features.provider.models.available')}</h4><span>{unconfiguredModels.length}</span></div>
+                      <div className="provider-model-section__heading">
+                        <h4>{t('features.provider.models.available')}</h4>
+                        <span>{unconfiguredModels.length}</span>
+                      </div>
                       <div className="provider-model-list">
-                        {unconfiguredModels.map((entry) => <article className="provider-model-row provider-model-row--available" key={`available-${entry.model}`}>
-                          <ProviderModelCopy metadata={entry.metadata} model={entry.model} provider={{ model: entry.model }} t={t} />
-                          <button aria-label={t('features.provider.models.configure')} onClick={() => openAvailableModel(entry.model, entry.metadata ?? (isObject(availableMetadata[entry.model]) ? availableMetadata[entry.model] as JsonObject : undefined))} title={t('features.provider.models.configure')} type="button"><MdiIcon name="mdi-plus" /></button>
-                        </article>)}
-                        {!unconfiguredModels.length && <div className="provider-model-list__empty provider-model-list__empty--available"><MdiIcon name="mdi-database-search-outline" /><span>{t('features.provider.models.noModelsFound')}</span></div>}
+                        {unconfiguredModels.map((entry) => (
+                          <article
+                            className="provider-model-row provider-model-row--available"
+                            key={`available-${entry.model}`}
+                          >
+                            <ProviderModelCopy
+                              metadata={entry.metadata}
+                              model={entry.model}
+                              provider={{ model: entry.model }}
+                              t={t}
+                            />
+                            <button
+                              aria-label={t('features.provider.models.configure')}
+                              onClick={() =>
+                                openAvailableModel(
+                                  entry.model,
+                                  entry.metadata ??
+                                    (isObject(availableMetadata[entry.model])
+                                      ? (availableMetadata[entry.model] as JsonObject)
+                                      : undefined),
+                                )
+                              }
+                              title={t('features.provider.models.configure')}
+                              type="button"
+                            >
+                              <MdiIcon name="mdi-plus" />
+                            </button>
+                          </article>
+                        ))}
+                        {!unconfiguredModels.length && (
+                          <div className="provider-model-list__empty provider-model-list__empty--available">
+                            <MdiIcon name="mdi-database-search-outline" />
+                            <span>{t('features.provider.models.noModelsFound')}</span>
+                          </div>
+                        )}
                       </div>
                     </section>
                   </div>
@@ -671,21 +829,62 @@ export default function ProviderPage() {
 
       {!loading && activeType !== 'chat_completion' && (
         <section className="provider-type-panel">
-          <header><div><h2>{t(`features.provider.providers.tabs.${activeTab.translation}`)}</h2></div><button className="button--primary" onClick={openProviderPicker} type="button"><MdiIcon name="mdi-plus" />{t('features.provider.providers.addProvider')}</button></header>
+          <header>
+            <div>
+              <h2>{t(`features.provider.providers.tabs.${activeTab.translation}`)}</h2>
+            </div>
+            <button className="button--primary" onClick={openProviderPicker} type="button">
+              <MdiIcon name="mdi-plus" />
+              {t('features.provider.providers.addProvider')}
+            </button>
+          </header>
           <div className="provider-card-grid">
             {visibleProviders.map((provider) => (
-              <ProviderCard key={recordId(provider, 'id')} onCopy={() => void copyProvider(provider)} onDelete={() => void removeProvider(provider)} onEdit={() => openProvider(provider)} onTest={() => void testProvider(provider)} onToggle={() => void toggleProvider(provider)} provider={provider} status={providerStatuses[recordId(provider, 'id')]} testing={testing === recordId(provider, 'id')} t={t} />
+              <ProviderCard
+                key={recordId(provider, 'id')}
+                onCopy={() => void copyProvider(provider)}
+                onDelete={() => void removeProvider(provider)}
+                onEdit={() => openProvider(provider)}
+                onTest={() => void testProvider(provider)}
+                onToggle={() => void toggleProvider(provider)}
+                provider={provider}
+                status={providerStatuses[recordId(provider, 'id')]}
+                testing={testing === recordId(provider, 'id')}
+                t={t}
+              />
             ))}
           </div>
-          {!visibleProviders.length && <div className="provider-type-panel__empty"><MdiIcon name={activeTab.icon} /><p>{t('features.provider.providers.empty.typed', { type: t(`features.provider.providers.tabs.${activeTab.translation}`) })}</p><button onClick={openProviderPicker} type="button"><MdiIcon name="mdi-plus" />{t('features.provider.providers.addProvider')}</button></div>}
+          {!visibleProviders.length && (
+            <div className="provider-type-panel__empty">
+              <MdiIcon name={activeTab.icon} />
+              <p>
+                {t('features.provider.providers.empty.typed', {
+                  type: t(`features.provider.providers.tabs.${activeTab.translation}`),
+                })}
+              </p>
+              <button onClick={openProviderPicker} type="button">
+                <MdiIcon name="mdi-plus" />
+                {t('features.provider.providers.addProvider')}
+              </button>
+            </div>
+          )}
         </section>
       )}
 
-      <Dialog onOpenChange={setProviderPickerOpen} open={providerPickerOpen} title={t('features.provider.dialogs.addProvider.title')}>
+      <Dialog
+        onOpenChange={setProviderPickerOpen}
+        open={providerPickerOpen}
+        title={t('features.provider.dialogs.addProvider.title')}
+      >
         <div className="provider-template-picker">
           <nav aria-label={t('features.provider.providerTypes.title')}>
             {PROVIDER_TABS.filter((tab) => tab.type !== 'chat_completion').map((tab) => (
-              <button aria-pressed={providerPickerType === tab.type} key={tab.type} onClick={() => setProviderPickerType(tab.type)} type="button">
+              <button
+                aria-pressed={providerPickerType === tab.type}
+                key={tab.type}
+                onClick={() => setProviderPickerType(tab.type)}
+                type="button"
+              >
                 <MdiIcon name={tab.icon} />
                 <span>{t(`features.provider.dialogs.addProvider.tabs.${tab.translation}`)}</span>
               </button>
@@ -693,14 +892,31 @@ export default function ProviderPage() {
           </nav>
           <div className="provider-template-picker__grid">
             {pickerTemplateOptions.map(({ key, template }) => (
-              <button className="provider-template-card" key={key} onClick={() => selectProviderTemplate(key, template)} type="button">
-                <span><strong>{key}</strong><small>{providerTemplateDescription(template, key, t)}</small></span>
+              <button
+                className="provider-template-card"
+                key={key}
+                onClick={() => selectProviderTemplate(key, template)}
+                type="button"
+              >
+                <span>
+                  <strong>{key}</strong>
+                  <small>{providerTemplateDescription(template, key, t)}</small>
+                </span>
                 <ProviderMark provider={String(template.provider || '')} variant="menu" />
               </button>
             ))}
-            {!pickerTemplateOptions.length && <div className="provider-template-picker__empty"><MdiIcon name="mdi-information-outline" />{t('features.provider.dialogs.addProvider.noTemplates')}</div>}
+            {!pickerTemplateOptions.length && (
+              <div className="provider-template-picker__empty">
+                <MdiIcon name="mdi-information-outline" />
+                {t('features.provider.dialogs.addProvider.noTemplates')}
+              </div>
+            )}
           </div>
-          <footer><button onClick={() => setProviderPickerOpen(false)} type="button">{t('features.provider.dialogs.config.cancel')}</button></footer>
+          <footer>
+            <button onClick={() => setProviderPickerOpen(false)} type="button">
+              {t('features.provider.dialogs.config.cancel')}
+            </button>
+          </footer>
         </div>
       </Dialog>
 
@@ -712,9 +928,11 @@ export default function ProviderPage() {
           }
         }}
         open={editingProvider !== null}
-        title={editingProviderOriginalId
-          ? t('features.provider.dialogs.config.editTitle')
-          : `${t('features.provider.dialogs.config.addTitle')} ${editingProviderName} ${t('features.provider.dialogs.config.provider')}`}
+        title={
+          editingProviderOriginalId
+            ? t('features.provider.dialogs.config.editTitle')
+            : `${t('features.provider.dialogs.config.addTitle')} ${editingProviderName} ${t('features.provider.dialogs.config.provider')}`
+        }
       >
         {editingProvider && (
           <div className="provider-template-editor-dialog">
@@ -733,8 +951,17 @@ export default function ProviderPage() {
               />
             </div>
             <footer>
-              <button disabled={savingProvider} onClick={() => setEditingProvider(null)} type="button">{t('features.provider.dialogs.config.cancel')}</button>
-              <button className="provider-dialog-button--primary" disabled={savingProvider} onClick={() => void saveProvider()} type="button">{savingProvider ? '…' : t('features.provider.dialogs.config.save')}</button>
+              <button disabled={savingProvider} onClick={() => setEditingProvider(null)} type="button">
+                {t('features.provider.dialogs.config.cancel')}
+              </button>
+              <button
+                className="provider-dialog-button--primary"
+                disabled={savingProvider}
+                onClick={() => void saveProvider()}
+                type="button"
+              >
+                {savingProvider ? '…' : t('features.provider.dialogs.config.save')}
+              </button>
             </footer>
           </div>
         )}
@@ -745,7 +972,13 @@ export default function ProviderPage() {
         open={manualModelOpen}
         title={t('features.provider.models.manualDialogTitle')}
       >
-        <form className="provider-manual-model-dialog" onSubmit={(event) => { event.preventDefault(); confirmManualModel(); }}>
+        <form
+          className="provider-manual-model-dialog"
+          onSubmit={(event) => {
+            event.preventDefault();
+            confirmManualModel();
+          }}
+        >
           <label>
             <span>{t('features.provider.models.manualDialogModelLabel')}</span>
             <input autoFocus onChange={(event) => setManualModelId(event.target.value)} value={manualModelId} />
@@ -756,8 +989,12 @@ export default function ProviderPage() {
             <small>{t('features.provider.models.manualDialogPreviewHint')}</small>
           </label>
           <footer>
-            <button onClick={() => setManualModelOpen(false)} type="button">{t('core.common.cancel')}</button>
-            <button className="provider-dialog-button--primary" disabled={!manualModelId.trim()} type="submit">{t('core.common.add')}</button>
+            <button onClick={() => setManualModelOpen(false)} type="button">
+              {t('core.common.cancel')}
+            </button>
+            <button className="provider-dialog-button--primary" disabled={!manualModelId.trim()} type="submit">
+              {t('core.common.add')}
+            </button>
           </footer>
         </form>
       </Dialog>
@@ -786,14 +1023,28 @@ export default function ProviderPage() {
               />
             </div>
             <footer>
-              <button onClick={() => setModelEditor(null)} type="button">{t('core.common.cancel')}</button>
-              <button className="provider-dialog-button--primary" disabled={savingProvider} onClick={() => void saveModelEditor()} type="button">{savingProvider ? '…' : t('features.provider.dialogs.config.save')}</button>
+              <button onClick={() => setModelEditor(null)} type="button">
+                {t('core.common.cancel')}
+              </button>
+              <button
+                className="provider-dialog-button--primary"
+                disabled={savingProvider}
+                onClick={() => void saveModelEditor()}
+                type="button"
+              >
+                {savingProvider ? '…' : t('features.provider.dialogs.config.save')}
+              </button>
             </footer>
           </div>
         )}
       </Dialog>
 
-      <Dialog description={t('features.provider.agentRunnerTest.description')} onOpenChange={setAgentRunnerHelpOpen} open={agentRunnerHelpOpen} title={t('features.provider.agentRunnerTest.title')}>
+      <Dialog
+        description={t('features.provider.agentRunnerTest.description')}
+        onOpenChange={setAgentRunnerHelpOpen}
+        open={agentRunnerHelpOpen}
+        title={t('features.provider.agentRunnerTest.title')}
+      >
         <div className="provider-agent-runner-help">
           <ol>
             <li>{t('features.provider.agentRunnerTest.steps.openConfig')}</li>
@@ -801,10 +1052,16 @@ export default function ProviderPage() {
             <li>{t('features.provider.agentRunnerTest.steps.openChat')}</li>
           </ol>
           <p>{t('features.provider.agentRunnerTest.hint')}</p>
-          <footer><button onClick={() => setAgentRunnerHelpOpen(false)} type="button">{t('core.common.confirm')}</button><Link className="button--primary" to="/config">{t('features.provider.agentRunnerTest.goToConfig')}</Link></footer>
+          <footer>
+            <button onClick={() => setAgentRunnerHelpOpen(false)} type="button">
+              {t('core.common.confirm')}
+            </button>
+            <Link className="button--primary" to="/config">
+              {t('features.provider.agentRunnerTest.goToConfig')}
+            </Link>
+          </footer>
         </div>
       </Dialog>
-
     </div>
   );
 }

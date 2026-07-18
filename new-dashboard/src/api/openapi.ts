@@ -1,11 +1,7 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 
 import { readAuthToken } from '@/auth/storage';
-import {
-  ApiError,
-  expireUnauthorizedSession,
-  readApiErrorMessage,
-} from '@/api/http';
+import { ApiError, expireUnauthorizedSession, readApiErrorMessage } from '@/api/http';
 import { client } from '@/api/generated/openapi-v1/sdk.gen';
 
 type OpenApiClientOptions = {
@@ -13,11 +9,7 @@ type OpenApiClientOptions = {
   storage?: Storage | null;
 };
 
-function setHeader(
-  headers: InternalAxiosRequestConfig['headers'],
-  key: string,
-  value: string,
-) {
+function setHeader(headers: InternalAxiosRequestConfig['headers'], key: string, value: string) {
   if (typeof headers.set === 'function') headers.set(key, value);
   else headers[key] = value;
 }
@@ -42,19 +34,15 @@ export function createOpenApiAxiosClient({
     (response) => {
       const payload = response.data;
       if (
-        response.status >= 200
-        && response.status < 300
-        && payload
-        && typeof payload === 'object'
-        && !Array.isArray(payload)
-        && 'status' in payload
-        && payload.status === 'error'
+        response.status >= 200 &&
+        response.status < 300 &&
+        payload &&
+        typeof payload === 'object' &&
+        !Array.isArray(payload) &&
+        'status' in payload &&
+        payload.status === 'error'
       ) {
-        throw new ApiError(
-          readApiErrorMessage(payload, response.statusText),
-          response.status,
-          payload,
-        );
+        throw new ApiError(readApiErrorMessage(payload, response.statusText), response.status, payload);
       }
       return response;
     },
@@ -62,11 +50,9 @@ export function createOpenApiAxiosClient({
       const status = error.response?.status ?? 0;
       const path = error.config?.url ?? '';
       expireUnauthorizedSession(path, status, storage, onUnauthorized);
-      return Promise.reject(new ApiError(
-        readApiErrorMessage(error.response?.data, error.message),
-        status,
-        error.response?.data,
-      ));
+      return Promise.reject(
+        new ApiError(readApiErrorMessage(error.response?.data, error.message), status, error.response?.data),
+      );
     },
   );
   return instance;

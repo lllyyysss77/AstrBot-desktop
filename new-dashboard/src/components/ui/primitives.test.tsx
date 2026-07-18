@@ -7,7 +7,9 @@ import { DialogActions } from './DialogActions';
 describe('shared UI primitives', () => {
   it('applies a consistent button variant while preserving caller classes', () => {
     const markup = renderToStaticMarkup(
-      <Button className="feature-action" disabled variant="primary">Save</Button>,
+      <Button className="feature-action" disabled variant="primary">
+        Save
+      </Button>,
     );
 
     expect(markup).toContain('ui-button ui-button--primary feature-action');

@@ -7,7 +7,9 @@ import { BlankLayout } from './BlankLayout';
 describe('BlankLayout', () => {
   it('renders explicit page content in the layout container', () => {
     const markup = renderToStaticMarkup(
-      <BlankLayout><p>Authentication page</p></BlankLayout>,
+      <BlankLayout>
+        <p>Authentication page</p>
+      </BlankLayout>,
     );
 
     expect(markup).toContain('class="blank-layout"');

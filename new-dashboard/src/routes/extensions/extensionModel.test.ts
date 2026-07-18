@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { addPluginPinyinSearchIndex, filterPlugins, localizedPluginConfigText, localizedPluginDescription, localizedPluginTitle, markdownContent, markInstalledMarketPlugins, marketCategoryCounts, marketPluginDisplayName, marketPluginList, marketPluginTotal, normalizePluginUrl, pluginAuthor, pluginId, pluginInstallUrl, pluginPages, sortMarketPlugins } from './extensionModel';
+import {
+  addPluginPinyinSearchIndex,
+  filterPlugins,
+  localizedPluginConfigText,
+  localizedPluginDescription,
+  localizedPluginTitle,
+  markdownContent,
+  markInstalledMarketPlugins,
+  marketCategoryCounts,
+  marketPluginDisplayName,
+  marketPluginList,
+  marketPluginTotal,
+  normalizePluginUrl,
+  pluginAuthor,
+  pluginId,
+  pluginInstallUrl,
+  pluginPages,
+  sortMarketPlugins,
+} from './extensionModel';
 
 describe('extension model helpers', () => {
   it('normalizes plugin identity and repository URLs', () => {
@@ -31,7 +49,15 @@ describe('extension model helpers', () => {
     };
     expect(localizedPluginTitle(plugin, 'zh-CN')).toBe('天气');
     expect(localizedPluginDescription(plugin, 'zh_CN')).toBe('天气预报');
-    expect(localizedPluginConfigText({ 'zh-CN': { config: { weather: { city: { description: '城市' } } } } }, 'zh-CN', 'weather.city', 'description', 'City')).toBe('城市');
+    expect(
+      localizedPluginConfigText(
+        { 'zh-CN': { config: { weather: { city: { description: '城市' } } } } },
+        'zh-CN',
+        'weather.city',
+        'description',
+        'City',
+      ),
+    ).toBe('城市');
     expect(markdownContent({ content: '# README' })).toBe('# README');
   });
 
@@ -49,12 +75,31 @@ describe('extension model helpers', () => {
 
   it('reproduces marketplace display, category, sorting and installed matching', () => {
     const market = [
-      { author: 'Bob', category: 'AI Tools', market_plugin_id: 'Bob/astrbot_plugin_search', name: 'astrbot_plugin_search', pinned: true, repo: 'https://github.com/b/search', stars: 2 },
-      { author: 'Alice', category: 'utilities', name: 'astrbot_plugin_weather', repo: 'https://github.com/a/weather.git', stars: 9 },
+      {
+        author: 'Bob',
+        category: 'AI Tools',
+        market_plugin_id: 'Bob/astrbot_plugin_search',
+        name: 'astrbot_plugin_search',
+        pinned: true,
+        repo: 'https://github.com/b/search',
+        stars: 2,
+      },
+      {
+        author: 'Alice',
+        category: 'utilities',
+        name: 'astrbot_plugin_weather',
+        repo: 'https://github.com/a/weather.git',
+        stars: 9,
+      },
     ];
     expect(marketPluginDisplayName(market[0])).toBe('search');
     expect(marketCategoryCounts(market).get('ai_tools')).toBe(1);
-    expect(sortMarketPlugins(market, 'stars', 'desc').map(pluginId)).toEqual(['astrbot_plugin_weather', 'astrbot_plugin_search']);
-    expect(markInstalledMarketPlugins(market, [{ name: 'weather', repo: 'https://github.com/a/weather' }], '')[1].installed).toBe(true);
+    expect(sortMarketPlugins(market, 'stars', 'desc').map(pluginId)).toEqual([
+      'astrbot_plugin_weather',
+      'astrbot_plugin_search',
+    ]);
+    expect(
+      markInstalledMarketPlugins(market, [{ name: 'weather', repo: 'https://github.com/a/weather' }], '')[1].installed,
+    ).toBe(true);
   });
 });

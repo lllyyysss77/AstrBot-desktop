@@ -39,7 +39,13 @@ export function localizedPluginDescription(item: PluginDto, language: string) {
   return nestedText(pluginLocaleData(item, language), 'metadata.desc') || pluginDescription(item);
 }
 
-export function localizedPluginConfigText(i18n: unknown, language: string, path: string, field: 'description' | 'hint', fallback = '') {
+export function localizedPluginConfigText(
+  i18n: unknown,
+  language: string,
+  path: string,
+  field: 'description' | 'hint',
+  fallback = '',
+) {
   return nestedText(pluginLocaleData({ i18n }, language), `config.${path}.${field}`) || fallback;
 }
 
@@ -69,11 +75,13 @@ export function marketPluginList(data: unknown): PluginDto[] {
     const fallbackName = key.includes('/') ? '' : key.trim();
     const name = String(value.name || '').trim() || fallbackName;
     const author = pluginAuthor(value).trim();
-    return [{
-      ...value,
-      name: name || key,
-      market_plugin_id: String(value.market_plugin_id || '').trim() || (author && name ? `${author}/${name}` : ''),
-    } satisfies PluginDto];
+    return [
+      {
+        ...value,
+        name: name || key,
+        market_plugin_id: String(value.market_plugin_id || '').trim() || (author && name ? `${author}/${name}` : ''),
+      } satisfies PluginDto,
+    ];
   });
 }
 
@@ -93,7 +101,11 @@ export function sourceList(data: unknown) {
 }
 
 export function normalizePluginUrl(value: unknown) {
-  return String(value || '').trim().replace(/\/+$/, '').replace(/\.git$/i, '').toLowerCase();
+  return String(value || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '')
+    .toLowerCase();
 }
 
 export function pluginInstallUrl(item: PluginDto) {
@@ -103,7 +115,9 @@ export function pluginInstallUrl(item: PluginDto) {
 export function pluginPages(item: PluginDto): string[] {
   const pages = item.pages;
   if (!Array.isArray(pages)) return [];
-  return pages.map((page) => isObject(page) ? String(page.name || page.page_name || page.id || '') : String(page || '')).filter(Boolean);
+  return pages
+    .map((page) => (isObject(page) ? String(page.name || page.page_name || page.id || '') : String(page || '')))
+    .filter(Boolean);
 }
 
 export function filterPlugins(items: PluginDto[], query: string) {
@@ -112,9 +126,18 @@ export function filterPlugins(items: PluginDto[], query: string) {
   const loose = term.replace(/[\s_-]+/g, '');
   return items.filter((item) => {
     const fields = [
-      pluginTitle(item), pluginId(item), pluginAuthor(item), pluginDescription(item), item.short_desc, item.repo,
-      item.version, item.astrbot_version, ...(Array.isArray(item.tags) ? item.tags : []),
-      ...(Array.isArray(item.support_platforms) ? item.support_platforms : []), item.search_pinyin, item.search_initials,
+      pluginTitle(item),
+      pluginId(item),
+      pluginAuthor(item),
+      pluginDescription(item),
+      item.short_desc,
+      item.repo,
+      item.version,
+      item.astrbot_version,
+      ...(Array.isArray(item.tags) ? item.tags : []),
+      ...(Array.isArray(item.support_platforms) ? item.support_platforms : []),
+      item.search_pinyin,
+      item.search_initials,
     ].map(String);
     return fields.some((field) => {
       const normalized = field.toLowerCase();
@@ -124,15 +147,26 @@ export function filterPlugins(items: PluginDto[], query: string) {
 }
 
 export async function addPluginPinyinSearchIndex(items: PluginDto[]) {
-  if (!items.some((item) => /\p{Unified_Ideograph}/u.test([
-    pluginTitle(item), pluginAuthor(item), pluginDescription(item), item.short_desc,
-  ].map(String).join(' ')))) return items;
+  if (
+    !items.some((item) =>
+      /\p{Unified_Ideograph}/u.test(
+        [pluginTitle(item), pluginAuthor(item), pluginDescription(item), item.short_desc].map(String).join(' '),
+      ),
+    )
+  )
+    return items;
   const { pinyin } = await import('pinyin-pro');
   return items.map((item) => {
     const text = [
-      pluginTitle(item), pluginId(item), pluginAuthor(item), pluginDescription(item), item.short_desc,
+      pluginTitle(item),
+      pluginId(item),
+      pluginAuthor(item),
+      pluginDescription(item),
+      item.short_desc,
       ...(Array.isArray(item.tags) ? item.tags : []),
-    ].map(String).join(' ');
+    ]
+      .map(String)
+      .join(' ');
     if (!/\p{Unified_Ideograph}/u.test(text)) return item;
     return {
       ...item,
@@ -155,7 +189,12 @@ export function marketPluginDisplayName(item: PluginDto, showFullName = false) {
 }
 
 export function normalizeMarketCategory(value: unknown) {
-  return String(value || 'other').trim().toLowerCase().replace(/[\s-]+/g, '_') || 'other';
+  return (
+    String(value || 'other')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_') || 'other'
+  );
 }
 
 export function marketCategoryCounts(items: PluginDto[]) {
@@ -167,13 +206,22 @@ export function marketCategoryCounts(items: PluginDto[]) {
   return counts;
 }
 
-export function sortMarketPlugins(items: PluginDto[], sort: 'default' | 'stars' | 'author' | 'updated', order: 'asc' | 'desc') {
+export function sortMarketPlugins(
+  items: PluginDto[],
+  sort: 'default' | 'stars' | 'author' | 'updated',
+  order: 'asc' | 'desc',
+) {
   const direction = order === 'desc' ? -1 : 1;
   const plugins = [...items];
-  if (sort === 'default') return [...plugins.filter((item) => Boolean(item.pinned)), ...plugins.filter((item) => !item.pinned)];
+  if (sort === 'default')
+    return [...plugins.filter((item) => Boolean(item.pinned)), ...plugins.filter((item) => !item.pinned)];
   return plugins.sort((left, right) => {
     if (sort === 'stars') return (Number(left.stars || 0) - Number(right.stars || 0)) * direction;
-    if (sort === 'updated') return (new Date(String(left.updated_at || 0)).getTime() - new Date(String(right.updated_at || 0)).getTime()) * direction;
+    if (sort === 'updated')
+      return (
+        (new Date(String(left.updated_at || 0)).getTime() - new Date(String(right.updated_at || 0)).getTime()) *
+        direction
+      );
     return pluginAuthor(left).localeCompare(pluginAuthor(right), undefined, { sensitivity: 'base' }) * direction;
   });
 }
@@ -185,19 +233,36 @@ export function markInstalledMarketPlugins(market: PluginDto[], installed: Plugi
   const names = new Map<string, PluginDto>();
   installed.forEach((item) => {
     const source = isObject(item.install_source) ? item.install_source : {};
-    if (source.install_method === 'market' && normalizePluginUrl(source.registry_url) === registry && source.market_plugin_id) identifiers.set(String(source.market_plugin_id), item);
+    if (
+      source.install_method === 'market' &&
+      normalizePluginUrl(source.registry_url) === registry &&
+      source.market_plugin_id
+    )
+      identifiers.set(String(source.market_plugin_id), item);
     const repo = normalizePluginUrl(item.repo || source.repo);
     if (repo) repos.set(repo, item);
-    else names.set(String(item.marketplace_name || pluginId(item)).trim().toLowerCase(), item);
+    else
+      names.set(
+        String(item.marketplace_name || pluginId(item))
+          .trim()
+          .toLowerCase(),
+        item,
+      );
   });
   const marked = market.map((item) => {
     const repo = normalizePluginUrl(item.repo || item.repo_url);
-    const match = identifiers.get(String(item.market_plugin_id || '')) || (repo ? repos.get(repo) : undefined) || names.get(pluginId(item).toLowerCase());
+    const match =
+      identifiers.get(String(item.market_plugin_id || '')) ||
+      (repo ? repos.get(repo) : undefined) ||
+      names.get(pluginId(item).toLowerCase());
     return {
       ...item,
       astrbot_version: item.astrbot_version || match?.astrbot_version,
       installed: Boolean(match),
-      support_platforms: Array.isArray(item.support_platforms) && item.support_platforms.length ? item.support_platforms : match?.support_platforms,
+      support_platforms:
+        Array.isArray(item.support_platforms) && item.support_platforms.length
+          ? item.support_platforms
+          : match?.support_platforms,
     };
   });
   return [...marked.filter((item) => !item.installed), ...marked.filter((item) => item.installed)];

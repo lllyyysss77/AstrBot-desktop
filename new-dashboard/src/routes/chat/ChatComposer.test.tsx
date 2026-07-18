@@ -8,7 +8,10 @@ describe('ChatComposer', () => {
     const markup = renderToStaticMarkup(
       <ChatComposer
         commandSuggestionsLabel="Commands"
-        configs={[{ id: 'default', name: 'Default' }, { id: 'profile-1', name: 'Profile 1' }]}
+        configs={[
+          { id: 'default', name: 'Default' },
+          { id: 'profile-1', name: 'Profile 1' },
+        ]}
         configId="default"
         busy
         onChange={() => undefined}

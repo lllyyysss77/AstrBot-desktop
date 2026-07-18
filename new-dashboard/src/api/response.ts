@@ -30,11 +30,7 @@ export function unwrapApiData(response: unknown): unknown {
   return body;
 }
 
-export function decodeApiData<T>(
-  response: unknown,
-  parser: RuntimeParser<T>,
-  domain = 'API response',
-): T {
+export function decodeApiData<T>(response: unknown, parser: RuntimeParser<T>, domain = 'API response'): T {
   const payload = unwrapApiData(response);
   try {
     return parser(payload);

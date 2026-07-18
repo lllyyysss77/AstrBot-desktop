@@ -6,9 +6,7 @@ export type PasswordSecurityFlags = {
 
 export type PasswordWarning = 'change' | 'md5' | 'upgrade' | null;
 
-export function passwordWarningFromFlags(
-  flags: PasswordSecurityFlags,
-): PasswordWarning {
+export function passwordWarningFromFlags(flags: PasswordSecurityFlags): PasswordWarning {
   if (flags.password_upgrade_required) return 'upgrade';
   if (flags.md5_pwd_hint) return 'md5';
   if (flags.change_pwd_hint) return 'change';
@@ -27,21 +25,16 @@ export function persistPasswordSecurityFlags(
   flags: PasswordSecurityFlags,
   storage: Pick<Storage, 'removeItem' | 'setItem'>,
 ) {
-  setFlag(storage, 'change_pwd_hint', Boolean(
-    flags.change_pwd_hint
-    || (flags.md5_pwd_hint && !flags.password_upgrade_required),
-  ));
-  setFlag(storage, 'md5_pwd_hint', Boolean(
-    flags.md5_pwd_hint && !flags.password_upgrade_required,
-  ));
+  setFlag(
+    storage,
+    'change_pwd_hint',
+    Boolean(flags.change_pwd_hint || (flags.md5_pwd_hint && !flags.password_upgrade_required)),
+  );
+  setFlag(storage, 'md5_pwd_hint', Boolean(flags.md5_pwd_hint && !flags.password_upgrade_required));
   setFlag(storage, 'password_upgrade_required', Boolean(flags.password_upgrade_required));
 }
 
-function setFlag(
-  storage: Pick<Storage, 'removeItem' | 'setItem'>,
-  key: string,
-  enabled: boolean,
-) {
+function setFlag(storage: Pick<Storage, 'removeItem' | 'setItem'>, key: string, enabled: boolean) {
   if (enabled) storage.setItem(key, 'true');
   else storage.removeItem(key);
 }

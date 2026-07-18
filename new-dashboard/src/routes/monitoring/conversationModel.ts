@@ -26,8 +26,9 @@ export function parseConversation(value: unknown): Conversation {
 
 export function parseConversationList(value: unknown): ConversationListData {
   const payload = expectRecord(value, 'conversation list');
-  const conversations = arrayValue(payload.conversations, 'conversation list.conversations')
-    .map((item) => parseConversation(item));
+  const conversations = arrayValue(payload.conversations, 'conversation list.conversations').map((item) =>
+    parseConversation(item),
+  );
   const pagination = isRecord(payload.pagination) ? payload.pagination : {};
   return {
     conversations,
@@ -52,8 +53,12 @@ export function parseUmo(userId: string) {
 export function parseConversationHistory(value: unknown): Array<Record<string, unknown>> {
   try {
     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-    return Array.isArray(parsed) ? parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object')) : [];
-  } catch { return []; }
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function arrayValue(value: unknown, field: string) {

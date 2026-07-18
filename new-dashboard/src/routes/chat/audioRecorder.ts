@@ -9,17 +9,12 @@ const RECORDING_MIME_TYPES = [
 
 type MediaRecorderSupport = Pick<typeof MediaRecorder, 'isTypeSupported'>;
 
-export function supportedRecordingMimeType(
-  recorderType: MediaRecorderSupport | undefined = globalThis.MediaRecorder,
-) {
+export function supportedRecordingMimeType(recorderType: MediaRecorderSupport | undefined = globalThis.MediaRecorder) {
   if (!recorderType?.isTypeSupported) return '';
   return RECORDING_MIME_TYPES.find((mimeType) => recorderType.isTypeSupported(mimeType)) || '';
 }
 
-export function recordingFilename(
-  mimeType: string,
-  id: string = globalThis.crypto?.randomUUID?.() || `${Date.now()}`,
-) {
+export function recordingFilename(mimeType: string, id: string = globalThis.crypto?.randomUUID?.() || `${Date.now()}`) {
   const normalized = mimeType.toLowerCase();
   const extensions: Record<string, string> = {
     'audio/mp4': 'm4a',

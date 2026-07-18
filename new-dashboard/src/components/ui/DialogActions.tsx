@@ -7,10 +7,7 @@ export function DialogActions({
   ...props
 }: HTMLAttributes<HTMLDivElement> & { leading?: ReactNode }) {
   return (
-    <div
-      className={`dialog-actions ui-dialog-actions${className ? ` ${className}` : ''}`}
-      {...props}
-    >
+    <div className={`dialog-actions ui-dialog-actions${className ? ` ${className}` : ''}`} {...props}>
       {leading ? <div className="ui-dialog-actions__leading">{leading}</div> : null}
       {children}
     </div>

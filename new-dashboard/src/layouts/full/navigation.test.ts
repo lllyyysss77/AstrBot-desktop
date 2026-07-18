@@ -45,13 +45,16 @@ describe('sidebar navigation compatibility', () => {
       { name: 'disabled', activated: false, pages: ['index'] },
       { name: 'no-pages', activated: true, pages: [] },
     ]);
-    expect(group?.children).toEqual([expect.objectContaining({
-      title: 'Demo',
-      to: '/plugin-page/demo%20plugin/settings',
-    })]);
+    expect(group?.children).toEqual([
+      expect.objectContaining({
+        title: 'Demo',
+        to: '/plugin-page/demo%20plugin/settings',
+      }),
+    ]);
     const merged = mergePluginNavigation(defaultNavigationItems, group);
-    expect(merged.findIndex((item) => item === group))
-      .toBe(merged.findIndex((item) => item.title === MORE_GROUP_KEY) - 1);
+    expect(merged.findIndex((item) => item === group)).toBe(
+      merged.findIndex((item) => item.title === MORE_GROUP_KEY) - 1,
+    );
   });
 
   it('marks and expands a parent group for deep-linked children', () => {

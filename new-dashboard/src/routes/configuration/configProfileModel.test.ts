@@ -4,7 +4,10 @@ import { copiedConfigPayload, hasDuplicateConfigProfileName, normalizeConfigProf
 
 describe('config profile operations', () => {
   it('normalizes and detects duplicate names while allowing the renamed source', () => {
-    const profiles = [{ id: 'default', name: 'default' }, { id: 'work', name: 'Work' }];
+    const profiles = [
+      { id: 'default', name: 'default' },
+      { id: 'work', name: 'Work' },
+    ];
     expect(normalizeConfigProfileName('  copy  ')).toBe('copy');
     expect(hasDuplicateConfigProfileName(profiles, ' work ')).toBe(true);
     expect(hasDuplicateConfigProfileName(profiles, 'work', 'work')).toBe(false);

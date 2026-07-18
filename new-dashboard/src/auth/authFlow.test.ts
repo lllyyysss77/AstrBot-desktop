@@ -5,11 +5,13 @@ import { authSessionFromResponse, formatRecoveryCode, isRecoveryCodeComplete, re
 
 describe('authentication page flow', () => {
   it('maps API session flags to legacy localStorage fields', () => {
-    expect(authSessionFromResponse({
-      change_pwd_hint: true,
-      token: 'token',
-      username: 'astrbot',
-    })).toEqual({
+    expect(
+      authSessionFromResponse({
+        change_pwd_hint: true,
+        token: 'token',
+        username: 'astrbot',
+      }),
+    ).toEqual({
       changePwdHint: true,
       md5PwdHint: undefined,
       passwordUpgradeRequired: undefined,
@@ -19,10 +21,14 @@ describe('authentication page flow', () => {
   });
 
   it('recognizes the TOTP challenge response', () => {
-    expect(requiresTotp(new ApiError('TOTP required', 401, {
-      data: { totp_required: true },
-      status: 'error',
-    }))).toBe(true);
+    expect(
+      requiresTotp(
+        new ApiError('TOTP required', 401, {
+          data: { totp_required: true },
+          status: 'error',
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('normalizes and validates recovery codes', () => {

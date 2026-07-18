@@ -117,6 +117,9 @@
 .console-page .monitor-terminal {
   min-height: 0;
   max-height: none;
+  padding: 16px;
+  border-radius: 8px;
+  background: #1e1e1e;
 }
 
 .monitor-log {
@@ -236,7 +239,6 @@
 .console-level-chip--warning { background: #fff0bd; color: #805b00; }
 .console-level-chip--error { background: #fde0e0; color: #a92d2d; }
 .console-level-chip--critical { background: #f0ddf3; color: #7b2c83; }
-.console-page .monitor-terminal { border-radius: 8px; background: #1e1e1e; padding: 16px; }
 .console-log-line { display: block; margin: 0 0 2px; color: #c8c8c8; font-family: SFMono-Regular, Menlo, Monaco, Consolas, var(--astrbot-font-cjk-mono, "Microsoft YaHei"), monospace; font-size: 12px; font-variant-ligatures: none; white-space: pre-wrap; animation: motion-fade-in .2s ease both; }
 .console-log-line--structured { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); column-gap: 8px; align-items: start; white-space: normal; }
 .console-log-prefix, .console-log-level, .console-log-message { min-width: 0; white-space: pre-wrap; }

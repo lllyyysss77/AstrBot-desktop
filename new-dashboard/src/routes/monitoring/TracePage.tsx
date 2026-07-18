@@ -27,10 +27,12 @@ export default function TracePage() {
   const highlightTimers = useRef(new Map<string, number>());
 
   useEffect(() => {
-    void getTraceSettings().then((response) => {
-      const settings = responseData<{ enabled?: boolean; trace_enable?: boolean }>(response);
-      setEnabled(settings?.trace_enable ?? settings?.enabled ?? true);
-    }).catch(() => undefined);
+    void getTraceSettings()
+      .then((response) => {
+        const settings = responseData<{ enabled?: boolean; trace_enable?: boolean }>(response);
+        setEnabled(settings?.trace_enable ?? settings?.enabled ?? true);
+      })
+      .catch(() => undefined);
   }, []);
   useEffect(() => {
     const versions = new Map<string, string>();
@@ -47,13 +49,22 @@ export default function TracePage() {
       const previous = highlightTimers.current.get(spanId);
       if (previous) window.clearTimeout(previous);
       const timer = window.setTimeout(() => {
-        setHighlighted((current) => { const next = new Set(current); next.delete(spanId); return next; });
+        setHighlighted((current) => {
+          const next = new Set(current);
+          next.delete(spanId);
+          return next;
+        });
         highlightTimers.current.delete(spanId);
       }, 1200);
       highlightTimers.current.set(spanId, timer);
     });
   }, [events]);
-  useEffect(() => () => { highlightTimers.current.forEach((timer) => window.clearTimeout(timer)); }, []);
+  useEffect(
+    () => () => {
+      highlightTimers.current.forEach((timer) => window.clearTimeout(timer));
+    },
+    [],
+  );
 
   const setTraceEnabled = async (next: boolean) => {
     setEnabled(next);
@@ -64,39 +75,142 @@ export default function TracePage() {
     } catch (cause) {
       setEnabled(!next);
       toast.error(cause instanceof Error ? cause.message : t('features.trace.updateFailed'));
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
-  const toggle = (span: string) => setExpanded((current) => {
-    const next = new Set(current);
-    if (next.has(span)) next.delete(span); else next.add(span);
-    return next;
-  });
-  const showMore = (event: TraceEvent) => setVisibleCounts((current) => ({
-    ...current,
-    [event.spanId]: Math.min(event.records.length, (current[event.spanId] ?? initialVisibleRecords) + initialVisibleRecords),
-  }));
+  const toggle = (span: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(span)) next.delete(span);
+      else next.add(span);
+      return next;
+    });
+  const showMore = (event: TraceEvent) =>
+    setVisibleCounts((current) => ({
+      ...current,
+      [event.spanId]: Math.min(
+        event.records.length,
+        (current[event.spanId] ?? initialVisibleRecords) + initialVisibleRecords,
+      ),
+    }));
 
   return (
     <div className="monitor-page trace-page">
-      <header className="monitor-header trace-header-react"><div><h1>{t('features.trace.title')}</h1><p>{t('features.trace.hint')}</p></div><div className="monitor-actions trace-header-actions"><label className="trace-recording-switch"><span>{t(`features.trace.${enabled ? 'recording' : 'paused'}`)}</span><span className="dynamic-switch"><input checked={enabled} disabled={saving} onChange={(event) => void setTraceEnabled(event.target.checked)} type="checkbox" /><span className="dynamic-switch__track" /></span>{saving && <MdiIcon className="mdi-spin" name="mdi-loading" />}</label></div></header>
+      <header className="monitor-header trace-header-react">
+        <div>
+          <h1>{t('features.trace.title')}</h1>
+          <p>{t('features.trace.hint')}</p>
+        </div>
+        <div className="monitor-actions trace-header-actions">
+          <label className="trace-recording-switch">
+            <span>{t(`features.trace.${enabled ? 'recording' : 'paused'}`)}</span>
+            <span className="dynamic-switch">
+              <input
+                checked={enabled}
+                disabled={saving}
+                onChange={(event) => void setTraceEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span className="dynamic-switch__track" />
+            </span>
+            {saving && <MdiIcon className="mdi-spin" name="mdi-loading" />}
+          </label>
+        </div>
+      </header>
       <div className="trace-body-react">
         <div className="trace-table-react">
-          <div className="trace-row-react trace-table-react__header"><div>{t('features.trace.columns.time')}</div><div>{t('features.trace.columns.eventId')}</div><div>{t('features.trace.columns.umo')}</div><div>{t('features.trace.columns.sender')}</div><div>{t('features.trace.columns.outline')}</div><div /></div>
-          {events.map((event) => <TraceEventGroup event={event} expanded={expanded.has(event.spanId)} highlighted={highlighted.has(event.spanId)} key={event.spanId} locale={i18n.language} onShowMore={showMore} onToggle={toggle} visibleCount={visibleCounts[event.spanId] ?? initialVisibleRecords} />)}
-          {events.length === 0 && <div className="trace-empty-react"><MdiIcon name="mdi-chart-timeline-variant-shimmer" /><strong>{t('features.trace.empty')}</strong></div>}
+          <div className="trace-row-react trace-table-react__header">
+            <div>{t('features.trace.columns.time')}</div>
+            <div>{t('features.trace.columns.eventId')}</div>
+            <div>{t('features.trace.columns.umo')}</div>
+            <div>{t('features.trace.columns.sender')}</div>
+            <div>{t('features.trace.columns.outline')}</div>
+            <div />
+          </div>
+          {events.map((event) => (
+            <TraceEventGroup
+              event={event}
+              expanded={expanded.has(event.spanId)}
+              highlighted={highlighted.has(event.spanId)}
+              key={event.spanId}
+              locale={i18n.language}
+              onShowMore={showMore}
+              onToggle={toggle}
+              visibleCount={visibleCounts[event.spanId] ?? initialVisibleRecords}
+            />
+          ))}
+          {events.length === 0 && (
+            <div className="trace-empty-react">
+              <MdiIcon name="mdi-chart-timeline-variant-shimmer" />
+              <strong>{t('features.trace.empty')}</strong>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function TraceEventGroup({ event, expanded, highlighted, locale, onShowMore, onToggle, visibleCount }: { event: TraceEvent; expanded: boolean; highlighted: boolean; locale: string; onShowMore: (event: TraceEvent) => void; onToggle: (span: string) => void; visibleCount: number }) {
+function TraceEventGroup({
+  event,
+  expanded,
+  highlighted,
+  locale,
+  onShowMore,
+  onToggle,
+  visibleCount,
+}: {
+  event: TraceEvent;
+  expanded: boolean;
+  highlighted: boolean;
+  locale: string;
+  onShowMore: (event: TraceEvent) => void;
+  onToggle: (span: string) => void;
+  visibleCount: number;
+}) {
   const { t } = useTranslation();
   const visibleRecords = event.records.slice(0, visibleCount);
-  return <section className={`trace-group-react${highlighted ? ' is-highlighted' : ''}`}>
-    <div className="trace-row-react trace-event-react"><time>{formatTraceTimestamp(event.firstTime, locale)}</time><div className="trace-event-id" title={event.spanId}>{event.spanId.slice(0, 8)}</div><div title={event.umo || ''}>{event.umo || '—'}</div><div title={event.senderName || ''}>{event.senderName || '—'}</div><div className="trace-event-outline" title={event.messageOutline || ''}>{event.messageOutline || '—'}</div><div className="trace-event-controls"><button aria-expanded={expanded} onClick={() => onToggle(event.spanId)} type="button">{t(`features.trace.actions.${expanded ? 'collapse' : 'expand'}`)}{event.hasAgentPrepare && <span className="trace-agent-dot" title={t('features.trace.agentPrepared')} />}</button></div></div>
-    <ExpandCollapse open={expanded}><div className="trace-records-react">{visibleRecords.map((record) => <div className="trace-record-react" key={record.key}><time>{formatTraceTimestamp(record.time, locale)}</time><strong>{record.action}</strong><pre>{record.fields == null ? '' : JSON.stringify(record.fields, null, 2)}</pre></div>)}{visibleCount < event.records.length && <div className="trace-show-more"><button onClick={() => onShowMore(event)} type="button"><MdiIcon name="mdi-chevron-down" />{t('features.trace.actions.showMore')}</button></div>}</div></ExpandCollapse>
-  </section>;
+  return (
+    <section className={`trace-group-react${highlighted ? ' is-highlighted' : ''}`}>
+      <div className="trace-row-react trace-event-react">
+        <time>{formatTraceTimestamp(event.firstTime, locale)}</time>
+        <div className="trace-event-id" title={event.spanId}>
+          {event.spanId.slice(0, 8)}
+        </div>
+        <div title={event.umo || ''}>{event.umo || '—'}</div>
+        <div title={event.senderName || ''}>{event.senderName || '—'}</div>
+        <div className="trace-event-outline" title={event.messageOutline || ''}>
+          {event.messageOutline || '—'}
+        </div>
+        <div className="trace-event-controls">
+          <button aria-expanded={expanded} onClick={() => onToggle(event.spanId)} type="button">
+            {t(`features.trace.actions.${expanded ? 'collapse' : 'expand'}`)}
+            {event.hasAgentPrepare && <span className="trace-agent-dot" title={t('features.trace.agentPrepared')} />}
+          </button>
+        </div>
+      </div>
+      <ExpandCollapse open={expanded}>
+        <div className="trace-records-react">
+          {visibleRecords.map((record) => (
+            <div className="trace-record-react" key={record.key}>
+              <time>{formatTraceTimestamp(record.time, locale)}</time>
+              <strong>{record.action}</strong>
+              <pre>{record.fields == null ? '' : JSON.stringify(record.fields, null, 2)}</pre>
+            </div>
+          ))}
+          {visibleCount < event.records.length && (
+            <div className="trace-show-more">
+              <button onClick={() => onShowMore(event)} type="button">
+                <MdiIcon name="mdi-chevron-down" />
+                {t('features.trace.actions.showMore')}
+              </button>
+            </div>
+          )}
+        </div>
+      </ExpandCollapse>
+    </section>
+  );
 }
 
 function formatTraceTimestamp(value: number, locale: string) {

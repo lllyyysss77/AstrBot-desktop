@@ -18,7 +18,7 @@ type DesktopActions = {
 
 const DesktopContext = createContext<DesktopActions | null>(null);
 const unavailable = (): AstrBotDesktopResult => ({ ok: false, reason: 'Desktop runtime is unavailable.' });
-const messageOf = (cause: unknown) => cause instanceof Error ? cause.message : String(cause);
+const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 function extractStartTime(response: unknown) {
   const outer = response as { data?: unknown };
@@ -34,8 +34,13 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     if (!bridge?.isDesktop) return null;
     try {
       const backend = await bridge.getBackendState();
-      const backendStatus = backend.running ? 'ready' : backend.restarting
-        ? 'restarting' : backend.spawning ? 'starting' : 'stopped';
+      const backendStatus = backend.running
+        ? 'ready'
+        : backend.restarting
+          ? 'restarting'
+          : backend.spawning
+            ? 'starting'
+            : 'stopped';
       patch({ backend, backendStatus, error: null });
       return backend;
     } catch (cause) {
@@ -71,9 +76,11 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     const bridge = globalThis.window?.astrbotDesktop;
     if (!bridge?.isDesktop) return false;
     const result = await bridge.stopBackend();
-    patch(result.ok
-      ? { backendStatus: 'stopped', error: null }
-      : { backendStatus: 'error', error: result.reason ?? 'Unable to stop backend.' });
+    patch(
+      result.ok
+        ? { backendStatus: 'stopped', error: null }
+        : { backendStatus: 'error', error: result.reason ?? 'Unable to stop backend.' },
+    );
     return result.ok;
   }, [patch]);
 
@@ -83,7 +90,11 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     patch({ updateStatus: 'checking', error: null });
     try {
       const update = await updater.checkForAppUpdate();
-      patch({ update, updateStatus: update.ok ? (update.hasUpdate ? 'available' : 'current') : 'error', error: update.reason ?? null });
+      patch({
+        update,
+        updateStatus: update.ok ? (update.hasUpdate ? 'available' : 'current') : 'error',
+        error: update.reason ?? null,
+      });
       return update;
     } catch (cause) {
       patch({ updateStatus: 'error', error: messageOf(cause) });
@@ -100,13 +111,16 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
     return result;
   }, [patch]);
 
-  const setUpdateChannel = useCallback(async (channel: string) => {
-    const updater = globalThis.window?.astrbotAppUpdater;
-    if (!updater?.setUpdateChannel) return false;
-    const result = await updater.setUpdateChannel(channel);
-    if (result.ok) patch({ updateChannel: channel });
-    return result.ok;
-  }, [patch]);
+  const setUpdateChannel = useCallback(
+    async (channel: string) => {
+      const updater = globalThis.window?.astrbotAppUpdater;
+      if (!updater?.setUpdateChannel) return false;
+      const result = await updater.setUpdateChannel(channel);
+      if (result.ok) patch({ updateChannel: channel });
+      return result.ok;
+    },
+    [patch],
+  );
 
   const openExternalUrl = useCallback(async (url: string) => {
     let normalized: URL;
@@ -140,13 +154,24 @@ export function DesktopProvider({ children }: { children: ReactNode }) {
         if (result.ok && result.channel) patch({ updateChannel: result.channel });
       }
     });
-    return () => { active = false; unsubscribe?.(); };
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, [patch, refreshBackend]);
 
-  const actions = useMemo<DesktopActions>(() => ({
-    checkForUpdate, installUpdate, openExternalUrl, refreshBackend,
-    restartBackend, setUpdateChannel, stopBackend,
-  }), [checkForUpdate, installUpdate, openExternalUrl, refreshBackend, restartBackend, setUpdateChannel, stopBackend]);
+  const actions = useMemo<DesktopActions>(
+    () => ({
+      checkForUpdate,
+      installUpdate,
+      openExternalUrl,
+      refreshBackend,
+      restartBackend,
+      setUpdateChannel,
+      stopBackend,
+    }),
+    [checkForUpdate, installUpdate, openExternalUrl, refreshBackend, restartBackend, setUpdateChannel, stopBackend],
+  );
   return <DesktopContext.Provider value={actions}>{children}</DesktopContext.Provider>;
 }
 
@@ -159,5 +184,9 @@ export function useDesktop() {
 export function DesktopRestartStatus() {
   const status = useDesktopStore((state) => state.backendStatus);
   if (status !== 'restarting' && status !== 'starting') return null;
-  return <div aria-live="polite" className="desktop-restart-status" role="status">AstrBot backend is restarting…</div>;
+  return (
+    <div aria-live="polite" className="desktop-restart-status" role="status">
+      AstrBot backend is restarting…
+    </div>
+  );
 }

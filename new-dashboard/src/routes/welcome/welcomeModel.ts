@@ -11,15 +11,19 @@ export function chatProviders(payload: unknown) {
   const sourceValue = payload.provider_sources ?? payload.providerSources;
   const sources = Array.isArray(sourceValue) ? sourceValue.filter(isRecord) : [];
   const providers = Array.isArray(payload.providers) ? payload.providers.filter(isRecord) : [];
-  const sourceTypes = new Map(sources.map((source) => [
-    typeof source.id === 'string' ? source.id : '',
-    typeof source.provider_type === 'string' ? source.provider_type : '',
-  ]));
-  return providers.filter((provider) => (
-    provider.provider_type === 'chat_completion'
-    || sourceTypes.get(typeof provider.provider_source_id === 'string' ? provider.provider_source_id : '') === 'chat_completion'
-    || String(provider.type ?? '').includes('chat_completion')
-  ));
+  const sourceTypes = new Map(
+    sources.map((source) => [
+      typeof source.id === 'string' ? source.id : '',
+      typeof source.provider_type === 'string' ? source.provider_type : '',
+    ]),
+  );
+  return providers.filter(
+    (provider) =>
+      provider.provider_type === 'chat_completion' ||
+      sourceTypes.get(typeof provider.provider_source_id === 'string' ? provider.provider_source_id : '') ===
+        'chat_completion' ||
+      String(provider.type ?? '').includes('chat_completion'),
+  );
 }
 
 export function pickDefaultProviderId(payload: unknown) {

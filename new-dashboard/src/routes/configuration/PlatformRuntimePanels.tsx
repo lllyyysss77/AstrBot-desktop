@@ -20,13 +20,22 @@ export function PlatformLogConsole() {
   return (
     <section className="platform-console">
       <div className="platform-console__status">
-        <MdiIcon name={status === 'live' ? 'mdi-check-circle' : status === 'connecting' ? 'mdi-loading' : 'mdi-alert-circle'} />
+        <MdiIcon
+          name={status === 'live' ? 'mdi-check-circle' : status === 'connecting' ? 'mdi-loading' : 'mdi-alert-circle'}
+        />
         {t(`features.console.connection.${status}`, { defaultValue: status })}
       </div>
       <div className="monitor-terminal platform-console__terminal" ref={terminal}>
         {items.map((item) => {
           const line = splitConsoleLog(item.data ?? item);
-          return <pre className={`console-log-line console-log-line--${String(item.level || 'info').toLowerCase()}`} key={`${item.time}-${item.level}-${item.data}`}>{line.message}</pre>;
+          return (
+            <pre
+              className={`console-log-line console-log-line--${String(item.level || 'info').toLowerCase()}`}
+              key={`${item.time}-${item.level}-${item.data}`}
+            >
+              {line.message}
+            </pre>
+          );
         })}
       </div>
     </section>
@@ -52,17 +61,25 @@ export function QrCodeImage({ alt, value }: { alt: string; value: string }) {
       margin: 2,
       width: 260,
       errorCorrectionLevel: 'M',
-    }).then((next) => {
-      if (!cancelled) setSource(next);
-    }).catch(() => {
-      if (!cancelled) setSource('');
-    });
-    return () => { cancelled = true; };
+    })
+      .then((next) => {
+        if (!cancelled) setSource(next);
+      })
+      .catch(() => {
+        if (!cancelled) setSource('');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
-  return source
-    ? <img alt={alt} src={source} />
-    : <div className="platform-qr-empty"><MdiIcon name="mdi-qrcode-remove" /></div>;
+  return source ? (
+    <img alt={alt} src={source} />
+  ) : (
+    <div className="platform-qr-empty">
+      <MdiIcon name="mdi-qrcode-remove" />
+    </div>
+  );
 }
 
 export function qrCodeValueKind(value: string) {

@@ -32,14 +32,16 @@ export function newSubagent(key: string): SubagentItem {
 
 export function normalizeSubagentConfig(value: unknown, createKey: () => string): SubagentConfig {
   const raw = isObject(value) ? value : {};
-  const agents = Array.isArray(raw.agents) ? raw.agents.filter(isObject).map((agent) => ({
-    key: createKey(),
-    name: String(agent.name ?? ''),
-    personaId: String(agent.persona_id ?? ''),
-    publicDescription: String(agent.public_description ?? ''),
-    enabled: agent.enabled !== false,
-    providerId: agent.provider_id == null ? undefined : String(agent.provider_id),
-  })) : [];
+  const agents = Array.isArray(raw.agents)
+    ? raw.agents.filter(isObject).map((agent) => ({
+        key: createKey(),
+        name: String(agent.name ?? ''),
+        personaId: String(agent.persona_id ?? ''),
+        publicDescription: String(agent.public_description ?? ''),
+        enabled: agent.enabled !== false,
+        providerId: agent.provider_id == null ? undefined : String(agent.provider_id),
+      }))
+    : [];
   return {
     mainEnable: Boolean(raw.main_enable),
     removeMainDuplicateTools: Boolean(raw.remove_main_duplicate_tools),

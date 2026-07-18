@@ -33,7 +33,9 @@ describe('Streamdown Markdown renderer', () => {
   });
 
   it('keeps the interactive Streamdown table and code structure', () => {
-    const html = renderToStaticMarkup(<Markdown content={'```ts\nconst value = 1;\n```\n\n| Name | Value |\n| --- | --- |\n| Streamdown | 1 |'} />);
+    const html = renderToStaticMarkup(
+      <Markdown content={'```ts\nconst value = 1;\n```\n\n| Name | Value |\n| --- | --- |\n| Streamdown | 1 |'} />,
+    );
 
     expect(html).toContain('data-streamdown="code-block"');
     expect(html).toContain('data-streamdown="code-block-actions"');

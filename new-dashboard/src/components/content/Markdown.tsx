@@ -20,11 +20,9 @@ const plugins = { cjk, code, math, mermaid };
 const streamingPlugins = { cjk };
 
 function MarkdownComponent({ className = '', content, streaming = false }: MarkdownProps) {
-  const rootClassName = [
-    'markdown-body',
-    streaming ? 'markdown-body--streaming' : '',
-    className,
-  ].filter(Boolean).join(' ');
+  const rootClassName = ['markdown-body', streaming ? 'markdown-body--streaming' : '', className]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <Streamdown

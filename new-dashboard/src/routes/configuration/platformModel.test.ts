@@ -15,18 +15,29 @@ import {
 
 describe('platform model', () => {
   it('keeps template order/defaults and preserves unknown legacy fields', () => {
-    const merged = mergePlatformTemplate({ id: 'bot', nested: { kept: 2 }, legacy: true }, { type: 'telegram', id: '', nested: { kept: 0, added: 3 } });
+    const merged = mergePlatformTemplate(
+      { id: 'bot', nested: { kept: 2 }, legacy: true },
+      { type: 'telegram', id: '', nested: { kept: 0, added: 3 } },
+    );
     expect(Object.keys(merged)).toEqual(['type', 'id', 'nested', 'legacy']);
     expect(merged).toEqual({ type: 'telegram', id: 'bot', nested: { kept: 2, added: 3 }, legacy: true });
   });
 
   it('reads platform templates from runtime metadata', () => {
-    expect(platformTemplates({ platform_group: { metadata: { platform: { config_template: { telegram: { type: 'telegram' } } } } } })).toEqual({ telegram: { type: 'telegram' } });
+    expect(
+      platformTemplates({
+        platform_group: { metadata: { platform: { config_template: { telegram: { type: 'telegram' } } } } },
+      }),
+    ).toEqual({ telegram: { type: 'telegram' } });
   });
 
   it('finds nested QR data and creates webhook URLs', () => {
-    expect(platformQrPayload({ adapter: { qrcode_img_content: 'data:image/png;base64,abc', qr_status: 'pending' } })).toEqual({ payload: 'data:image/png;base64,abc', status: 'pending' });
-    expect(webhookUrl({ callback_api_base: 'https://bot.example/' }, 'uuid')).toBe('https://bot.example/api/v1/webhooks/platforms/uuid');
+    expect(
+      platformQrPayload({ adapter: { qrcode_img_content: 'data:image/png;base64,abc', qr_status: 'pending' } }),
+    ).toEqual({ payload: 'data:image/png;base64,abc', status: 'pending' });
+    expect(webhookUrl({ callback_api_base: 'https://bot.example/' }, 'uuid')).toBe(
+      'https://bot.example/api/v1/webhooks/platforms/uuid',
+    );
   });
 
   it('validates IDs using the legacy restrictions', () => {
@@ -50,11 +61,16 @@ describe('platform model', () => {
       messageType: 'GroupMessage',
       sessionId: 'room:42',
     });
-    expect(platformRoutes({
-      'qq:*:*': 'default',
-      'qq:GroupMessage:room:42': 'group',
-      'telegram:*:*': 'telegram',
-    }, 'qq')).toEqual([
+    expect(
+      platformRoutes(
+        {
+          'qq:*:*': 'default',
+          'qq:GroupMessage:room:42': 'group',
+          'telegram:*:*': 'telegram',
+        },
+        'qq',
+      ),
+    ).toEqual([
       emptyPlatformRoute(),
       { configId: 'group', messageType: 'GroupMessage', sessionId: 'room:42', sourceUmo: 'qq:GroupMessage:room:42' },
     ]);
@@ -62,15 +78,22 @@ describe('platform model', () => {
   });
 
   it('replaces only old and new platform routing entries', () => {
-    expect(replacePlatformRouting({
-      'old:*:*': 'default',
-      'old:GroupMessage:room': 'group',
-      'new:FriendMessage:stale': 'stale',
-      'other:*:*': 'other',
-    }, 'old', 'new', [
-      { configId: 'next', messageType: '*', sessionId: '*' },
-      { configId: 'friend', messageType: 'FriendMessage', sessionId: 'alice' },
-    ])).toEqual({
+    expect(
+      replacePlatformRouting(
+        {
+          'old:*:*': 'default',
+          'old:GroupMessage:room': 'group',
+          'new:FriendMessage:stale': 'stale',
+          'other:*:*': 'other',
+        },
+        'old',
+        'new',
+        [
+          { configId: 'next', messageType: '*', sessionId: '*' },
+          { configId: 'friend', messageType: 'FriendMessage', sessionId: 'alice' },
+        ],
+      ),
+    ).toEqual({
       'other:*:*': 'other',
       'new:*:*': 'next',
       'new:FriendMessage:alice': 'friend',

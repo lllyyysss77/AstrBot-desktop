@@ -8,7 +8,13 @@
     "generate:api": "node scripts/generate-openapi.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
+    "lint": "eslint . --max-warnings 95",
+    "lint:styles": "stylelint \"src/**/*.scss\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"scripts/**/*.mjs\" \"*.{json,ts,js}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"scripts/**/*.mjs\" \"*.{json,ts,js}\"",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "quality": "pnpm typecheck && pnpm lint && pnpm lint:styles && pnpm format:check && pnpm test:coverage && pnpm build",
     "preview": "vite preview --port 5051"
   },
   "dependencies": {
@@ -35,13 +41,25 @@
     "zustand": "5.0.14"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "@types/node": "20.19.9",
     "@types/qrcode": "^1.5.6",
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
     "@vitejs/plugin-react": "4.6.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.0.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.7.0",
+    "postcss-scss": "^4.0.9",
+    "prettier": "^3.9.5",
     "sass": "1.101.0",
+    "stylelint": "^17.14.0",
+    "stylelint-scss": "^7.2.0",
     "typescript": "5.1.6",
+    "typescript-eslint": "^8.64.0",
     "vite": "6.4.1",
     "vitest": "3.2.4"
   }

@@ -1,9 +1,4 @@
-import {
-  ApiPayloadError,
-  expectRecord,
-  isRecord,
-  type UnknownRecord,
-} from './response';
+import { ApiPayloadError, expectRecord, isRecord, type UnknownRecord } from './response';
 
 export interface ProviderDto extends UnknownRecord {
   capability?: string;
@@ -125,8 +120,9 @@ export function parseProviderSources(value: unknown): ProviderSourceDto[] {
 }
 
 export function parsePlugins(value: unknown): PluginDto[] {
-  return locateArray(value, ['plugins', 'items', 'data', 'results'])
-    .map((item, index) => ({ ...expectRecord(item, `plugins[${index}]`) }));
+  return locateArray(value, ['plugins', 'items', 'data', 'results']).map((item, index) => ({
+    ...expectRecord(item, `plugins[${index}]`),
+  }));
 }
 
 export function parsePlugin(value: unknown): PluginDto {
@@ -215,7 +211,8 @@ function recordOrEmpty(value: unknown) {
 }
 
 function requiredString(value: unknown, field: string) {
-  if (typeof value !== 'string' || !value) throw new ApiPayloadError(`Expected ${field} to be a non-empty string.`, value);
+  if (typeof value !== 'string' || !value)
+    throw new ApiPayloadError(`Expected ${field} to be a non-empty string.`, value);
   return value;
 }
 

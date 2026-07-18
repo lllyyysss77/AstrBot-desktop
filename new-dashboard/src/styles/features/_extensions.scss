@@ -1,6 +1,6 @@
 /* Extensions */
 .extension-page { width: min(1400px, 100%); min-height: 100%; margin: 0 auto; padding: 18px 28px 48px; }
-.extension-section__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.extension-section__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 8px 0 18px; }
 .extension-section__header p { margin: 5px 0 0; color: color-mix(in srgb, var(--astrbot-text) 57%, transparent); }
 .extension-section__header > div:last-child,
 .extension-controls,
@@ -13,7 +13,6 @@
 .extension-subtabs button { display: inline-flex; min-height: 40px; flex: 1 0 auto; align-items: center; justify-content: center; gap: 7px; padding: 8px 14px; border: 0; border-radius: 9px; background: transparent; color: color-mix(in srgb, var(--astrbot-text) 68%, transparent); cursor: pointer; font-weight: 600; }
 .extension-subtabs button[aria-pressed='true'] { background: var(--astrbot-surface); color: var(--astrbot-primary); box-shadow: 0 1px 5px rgb(0 0 0 / 9%); }
 .extension-section { min-width: 0; }
-.extension-section__header { margin: 8px 0 18px; }
 .extension-section__header h2 { margin: 0; font-size: 24px; }
 .extension-section__header button,
 .extension-controls button,

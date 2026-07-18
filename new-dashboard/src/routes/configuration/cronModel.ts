@@ -50,14 +50,12 @@ function parseTime(value: string) {
 }
 
 function isCronTime(minute: number, hour: number) {
-  return Number.isInteger(minute) && minute >= 0 && minute <= 59
-    && Number.isInteger(hour) && hour >= 0 && hour <= 23;
+  return Number.isInteger(minute) && minute >= 0 && minute <= 59 && Number.isInteger(hour) && hour >= 0 && hour <= 23;
 }
 
 export function jobSession(job: JsonObject) {
-  const payload = job.payload && typeof job.payload === 'object' && !Array.isArray(job.payload)
-    ? job.payload as JsonObject
-    : {};
+  const payload =
+    job.payload && typeof job.payload === 'object' && !Array.isArray(job.payload) ? (job.payload as JsonObject) : {};
   return String(job.session || payload.session || '').trim();
 }
 
@@ -93,7 +91,20 @@ export function buildCronExpression(form: CronForm) {
   return form.cronExpression.trim();
 }
 
-export function readSchedule(job: JsonObject): Pick<CronForm, 'scheduleMode' | 'cronExpression' | 'intervalValue' | 'intervalUnit' | 'dailyTime' | 'weeklyDay' | 'weeklyTime' | 'monthlyDay' | 'monthlyTime'> {
+export function readSchedule(
+  job: JsonObject,
+): Pick<
+  CronForm,
+  | 'scheduleMode'
+  | 'cronExpression'
+  | 'intervalValue'
+  | 'intervalUnit'
+  | 'dailyTime'
+  | 'weeklyDay'
+  | 'weeklyTime'
+  | 'monthlyDay'
+  | 'monthlyTime'
+> {
   const cronExpression = String(job.cron_expression || '');
   const fallback = {
     scheduleMode: 'cron' as ScheduleMode,
@@ -127,7 +138,8 @@ export function readSchedule(job: JsonObject): Pick<CronForm, 'scheduleMode' | '
   const hourNumber = Number(hour);
   if (!isCronTime(minuteNumber, hourNumber)) return fallback;
   const time = `${pad(hourNumber)}:${pad(minuteNumber)}`;
-  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') return { ...fallback, scheduleMode: 'daily', dailyTime: time };
+  if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*')
+    return { ...fallback, scheduleMode: 'daily', dailyTime: time };
   const weekday = Number(dayOfWeek);
   if (dayOfMonth === '*' && month === '*' && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6) {
     return { ...fallback, scheduleMode: 'weekly', weeklyDay: weekday, weeklyTime: time };
@@ -174,20 +186,25 @@ export function scheduleDescriptor(job: JsonObject): { kind: ScheduleKind; value
   const cron = String(job.cron_expression || '').trim();
   const [minute, hour, dayOfMonth, month, dayOfWeek] = cron.split(/\s+/);
   const minuteInterval = /^\*\/(\d+)$/.exec(minute);
-  if (minuteInterval && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') return { kind: 'minutes', values: { count: Number(minuteInterval[1]) } };
+  if (minuteInterval && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*')
+    return { kind: 'minutes', values: { count: Number(minuteInterval[1]) } };
   const hourInterval = /^\*\/(\d+)$/.exec(hour);
-  if (minute === '0' && hourInterval && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') return { kind: 'hours', values: { count: Number(hourInterval[1]) } };
+  if (minute === '0' && hourInterval && dayOfMonth === '*' && month === '*' && dayOfWeek === '*')
+    return { kind: 'hours', values: { count: Number(hourInterval[1]) } };
   const dayInterval = /^\*\/(\d+)$/.exec(dayOfMonth);
-  if (minute === '0' && hour === '0' && dayInterval && month === '*' && dayOfWeek === '*') return { kind: 'days', values: { count: Number(dayInterval[1]) } };
+  if (minute === '0' && hour === '0' && dayInterval && month === '*' && dayOfWeek === '*')
+    return { kind: 'days', values: { count: Number(dayInterval[1]) } };
   const minuteNumber = Number(minute);
   const hourNumber = Number(hour);
   if (!isCronTime(minuteNumber, hourNumber)) return { kind: 'cron', values: { cron } };
   const time = `${pad(hourNumber)}:${pad(minuteNumber)}`;
   if (dayOfMonth === '*' && month === '*' && dayOfWeek === '*') return { kind: 'daily', values: { time } };
   const weekday = Number(dayOfWeek);
-  if (dayOfMonth === '*' && month === '*' && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6) return { kind: 'weekly', values: { day: weekday, time } };
+  if (dayOfMonth === '*' && month === '*' && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6)
+    return { kind: 'weekly', values: { day: weekday, time } };
   const monthDay = Number(dayOfMonth);
-  if (Number.isInteger(monthDay) && monthDay >= 1 && monthDay <= 31 && month === '*' && dayOfWeek === '*') return { kind: 'monthly', values: { day: monthDay, time } };
+  if (Number.isInteger(monthDay) && monthDay >= 1 && monthDay <= 31 && month === '*' && dayOfWeek === '*')
+    return { kind: 'monthly', values: { day: monthDay, time } };
   return { kind: 'cron', values: { cron } };
 }
 

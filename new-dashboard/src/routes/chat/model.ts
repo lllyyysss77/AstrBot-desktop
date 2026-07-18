@@ -11,7 +11,17 @@ export type ChatPart = JsonObject & {
   filename?: string;
   stored_filename?: string;
 };
-export type ChatRecord = JsonObject & { id?: string | number; content: { type: string; message: ChatPart[]; reasoning?: string; isLoading?: boolean; agentStats?: JsonObject; refs?: unknown } };
+export type ChatRecord = JsonObject & {
+  id?: string | number;
+  content: {
+    type: string;
+    message: ChatPart[];
+    reasoning?: string;
+    isLoading?: boolean;
+    agentStats?: JsonObject;
+    refs?: unknown;
+  };
+};
 export type ChatSession = ChatSessionDto;
 export type StagedAttachmentType = 'image' | 'record' | 'file';
 
@@ -21,7 +31,9 @@ export function contextTokenCount(stats?: JsonObject) {
   const usage = stats.token_usage;
   if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return 0;
   const tokenUsage = usage as JsonObject;
-  return readTokenCount(tokenUsage.input_other) + readTokenCount(tokenUsage.input_cached) + readTokenCount(tokenUsage.output);
+  return (
+    readTokenCount(tokenUsage.input_other) + readTokenCount(tokenUsage.input_cached) + readTokenCount(tokenUsage.output)
+  );
 }
 
 export function stagedAttachmentType(serverType: unknown, mimeType: string): StagedAttachmentType {
@@ -37,15 +49,27 @@ export function normalizeParts(value: unknown): ChatPart[] {
   return value.map((part) => {
     if (!part || typeof part !== 'object') return { type: 'plain', text: String(part ?? '') };
     const item = part as ChatPart;
-    return item.type === 'reasoning' ? { ...item, type: 'think', think: String(item.think ?? item.text ?? '') } : { ...item };
+    return item.type === 'reasoning'
+      ? { ...item, type: 'think', think: String(item.think ?? item.text ?? '') }
+      : { ...item };
   });
 }
 
 export function normalizeRecord(value: unknown): ChatRecord {
-  const record = value && typeof value === 'object' ? value as JsonObject : {};
-  const rawContent = record.content && typeof record.content === 'object' ? record.content as JsonObject : {};
+  const record = value && typeof value === 'object' ? (value as JsonObject) : {};
+  const rawContent = record.content && typeof record.content === 'object' ? (record.content as JsonObject) : {};
   const rawStats = rawContent.agentStats || rawContent.agent_stats;
-  return { ...record, content: { type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')), message: normalizeParts(rawContent.message), reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined, agentStats: rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? rawStats as JsonObject : undefined, refs: rawContent.refs } } as ChatRecord;
+  return {
+    ...record,
+    content: {
+      type: String(rawContent.type || (record.sender_id === 'bot' ? 'bot' : 'user')),
+      message: normalizeParts(rawContent.message),
+      reasoning: typeof rawContent.reasoning === 'string' ? rawContent.reasoning : undefined,
+      agentStats:
+        rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? (rawStats as JsonObject) : undefined,
+      refs: rawContent.refs,
+    },
+  } as ChatRecord;
 }
 
 export function serializeChatParts(parts: ChatPart[]) {
@@ -67,14 +91,17 @@ export function serializeChatParts(parts: ChatPart[]) {
 }
 
 export function agentRunnerTypeFromProfile(value: unknown) {
-  const payload = value && typeof value === 'object' && !Array.isArray(value) ? value as JsonObject : {};
-  const config = payload.config && typeof payload.config === 'object' && !Array.isArray(payload.config)
-    ? payload.config as JsonObject
-    : payload;
-  const settings = config.provider_settings && typeof config.provider_settings === 'object' && !Array.isArray(config.provider_settings)
-    ? config.provider_settings as JsonObject
-    : {};
-  const runnerType = typeof settings.agent_runner_type === 'string' ? settings.agent_runner_type.trim().toLowerCase() : '';
+  const payload = value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonObject) : {};
+  const config =
+    payload.config && typeof payload.config === 'object' && !Array.isArray(payload.config)
+      ? (payload.config as JsonObject)
+      : payload;
+  const settings =
+    config.provider_settings && typeof config.provider_settings === 'object' && !Array.isArray(config.provider_settings)
+      ? (config.provider_settings as JsonObject)
+      : {};
+  const runnerType =
+    typeof settings.agent_runner_type === 'string' ? settings.agent_runner_type.trim().toLowerCase() : '';
   return runnerType || 'local';
 }
 
@@ -85,8 +112,11 @@ export function usesLocalProviderOverride(agentRunnerType: string) {
 
 export function appendStreamPayload(record: ChatRecord, payload: unknown, userRecord?: ChatRecord) {
   if (!payload || typeof payload !== 'object') return false;
-  const raw = payload as JsonObject; const normalized = raw.ct === 'chat' ? { ...raw, type: raw.type || raw.t } : raw;
-  const type = String(normalized.type || normalized.t || ''); const chain = String(normalized.chain_type || ''); const data = normalized.data;
+  const raw = payload as JsonObject;
+  const normalized = raw.ct === 'chat' ? { ...raw, type: raw.type || raw.t } : raw;
+  const type = String(normalized.type || normalized.t || '');
+  const chain = String(normalized.chain_type || '');
+  const data = normalized.data;
   if (['session_id', 'session_bound'].includes(type)) return false;
   if (type === 'user_message_saved') {
     if (!userRecord || !data || typeof data !== 'object' || Array.isArray(data)) return false;
@@ -96,11 +126,33 @@ export function appendStreamPayload(record: ChatRecord, payload: unknown, userRe
     userRecord.llm_checkpoint_id = saved.llm_checkpoint_id || userRecord.llm_checkpoint_id;
     return true;
   }
-  if (type === 'message_saved' && data && typeof data === 'object') { const saved = data as JsonObject; record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id; record.created_at = saved.created_at || record.created_at; record.llm_checkpoint_id = saved.llm_checkpoint_id || record.llm_checkpoint_id; if (saved.refs) record.content.refs = saved.refs; record.content.isLoading = false; return true; }
-  if ((type === 'agent_stats' || chain === 'agent_stats') && data && typeof data === 'object' && !Array.isArray(data)) { record.content.agentStats = data as JsonObject; record.content.isLoading = false; return true; }
-  if (type === 'error') { appendPlain(record, `\n\n${String(data ?? 'Unknown error')}`); return true; }
-  if (['complete', 'break'].includes(type)) { if (!plainText(record)) appendPlain(record, payloadText(data), false); record.content.isLoading = false; return true; }
-  if (type === 'end') { record.content.isLoading = false; return true; }
+  if (type === 'message_saved' && data && typeof data === 'object') {
+    const saved = data as JsonObject;
+    record.id = typeof saved.id === 'string' || typeof saved.id === 'number' ? saved.id : record.id;
+    record.created_at = saved.created_at || record.created_at;
+    record.llm_checkpoint_id = saved.llm_checkpoint_id || record.llm_checkpoint_id;
+    if (saved.refs) record.content.refs = saved.refs;
+    record.content.isLoading = false;
+    return true;
+  }
+  if ((type === 'agent_stats' || chain === 'agent_stats') && data && typeof data === 'object' && !Array.isArray(data)) {
+    record.content.agentStats = data as JsonObject;
+    record.content.isLoading = false;
+    return true;
+  }
+  if (type === 'error') {
+    appendPlain(record, `\n\n${String(data ?? 'Unknown error')}`);
+    return true;
+  }
+  if (['complete', 'break'].includes(type)) {
+    if (!plainText(record)) appendPlain(record, payloadText(data), false);
+    record.content.isLoading = false;
+    return true;
+  }
+  if (type === 'end') {
+    record.content.isLoading = false;
+    return true;
+  }
   if (type === 'plain') {
     if (chain === 'reasoning') appendReasoning(record, payloadText(data));
     else if (chain === 'tool_call') upsertToolCall(record, parsePayloadObject(data));
@@ -108,7 +160,14 @@ export function appendStreamPayload(record: ChatRecord, payload: unknown, userRe
     else appendPlain(record, payloadText(data), normalized.streaming !== false);
     return true;
   }
-  if (['image', 'record', 'file', 'video'].includes(type)) { const rawName = String(data ?? '').replace(/^\[(IMAGE|RECORD|FILE|VIDEO)\]/, ''); const split = rawName.indexOf('|'); const stored = split >= 0 ? rawName.slice(0, split) : rawName; const filename = split >= 0 ? rawName.slice(split + 1) : stored; record.content.message.push({ type, filename, ...(stored !== filename ? { stored_filename: stored } : {}) }); return true; }
+  if (['image', 'record', 'file', 'video'].includes(type)) {
+    const rawName = String(data ?? '').replace(/^\[(IMAGE|RECORD|FILE|VIDEO)\]/, '');
+    const split = rawName.indexOf('|');
+    const stored = split >= 0 ? rawName.slice(0, split) : rawName;
+    const filename = split >= 0 ? rawName.slice(split + 1) : stored;
+    record.content.message.push({ type, filename, ...(stored !== filename ? { stored_filename: stored } : {}) });
+    return true;
+  }
   return false;
 }
 
@@ -122,8 +181,18 @@ function payloadText(value: unknown) {
   }
   return String(value ?? '');
 }
-function plainText(record: ChatRecord) { return record.content.message.filter((part) => part.type === 'plain').map((part) => part.text || '').join(''); }
-function appendPlain(record: ChatRecord, text: string, streaming = true) { const last = record.content.message.at(-1); if (streaming && last?.type === 'plain') last.text = `${last.text || ''}${text}`; else if (text) record.content.message.push({ type: 'plain', text }); record.content.isLoading = false; }
+function plainText(record: ChatRecord) {
+  return record.content.message
+    .filter((part) => part.type === 'plain')
+    .map((part) => part.text || '')
+    .join('');
+}
+function appendPlain(record: ChatRecord, text: string, streaming = true) {
+  const last = record.content.message.at(-1);
+  if (streaming && last?.type === 'plain') last.text = `${last.text || ''}${text}`;
+  else if (text) record.content.message.push({ type: 'plain', text });
+  record.content.isLoading = false;
+}
 function appendReasoning(record: ChatRecord, text: string) {
   record.content.reasoning = `${record.content.reasoning || ''}${text}`;
   const last = record.content.message.at(-1);
@@ -136,7 +205,9 @@ function parsePayloadObject(value: unknown): JsonObject {
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as JsonObject : { result: value };
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as JsonObject)
+        : { result: value };
     } catch {
       return { result: value };
     }
@@ -148,7 +219,12 @@ function upsertToolCall(record: ChatRecord, toolCall: JsonObject) {
   const id = String(toolCall.id || toolCall.tool_call_id || toolCall.name || '');
   for (const part of record.content.message) {
     if (part.type !== 'tool_call' || !Array.isArray(part.tool_calls)) continue;
-    const index = part.tool_calls.findIndex((item) => item && typeof item === 'object' && String((item as JsonObject).id || (item as JsonObject).tool_call_id || (item as JsonObject).name || '') === id);
+    const index = part.tool_calls.findIndex(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        String((item as JsonObject).id || (item as JsonObject).tool_call_id || (item as JsonObject).name || '') === id,
+    );
     if (index >= 0) {
       part.tool_calls[index] = { ...(part.tool_calls[index] as JsonObject), ...toolCall };
       return;
@@ -161,7 +237,12 @@ function finishToolCall(record: ChatRecord, result: JsonObject) {
   const id = String(result.id || result.tool_call_id || result.name || '');
   for (const part of record.content.message) {
     if (part.type !== 'tool_call' || !Array.isArray(part.tool_calls)) continue;
-    const matched = part.tool_calls.find((item) => item && typeof item === 'object' && String((item as JsonObject).id || (item as JsonObject).tool_call_id || (item as JsonObject).name || '') === id);
+    const matched = part.tool_calls.find(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        String((item as JsonObject).id || (item as JsonObject).tool_call_id || (item as JsonObject).name || '') === id,
+    );
     if (matched && typeof matched === 'object') {
       Object.assign(matched, {
         result: result.result ?? result.output ?? result.content ?? result,

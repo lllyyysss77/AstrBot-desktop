@@ -1,8 +1,4 @@
-import {
-  forwardRef,
-  type ButtonHTMLAttributes,
-  type ReactNode,
-} from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 import { DialogClose } from '@/components/headless/Dialog';
 
@@ -14,14 +10,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  {
-    children,
-    className = '',
-    icon,
-    type = 'button',
-    variant = 'secondary',
-    ...props
-  },
+  { children, className = '', icon, type = 'button', variant = 'secondary', ...props },
   ref,
 ) {
   return (
@@ -37,11 +26,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-export function DialogCancel({
-  children,
-  className,
-  ...props
-}: Omit<ButtonProps, 'type' | 'variant'>) {
+export function DialogCancel({ children, className, ...props }: Omit<ButtonProps, 'type' | 'variant'>) {
   return (
     <DialogClose asChild>
       <Button className={className} variant="secondary" {...props}>

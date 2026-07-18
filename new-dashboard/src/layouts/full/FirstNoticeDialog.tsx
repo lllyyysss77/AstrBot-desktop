@@ -35,7 +35,9 @@ export function FirstNoticeDialog() {
         setOpen(true);
       })
       .catch(() => undefined);
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [i18n.resolvedLanguage]);
 
   const changeOpen = (next: boolean) => {
@@ -44,15 +46,9 @@ export function FirstNoticeDialog() {
   };
 
   return (
-    <Dialog
-      onOpenChange={changeOpen}
-      open={open}
-      title={t('core.common.firstNotice.title')}
-    >
+    <Dialog onOpenChange={changeOpen} open={open} title={t('core.common.firstNotice.title')}>
       <div className="first-notice-dialog">
-        {content
-          ? <Markdown content={content} />
-          : <p>{t('core.common.firstNotice.empty.subtitle')}</p>}
+        {content ? <Markdown content={content} /> : <p>{t('core.common.firstNotice.empty.subtitle')}</p>}
         <DialogActions>
           <Button onClick={() => changeOpen(false)} variant="primary">
             {t('core.common.confirm')}

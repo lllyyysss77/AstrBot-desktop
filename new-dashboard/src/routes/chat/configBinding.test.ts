@@ -7,17 +7,21 @@ describe('chat config binding', () => {
     const umo = buildWebchatUmo('session-1');
     expect(umo).toContain('webchat:FriendMessage:webchat!');
     expect(configRouteMatches('webchat:*:*', umo)).toBe(true);
-    expect(resolveChatConfigId([
-      { pattern: 'other:*:*', configId: 'ignored' },
-      { pattern: 'webchat:FriendMessage:*', configId: 'profile-1' },
-    ], umo)).toBe('profile-1');
+    expect(
+      resolveChatConfigId(
+        [
+          { pattern: 'other:*:*', configId: 'ignored' },
+          { pattern: 'webchat:FriendMessage:*', configId: 'profile-1' },
+        ],
+        umo,
+      ),
+    ).toBe('profile-1');
   });
 
   it('normalizes routing response payloads', () => {
-    expect(configRouteEntries({ routing: { '*:*:*': 'default', 'webchat:*:*': 'profile-2' } }))
-      .toEqual([
-        { pattern: '*:*:*', configId: 'default' },
-        { pattern: 'webchat:*:*', configId: 'profile-2' },
-      ]);
+    expect(configRouteEntries({ routing: { '*:*:*': 'default', 'webchat:*:*': 'profile-2' } })).toEqual([
+      { pattern: '*:*:*', configId: 'default' },
+      { pattern: 'webchat:*:*', configId: 'profile-2' },
+    ]);
   });
 });

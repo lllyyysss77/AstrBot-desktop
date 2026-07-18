@@ -6,7 +6,9 @@ function frameHarness() {
   let nextHandle = 1;
   const frames = new Map<number, FrameRequestCallback>();
   return {
-    cancelFrame: vi.fn((handle: number) => { frames.delete(handle); }),
+    cancelFrame: vi.fn((handle: number) => {
+      frames.delete(handle);
+    }),
     requestFrame: vi.fn((callback: FrameRequestCallback) => {
       const handle = nextHandle++;
       frames.set(handle, callback);
@@ -22,7 +24,9 @@ function frameHarness() {
 }
 
 describe('stream render scheduler', () => {
-  afterEach(() => { vi.useRealTimers(); });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('coalesces multiple chunks into one animation frame', () => {
     const frames = frameHarness();

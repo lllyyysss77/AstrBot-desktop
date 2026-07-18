@@ -29,7 +29,10 @@ export function requiresTotp(error: unknown) {
 }
 
 export function formatRecoveryCode(raw: string) {
-  const normalized = raw.toUpperCase().replace(/[^A-Z2-7]/g, '').slice(0, 32);
+  const normalized = raw
+    .toUpperCase()
+    .replace(/[^A-Z2-7]/g, '')
+    .slice(0, 32);
   return normalized.match(/.{1,8}/g)?.join('-') ?? '';
 }
 

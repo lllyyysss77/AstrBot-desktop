@@ -14,7 +14,9 @@ describe('detectDesktopRuntime', () => {
   it('tolerates a failing desktop probe', async () => {
     const candidate = {
       isDesktop: true,
-      isDesktopRuntime: async () => { throw new Error('not ready'); },
+      isDesktopRuntime: async () => {
+        throw new Error('not ready');
+      },
       getBackendState: async () => ({ canManage: true, restarting: false, running: true, spawning: false }),
       restartBackend: async () => ({ ok: true }),
       stopBackend: async () => ({ ok: true }),

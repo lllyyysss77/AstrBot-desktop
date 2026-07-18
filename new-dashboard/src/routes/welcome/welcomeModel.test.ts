@@ -11,19 +11,23 @@ import {
 describe('welcome page model', () => {
   it('recognizes direct and source-backed chat providers', () => {
     expect(hasChatProvider({ providers: [{ provider_type: 'chat_completion' }] })).toBe(true);
-    expect(hasChatProvider({
-      provider_sources: [{ id: 'source', provider_type: 'chat_completion' }],
-      providers: [{ provider_source_id: 'source' }],
-    })).toBe(true);
+    expect(
+      hasChatProvider({
+        provider_sources: [{ id: 'source', provider_type: 'chat_completion' }],
+        providers: [{ provider_source_id: 'source' }],
+      }),
+    ).toBe(true);
   });
 
   it('selects the first enabled chat provider for the default config', () => {
-    expect(pickDefaultProviderId({
-      providers: [
-        { id: 'disabled', provider_type: 'chat_completion', enable: false },
-        { id: 'enabled', provider_type: 'chat_completion', enable: true },
-      ],
-    })).toBe('enabled');
+    expect(
+      pickDefaultProviderId({
+        providers: [
+          { id: 'disabled', provider_type: 'chat_completion', enable: false },
+          { id: 'enabled', provider_type: 'chat_completion', enable: true },
+        ],
+      }),
+    ).toBe('enabled');
     expect(pickDefaultProviderId({ providers: [{ id: 'embedding', provider_type: 'embedding' }] })).toBe('');
   });
 

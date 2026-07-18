@@ -11,17 +11,17 @@ export function createLoginSchema(t: Translate) {
 
 export function createSetupSchema(t: Translate) {
   return yup.object({
-    confirmPassword: yup.string()
+    confirmPassword: yup
+      .string()
       .required(t('confirmPasswordRequired'))
       .oneOf([yup.ref('password')], t('passwordMatch')),
-    password: yup.string()
+    password: yup
+      .string()
       .required(t('passwordRequired'))
       .min(8, t('passwordMinLength'))
       .matches(/[A-Z]/, t('passwordUppercase'))
       .matches(/[a-z]/, t('passwordLowercase'))
       .matches(/\d/, t('passwordDigit')),
-    username: yup.string()
-      .required(t('usernameRequired'))
-      .min(3, t('usernameMinLength')),
+    username: yup.string().required(t('usernameRequired')).min(3, t('usernameMinLength')),
   });
 }

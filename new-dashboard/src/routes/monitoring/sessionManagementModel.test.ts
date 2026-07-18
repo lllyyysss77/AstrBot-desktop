@@ -25,8 +25,9 @@ describe('session management API parsers', () => {
     expect(parseSessionGroups({ groups: [{ id: 'group-1', umos: ['a', 1] }] })).toEqual([
       { id: 'group-1', name: undefined, umo_count: undefined, umos: ['a'] },
     ]);
-    expect(parseActiveUmos({ umo_infos: [{ umo: 'aiocqhttp:group:42' }], umos: ['aiocqhttp:group:42'] }))
-      .toMatchObject({ umo_infos: [{ platform: 'aiocqhttp', session_id: '42' }] });
+    expect(parseActiveUmos({ umo_infos: [{ umo: 'aiocqhttp:group:42' }], umos: ['aiocqhttp:group:42'] })).toMatchObject(
+      { umo_infos: [{ platform: 'aiocqhttp', session_id: '42' }] },
+    );
   });
 
   it('rejects malformed required identifiers at the API boundary', () => {

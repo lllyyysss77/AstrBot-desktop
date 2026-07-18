@@ -44,9 +44,11 @@ export function configRouteEntries(value: unknown): ConfigRouteEntry[] {
 export function configRouteMatches(pattern: string, target: string) {
   const patternParts = pattern.split(':');
   const targetParts = target.split(':');
-  return patternParts.length === 3
-    && targetParts.length === 3
-    && patternParts.every((part, index) => !part || part === '*' || part === targetParts[index]);
+  return (
+    patternParts.length === 3 &&
+    targetParts.length === 3 &&
+    patternParts.every((part, index) => !part || part === '*' || part === targetParts[index])
+  );
 }
 
 export function resolveChatConfigId(entries: ConfigRouteEntry[], umo: string) {

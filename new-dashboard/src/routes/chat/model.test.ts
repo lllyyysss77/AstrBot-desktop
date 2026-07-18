@@ -11,16 +11,20 @@ import {
 
 describe('chat model', () => {
   it('uses current context tokens before accumulated provider usage', () => {
-    expect(contextTokenCount({
-      current_context_tokens: 1_100,
-      token_usage: { input_other: 1_050, input_cached: 1_000, output: 50 },
-    })).toBe(1_100);
+    expect(
+      contextTokenCount({
+        current_context_tokens: 1_100,
+        token_usage: { input_other: 1_050, input_cached: 1_000, output: 50 },
+      }),
+    ).toBe(1_100);
   });
 
   it('falls back to provider usage when current context tokens are absent', () => {
-    expect(contextTokenCount({
-      token_usage: { input_other: 1_050, input_cached: 1_000, output: 50 },
-    })).toBe(2_100);
+    expect(
+      contextTokenCount({
+        token_usage: { input_other: 1_050, input_cached: 1_000, output: 50 },
+      }),
+    ).toBe(2_100);
   });
 
   it('classifies recorded audio as a record attachment', () => {
@@ -46,7 +50,10 @@ describe('chat model', () => {
   });
 
   it('preserves historical and streaming agent statistics', () => {
-    const record = normalizeRecord({ sender_id: 'bot', content: { message: [], agent_stats: { token_usage: { output: 3 } } } });
+    const record = normalizeRecord({
+      sender_id: 'bot',
+      content: { message: [], agent_stats: { token_usage: { output: 3 } } },
+    });
     expect(record.content.agentStats).toEqual({ token_usage: { output: 3 } });
     appendStreamPayload(record, { type: 'agent_stats', data: { duration: 1.2 } });
     expect(record.content.agentStats).toEqual({ duration: 1.2 });
@@ -82,11 +89,13 @@ describe('chat model', () => {
   });
 
   it('serializes reply, text, and attachment parts without dropping protocol fields', () => {
-    expect(serializeChatParts([
-      { type: 'reply', message_id: 9, selected_text: 'selected' },
-      { type: 'plain', text: 'hello' },
-      { type: 'file', attachment_id: 'attachment-1', filename: 'notes.txt' },
-    ])).toEqual([
+    expect(
+      serializeChatParts([
+        { type: 'reply', message_id: 9, selected_text: 'selected' },
+        { type: 'plain', text: 'hello' },
+        { type: 'file', attachment_id: 'attachment-1', filename: 'notes.txt' },
+      ]),
+    ).toEqual([
       { type: 'reply', message_id: 9, selected_text: 'selected' },
       { type: 'plain', text: 'hello' },
       { type: 'file', attachment_id: 'attachment-1', filename: 'notes.txt' },
@@ -101,10 +110,16 @@ describe('chat model', () => {
       content: { message: [{ type: 'plain', text: 'hello' }] },
     });
 
-    expect(appendStreamPayload(bot, {
-      type: 'user_message_saved',
-      data: { id: 7, created_at: '2026-07-17T00:00:00Z', llm_checkpoint_id: 'checkpoint-user' },
-    }, user)).toBe(true);
+    expect(
+      appendStreamPayload(
+        bot,
+        {
+          type: 'user_message_saved',
+          data: { id: 7, created_at: '2026-07-17T00:00:00Z', llm_checkpoint_id: 'checkpoint-user' },
+        },
+        user,
+      ),
+    ).toBe(true);
     expect(user.id).toBe(7);
     expect(user.created_at).toBe('2026-07-17T00:00:00Z');
     expect(user.llm_checkpoint_id).toBe('checkpoint-user');
@@ -112,14 +127,15 @@ describe('chat model', () => {
   });
 
   it('resolves agent runner type and local provider override behavior', () => {
-    expect(agentRunnerTypeFromProfile({
-      config: { provider_settings: { agent_runner_type: 'Internal' } },
-    })).toBe('internal');
+    expect(
+      agentRunnerTypeFromProfile({
+        config: { provider_settings: { agent_runner_type: 'Internal' } },
+      }),
+    ).toBe('internal');
     expect(agentRunnerTypeFromProfile({ provider_settings: { agent_runner_type: 'dify' } })).toBe('dify');
     expect(agentRunnerTypeFromProfile({})).toBe('local');
     expect(usesLocalProviderOverride('local')).toBe(true);
     expect(usesLocalProviderOverride('INTERNAL')).toBe(true);
     expect(usesLocalProviderOverride('dify')).toBe(false);
   });
-
 });

@@ -18,11 +18,16 @@ const workerGlobal = globalThis as typeof globalThis & {
 workerGlobal.MonacoEnvironment = {
   getWorker(_moduleId: string, label: string) {
     switch (resolveMonacoWorkerKind(label)) {
-      case 'json': return new JsonWorker();
-      case 'css': return new CssWorker();
-      case 'html': return new HtmlWorker();
-      case 'typescript': return new TypeScriptWorker();
-      default: return new EditorWorker();
+      case 'json':
+        return new JsonWorker();
+      case 'css':
+        return new CssWorker();
+      case 'html':
+        return new HtmlWorker();
+      case 'typescript':
+        return new TypeScriptWorker();
+      default:
+        return new EditorWorker();
     }
   },
 };

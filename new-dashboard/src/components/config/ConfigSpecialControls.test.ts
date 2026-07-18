@@ -16,11 +16,13 @@ describe('plugin set selector migration', () => {
   });
 
   it('only lists activated non-system plugins sorted by internal name', () => {
-    expect(selectablePlugins([
-      { name: 'weather', activated: true, reserved: false },
-      { name: 'admin', activated: true, reserved: true },
-      { name: 'disabled', activated: false, reserved: false },
-      { name: 'search', activated: true, reserved: false },
-    ]).map((plugin) => plugin.name)).toEqual(['search', 'weather']);
+    expect(
+      selectablePlugins([
+        { name: 'weather', activated: true, reserved: false },
+        { name: 'admin', activated: true, reserved: true },
+        { name: 'disabled', activated: false, reserved: false },
+        { name: 'search', activated: true, reserved: false },
+      ]).map((plugin) => plugin.name),
+    ).toEqual(['search', 'weather']);
   });
 });
