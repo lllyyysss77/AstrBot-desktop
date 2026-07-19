@@ -79,7 +79,7 @@
 .knowledge-provider-select__trigger.is-open { border-color: var(--astrbot-primary); box-shadow: 0 0 0 1px var(--astrbot-primary); }
 .knowledge-provider-select__trigger.is-open > .mdi { transform: rotate(180deg); }
 .knowledge-provider-select__trigger:disabled { cursor: not-allowed; opacity: .68; }
-.knowledge-provider-select__menu { position: fixed; z-index: 1200; display: grid; max-height: min(320px, 45vh); overflow-y: auto; border: 1px solid var(--astrbot-border); border-radius: 4px; background: var(--astrbot-surface); box-shadow: 0 5px 12px rgb(0 0 0 / 18%); }
+.knowledge-provider-select__menu { position: absolute; z-index: 1200; display: grid; max-height: min(320px, 45vh); overflow-y: auto; border: 1px solid var(--astrbot-border); border-radius: 8px; background: var(--astrbot-surface); box-shadow: 0 5px 12px rgb(0 0 0 / 18%); }
 .knowledge-provider-select__menu button { display: grid; width: 100%; min-height: 52px; align-content: center; gap: 2px; padding: 8px 14px; border: 0; background: transparent; color: var(--astrbot-text); cursor: pointer; text-align: left; }
 .knowledge-provider-select__menu button:hover { background: var(--astrbot-hover); }
 .knowledge-provider-select__menu button.is-selected { background: color-mix(in srgb, var(--astrbot-primary) 12%, var(--astrbot-surface)); }

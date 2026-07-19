@@ -80,8 +80,13 @@ function ProviderSelect({
     if (!open) return undefined;
     const positionMenu = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setMenuStyle({ left: rect.left, top: rect.bottom + 4, width: rect.width });
+      const containerRect = portalContainer?.getBoundingClientRect();
+      if (!rect || !containerRect) return;
+      setMenuStyle({
+        left: rect.left - containerRect.left,
+        top: rect.bottom - containerRect.top + 4,
+        width: rect.width,
+      });
     };
     const closeOnOutsideClick = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -96,7 +101,7 @@ function ProviderSelect({
       window.removeEventListener('scroll', positionMenu, true);
       document.removeEventListener('mousedown', closeOnOutsideClick);
     };
-  }, [open]);
+  }, [open, portalContainer]);
 
   const choose = (nextValue: string) => {
     onChange(nextValue);

@@ -80,4 +80,48 @@ describe('KnowledgeBaseListPage', () => {
       }),
     );
   });
+
+  it('positions provider menus relative to the dialog instead of the viewport', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listKnowledgeBases).mockResolvedValue(knowledgePage());
+
+    renderRoute(<KnowledgeBaseListPage />, { route: '/knowledge-base' });
+    await screen.findByText('features.knowledge-base.index.list.empty');
+    await user.click(screen.getAllByRole('button', { name: 'features.knowledge-base.index.list.create' })[0]);
+
+    const dialog = screen.getByRole('dialog');
+    const trigger = screen.getByRole('button', {
+      name: /features\.knowledge-base\.index\.create\.embeddingModelLabel/,
+    });
+    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue({
+      bottom: 900,
+      height: 800,
+      left: 500,
+      right: 1_100,
+      top: 100,
+      width: 600,
+      x: 500,
+      y: 100,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      bottom: 640,
+      height: 48,
+      left: 524,
+      right: 1_076,
+      top: 592,
+      width: 552,
+      x: 524,
+      y: 592,
+      toJSON: () => ({}),
+    });
+
+    await user.click(trigger);
+
+    const menu = screen.getByRole('listbox');
+    await waitFor(() => {
+      expect(menu).toHaveStyle({ left: '24px', top: '544px', width: '552px' });
+    });
+    expect(menu.parentElement).toBe(dialog);
+  });
 });
