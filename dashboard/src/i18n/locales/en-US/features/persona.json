@@ -2,6 +2,14 @@
   "page": {
     "description": "Manage and configure chat bot personality settings"
   },
+  "import": {
+    "import": "Import Persona",
+    "importError": "Failed to import personas",
+    "importInvalid": "Invalid persona file format",
+    "importPartial": "{count} personas failed to import or already exist",
+    "importSuccess": "Imported {count} personas successfully",
+    "selectSpecificTools": "Select specific tools"
+  },
   "buttons": {
     "create": "Create Persona",
     "createFirst": "Create First Persona",
@@ -10,6 +18,8 @@
     "cancel": "Cancel",
     "save": "Save",
     "move": "Move",
+    "more": "More actions",
+    "export": "Export",
     "addDialogPair": "Add Dialog Pair"
   },
   "labels": {
@@ -83,7 +93,9 @@
     "saveError": "Save failed",
     "deleteConfirm": "Are you sure you want to delete persona \"{id}\"? This action cannot be undone.",
     "deleteSuccess": "Deleted successfully",
-    "deleteError": "Delete failed"
+    "deleteError": "Delete failed",
+    "exportSuccess": "Exported successfully",
+    "exportError": "Export failed"
   },
   "persona": {
     "personasTitle": "Personas",

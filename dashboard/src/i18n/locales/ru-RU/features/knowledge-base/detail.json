@@ -23,6 +23,7 @@
         "chunkCount": "Количество фрагментов",
         "embeddingModel": "Embedding модель",
         "rerankModel": "Rerank модель",
+        "noDescription": "Нет описания",
         "notSet": "не выбрано"
     },
     "documents": {
@@ -31,6 +32,7 @@
         "empty": "Документов нет",
         "name": "Имя файла",
         "type": "Тип",
+        "unknownType": "Неизвестный тип",
         "size": "Размер",
         "chunks": "Фрагменты",
         "createdAt": "Дата загрузки",
@@ -75,7 +77,19 @@
         "urlPlaceholder": "Ссылка на веб-страницу",
         "urlRequired": "Введите URL",
         "urlHint": "Контент будет автоматически извлечен со страницы. Убедитесь, что сайт разрешает доступ роботам.",
-        "beta": "Бета-версия"
+        "beta": "Бета-версия",
+        "invalidSettings": "Некорректные параметры: перекрытие должно быть меньше размера блока, а пакет и параллелизм — больше нуля",
+        "cleaningProviderRequired": "При включенной очистке выберите провайдера",
+        "tavilySaved": "API-ключ Tavily сохранён",
+        "tavilySaveFailed": "Не удалось сохранить API-ключ Tavily",
+        "tavily": {
+            "loading": "Проверка настроек Tavily...",
+            "configured": "Tavily настроен, импорт по URL доступен",
+            "not_configured": "Для этой функции требуется ключ Tavily",
+            "error": "Не удалось проверить настройки веб-поиска",
+            "configure": "Настроить ключ Tavily",
+            "keyLabel": "API-ключ Tavily"
+        }
     },
     "retrieval": {
         "title": "Поиск и проверка",
@@ -89,6 +103,7 @@
         "tryDifferentQuery": "Попробуйте изменить формулировку запроса",
         "settings": "Параметры поиска",
         "topK": "Количество результатов",
+        "scoreThreshold": "Порог релевантности",
         "topKHint": "Сколько фрагментов возвращать",
         "enableRerank": "Включить Rerank",
         "enableRerankHint": "Применить переранжирование для повышения точности",

@@ -10,7 +10,7 @@
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
     "sync:version": "node scripts/prepare-resources.mjs version",
-    "test:prepare-resources": "node --test \"scripts/**/*.test.mjs\"",
+    "test:prepare-resources": "node scripts/run-node-tests.mjs",
     "install:dashboard": "pnpm --dir dashboard install --frozen-lockfile",
     "dev:dashboard": "pnpm --dir dashboard dev",
     "typecheck:dashboard": "pnpm --dir dashboard typecheck",

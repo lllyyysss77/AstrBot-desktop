@@ -53,14 +53,19 @@
     "defaultPersona": "默认人格",
     "buttonText": "选择人格...",
     "dialogTitle": "选择人格",
+    "loading": "加载中...",
     "noDescription": "无描述",
     "noPersonas": "暂无可用的人格",
     "createPersona": "创建新人格",
+    "editPersona": "编辑人格",
     "cancelSelection": "取消",
     "confirmSelection": "确认选择",
     "selectPersonaPool": "选择人格池...",
     "rootFolder": "全部人格",
-    "emptyFolder": "此文件夹为空"
+    "emptyFolder": "此文件夹为空",
+    "folders": "文件夹",
+    "subfolders": "子文件夹",
+    "availableItems": "可选项目"
   },
   "personaQuickPreview": {
     "title": "快速预览",
@@ -106,6 +111,14 @@
     "confirmDeleteMessage": "确定要删除模板 '{name}' 吗？此操作无法撤销。",
     "confirmDeleteButton": "确认删除",
     "confirmAction": "确认操作",
-    "confirmApplyMessage": "确定要保存对 '{name}' 的修改，并将其设为新的活动模板吗？"
+    "confirmApplyMessage": "确定要保存对 '{name}' 的修改，并将其设为新的活动模板吗？",
+    "loadTemplateFailed": "加载模板 {name} 失败",
+    "loadFailed": "加载模板列表失败",
+    "saveSuccess": "模板已保存",
+    "saveFailed": "保存模板失败",
+    "applySuccess": "模板已应用",
+    "applyFailed": "应用模板失败",
+    "resetFailed": "重置模板失败",
+    "deleteFailed": "删除模板失败"
   }
 }

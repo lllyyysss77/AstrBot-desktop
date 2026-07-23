@@ -23,7 +23,7 @@
       "openai": "也支持所有兼容 OpenAI API 的模型提供商。",
       "kimi_code": "Kimi 的 CodingPlan / Kimi Code 专用接入，使用特殊的 Anthropic API 兼容适配。",
       "vllm_rerank": "也支持 Jina AI, Cohere, PPIO 等提供商。",
-      "default": ""
+      "default": "模型服务提供商。"
     }
   },
   "availability": {
@@ -123,6 +123,23 @@
     "labels": {
       "proxy": "代理地址"
     }
+  },
+  "agentRunnerTest": {
+    "title": "请前往「配置文件」页测试 Agent 执行器",
+    "description": "Agent 执行器的测试请在「配置文件」页进行。",
+    "steps": {
+      "openConfig": "找到对应的配置文件并打开。",
+      "selectRunner": "找到 Agent 执行方式部分，修改执行器后点击保存。",
+      "openChat": "点击右下角的聊天按钮进行测试。"
+    },
+    "hint": "要让机器人应用这个 Agent 执行器，也需要在配置文件中修改 Agent 执行器。",
+    "goToConfig": "点击前往"
+  },
+  "embeddingDimension": {
+    "missingId": "缺少提供商 ID",
+    "invalidResponse": "未获取到有效的嵌入维度",
+    "success": "获取成功：{dimension}",
+    "error": "获取嵌入维度失败"
   },
   "models": {
     "title": "模型",

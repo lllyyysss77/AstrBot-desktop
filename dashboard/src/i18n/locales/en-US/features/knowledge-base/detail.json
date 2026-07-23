@@ -23,6 +23,7 @@
     "chunkCount": "Chunks",
     "embeddingModel": "Embedding Model",
     "rerankModel": "Rerank Model",
+    "noDescription": "No description",
     "notSet": "Not Set"
   },
   "documents": {
@@ -31,6 +32,7 @@
     "empty": "No documents",
     "name": "Name",
     "type": "Type",
+    "unknownType": "Unknown type",
     "size": "Size",
     "chunks": "Chunks",
     "createdAt": "Uploaded At",
@@ -75,7 +77,19 @@
     "urlPlaceholder": "Enter the URL of the web page to extract content from",
     "urlRequired": "Please enter a URL",
     "urlHint": "The main content will be automatically extracted from the target URL as a document. Currently supports {supported} pages. Before use, please ensure that the target web page allows crawler access.",
-    "beta": "Beta"
+    "beta": "Beta",
+    "invalidSettings": "Invalid import settings: overlap must be smaller than chunk size, and batch/concurrency values must be positive",
+    "cleaningProviderRequired": "Select a service provider when content cleaning is enabled",
+    "tavilySaved": "Tavily API key saved",
+    "tavilySaveFailed": "Failed to save the Tavily API key",
+    "tavily": {
+      "loading": "Checking Tavily configuration...",
+      "configured": "Tavily is configured and URL import is available",
+      "not_configured": "A Tavily key is required to use this feature",
+      "error": "Failed to check web search configuration",
+      "configure": "Configure Tavily key",
+      "keyLabel": "Tavily API key"
+    }
   },
   "retrieval": {
     "title": "Retrieval",
@@ -89,6 +103,7 @@
     "tryDifferentQuery": "Try a different query",
     "settings": "Retrieval Settings",
     "topK": "Number of Results",
+    "scoreThreshold": "Score threshold",
     "topKHint": "Maximum number of results to return",
     "enableRerank": "Enable Rerank",
     "enableRerankHint": "Use a rerank model to improve retrieval quality",

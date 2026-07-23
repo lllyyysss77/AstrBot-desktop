@@ -1,151 +1,160 @@
-import axios, {
-  type AxiosError,
-  type AxiosInstance,
-  type InternalAxiosRequestConfig,
-} from 'axios';
+import { clearAuthSession, readAuthToken } from '@/auth/storage';
+import { localePreference } from '@/config/preferences';
 
-const AUTH_HEADER = 'Authorization';
-const LOCALE_HEADER = 'Accept-Language';
+const AUTH_CHALLENGE_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/setup',
+  '/api/auth/setup-status',
+  '/api/v1/auth/login',
+  '/api/v1/auth/setup',
+  '/api/v1/auth/setup-status',
+]);
 
-let configured = false;
-let originalFetch: typeof window.fetch | null = null;
+export const AUTH_SESSION_EXPIRED_EVENT = 'astrbot:auth-session-expired';
 
-export const httpClient = axios;
-export const apiV1Client = axios.create({ baseURL: '/api/v1' });
+export type ApiEnvelope<T> = {
+  data: T;
+  message?: string | null;
+  status: 'ok' | 'error';
+};
 
-function getToken(): string | null {
-  return localStorage.getItem('token');
+export class ApiError extends Error {
+  readonly payload: unknown;
+  readonly status: number;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.payload = payload;
+    this.status = status;
+  }
 }
 
-function getLocale(): string | null {
-  return localStorage.getItem('astrbot-locale');
+export type RequestDependencies = {
+  fetch?: typeof fetch;
+  onUnauthorized?: () => void;
+  skipUnauthorizedHandling?: boolean;
+  storage?: Storage | null;
+};
+
+function requestStorage(dependencies: RequestDependencies) {
+  return dependencies.storage === undefined
+    ? typeof window === 'undefined'
+      ? null
+      : window.localStorage
+    : dependencies.storage;
 }
 
-function setAxiosHeader(
-  headers: InternalAxiosRequestConfig['headers'],
-  key: string,
-  value: string,
+function authenticatedHeaders(input: RequestInfo | URL, init: RequestInit, storage: Storage | null) {
+  const inputHeaders = typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined;
+  const headers = new Headers(init.headers ?? inputHeaders);
+  const token = readAuthToken(storage);
+  const locale = localePreference.read(storage);
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  if (locale && !headers.has('Accept-Language')) {
+    headers.set('Accept-Language', locale);
+  }
+  return headers;
+}
+
+function requestPath(input: RequestInfo | URL) {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+/**
+ * Authenticated raw fetch for streams, blobs, and other responses that must
+ * not be parsed as an API envelope.
+ */
+export async function fetchWithAuth(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  dependencies: RequestDependencies = {},
 ) {
-  if (typeof headers.set === 'function') {
-    headers.set(key, value);
-    return;
+  const storage = requestStorage(dependencies);
+  const fetchImpl = dependencies.fetch ?? fetch;
+  const response = await fetchImpl(input, {
+    ...init,
+    headers: authenticatedHeaders(input, init, storage),
+  });
+  if (!dependencies.skipUnauthorizedHandling) {
+    expireUnauthorizedSession(requestPath(input), response.status, storage, dependencies.onUnauthorized);
   }
-  headers[key] = value;
+  return response;
 }
 
-function attachAxiosHeaders(config: InternalAxiosRequestConfig) {
-  const token = getToken();
-  if (token) {
-    setAxiosHeader(config.headers, AUTH_HEADER, `Bearer ${token}`);
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  dependencies: RequestDependencies = {},
+): Promise<ApiEnvelope<T>> {
+  const storage = requestStorage(dependencies);
+  const fetchImpl = dependencies.fetch ?? fetch;
+  const headers = authenticatedHeaders(path, init, storage);
+  if (init.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
   }
 
-  const locale = getLocale();
-  if (locale) {
-    setAxiosHeader(config.headers, LOCALE_HEADER, locale);
+  const response = await fetchImpl(path, { ...init, headers });
+  const payload = await readResponsePayload(response);
+
+  if (!response.ok) {
+    expireUnauthorizedSession(path, response.status, storage, dependencies.onUnauthorized);
+    throw new ApiError(readApiErrorMessage(payload, response.statusText), response.status, payload);
   }
 
-  return config;
+  return payload as ApiEnvelope<T>;
 }
 
-function normalizeAxiosError(error: AxiosError) {
-  if (error.response?.status === 401) {
-    let requestPath = '';
-    try {
-      const url = error.config?.url || '';
-      const baseURL = error.config?.baseURL;
-      const resolvedUrl =
-        url && baseURL && !/^([a-z][a-z\d+\-.]*:)?\/\//i.test(url)
-          ? `${baseURL.replace(/\/+$/, '')}/${url.replace(/^\/+/, '')}`
-          : url;
-      const requestUrl = new URL(resolvedUrl || '/', window.location.origin);
-      if (requestUrl.origin === window.location.origin) {
-        requestPath = requestUrl.pathname;
-      }
-    } catch {
-      requestPath = '';
-    }
+async function readResponsePayload(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
 
-    const isAuthChallenge =
-      [
-        '/api/auth/login',
-        '/api/auth/setup',
-        '/api/auth/setup-status',
-        '/api/v1/auth/login',
-        '/api/v1/auth/setup',
-        '/api/v1/auth/setup-status',
-      ].includes(requestPath) ||
-      Boolean(
-        (
-          error.response.data as
-            | { data?: { totp_required?: boolean } }
-            | undefined
-        )?.data?.totp_required,
-      );
-
-    if (requestPath.startsWith('/api/') && !isAuthChallenge) {
-      [
-        'user',
-        'token',
-        'change_pwd_hint',
-        'md5_pwd_hint',
-        'password_upgrade_required',
-      ].forEach((key) => localStorage.removeItem(key));
-
-      if (!window.location.hash.startsWith('#/auth/login')) {
-        window.location.hash = '/auth/login';
-      }
-    }
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) return text;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
   }
-
-  if (error.response?.status === 429) {
-    const data = error.response.data as { message?: string } | undefined;
-    if (data?.message) {
-      return Promise.reject(data.message);
-    }
-  }
-  return Promise.reject(error);
 }
 
-function installAxiosInterceptors(instance: AxiosInstance) {
-  instance.interceptors.request.use(attachAxiosHeaders);
-  instance.interceptors.response.use((response) => response, normalizeAxiosError);
+export function readApiErrorMessage(payload: unknown, fallback: string) {
+  if (typeof payload === 'string') return payload;
+  if (payload && typeof payload === 'object' && 'message' in payload) {
+    const message = (payload as { message?: unknown }).message;
+    if (typeof message === 'string' && message) return message;
+  }
+  return fallback || 'Request failed';
 }
 
-export function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit) {
-  const fetchImpl = originalFetch ?? window.fetch.bind(window);
-  const token = getToken();
-  const locale = getLocale();
-
-  if (!token && !locale) {
-    return fetchImpl(input, init);
-  }
-
-  const requestHeaders =
-    typeof input !== 'string' && 'headers' in input
-      ? (input as Request).headers
-      : undefined;
-  const headers = new Headers(init?.headers || requestHeaders);
-
-  if (token && !headers.has(AUTH_HEADER)) {
-    headers.set(AUTH_HEADER, `Bearer ${token}`);
-  }
-  if (locale && !headers.has(LOCALE_HEADER)) {
-    headers.set(LOCALE_HEADER, locale);
-  }
-
-  return fetchImpl(input, { ...init, headers });
+export function shouldExpireSession(path: string) {
+  const origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin;
+  const pathname = new URL(path, origin).pathname;
+  return pathname.startsWith('/api/') && !AUTH_CHALLENGE_PATHS.has(pathname);
 }
 
-export function setupHttpClient() {
-  if (configured) {
-    return;
+export function redirectToLogin() {
+  if (typeof window !== 'undefined' && !window.location.hash.startsWith('#/auth/login')) {
+    window.location.hash = '/auth/login';
   }
+}
 
-  installAxiosInterceptors(axios);
-  installAxiosInterceptors(apiV1Client);
-
-  originalFetch = window.fetch.bind(window);
-  window.fetch = fetchWithAuth;
-
-  configured = true;
+export function expireUnauthorizedSession(
+  path: string,
+  status: number,
+  storage: Storage | null,
+  onUnauthorized: (() => void) | undefined,
+) {
+  if (status !== 401 || !shouldExpireSession(path)) return false;
+  clearAuthSession(storage);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+  }
+  (onUnauthorized ?? redirectToLogin)();
+  return true;
 }

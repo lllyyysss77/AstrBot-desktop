@@ -1,71 +1,29 @@
-import { fileURLToPath, URL } from 'url';
-import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import vuetify from 'vite-plugin-vuetify';
-import webfontDl from 'vite-plugin-webfont-dl';
-// @ts-ignore — .mjs not in TS project scope; Vite resolves this at runtime
-import { runMdiSubset } from './scripts/subset-mdi-font.mjs';
+import { fileURLToPath, URL } from 'node:url';
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
-// Vite plugin: run MDI icon font subsetting (build only)
-function mdiSubset() {
-  return {
-    name: 'vite-plugin-mdi-subset',
-    async buildStart() {
-      console.log('\n🔧 Running MDI icon font subsetting...');
-      await runMdiSubset();
-    },
-  };
-}
-
-// https://vitejs.dev/config/
-export default defineConfig(({ command }) => ({
-  plugins: [
-    // Only run MDI subsetting during production builds, skip in dev server
-    ...(command === 'build' ? [mdiSubset()] : []),
-    vue({
-      template: {
-        compilerOptions: {
-          isCustomElement: (tag) => ['v-list-recognize-title'].includes(tag)
-        }
-      }
-    }),
-    vuetify({
-      autoImport: true
-    }),
-    webfontDl()
-  ],
+export default defineConfig({
+  plugins: [react()],
   resolve: {
-    alias: [
-      {
-        find: /^shiki$/,
-        replacement: fileURLToPath(new URL('./src/utils/shikiLimitedBundle.js', import.meta.url))
-      },
-      {
-        find: /^stream-monaco$/,
-        replacement: fileURLToPath(new URL('./src/utils/streamMonacoDisabled.js', import.meta.url))
-      },
-      {
-        find: 'mermaid',
-        replacement: 'mermaid/dist/mermaid.js'
-      },
-      {
-        find: '@',
-        replacement: fileURLToPath(new URL('./src', import.meta.url))
-      }
-    ]
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
   },
-  css: {
-    preprocessorOptions: {
-      scss: {}
-    }
-  },
-  build: {
-    sourcemap: false,
-    chunkSizeWarningLimit: 1024 * 1024 // Set the limit to 1 MB
-  },
-  optimizeDeps: {
-    exclude: ['vuetify'],
-    entries: ['./index.html', './src/main.ts', './src/**/*.vue']
+  test: {
+    setupFiles: ['./src/test/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      reportsDirectory: 'coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/api/generated/**', 'src/main.tsx', 'src/vite-env.d.ts'],
+      thresholds: {
+        branches: 59,
+        functions: 44,
+        lines: 39,
+        statements: 39,
+      },
+    },
   },
   server: {
     host: '0.0.0.0',
@@ -75,8 +33,8 @@ export default defineConfig(({ command }) => ({
       '/api': {
         target: 'http://127.0.0.1:6185/',
         changeOrigin: true,
-        ws: true
-      }
-    }
-  }
-}));
+        ws: true,
+      },
+    },
+  },
+});

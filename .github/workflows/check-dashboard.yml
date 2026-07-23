@@ -1,0 +1,68 @@
+name: Check Dashboard
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dashboard/**'
+      - '.github/actions/setup-toolchains/**'
+      - '.github/workflows/check-dashboard.yml'
+  pull_request:
+    paths:
+      - 'dashboard/**'
+      - '.github/actions/setup-toolchains/**'
+      - '.github/workflows/check-dashboard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: lint, test, and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.3
+        with:
+          version: 10.28.2
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-toolchains
+        with:
+          node-version: '20'
+          node-cache: 'pnpm'
+          node-cache-dependency-path: dashboard/pnpm-lock.yaml
+          setup-python: 'false'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint TypeScript and React
+        run: pnpm lint
+
+      - name: Lint styles
+        run: pnpm lint:styles
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Test with coverage thresholds
+        run: pnpm test:coverage
+
+      - name: Build production bundle
+        run: pnpm build

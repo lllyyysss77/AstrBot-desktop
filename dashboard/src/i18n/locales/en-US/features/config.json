@@ -28,6 +28,7 @@
   "messages": {
     "configApplied": "Configuration successfully applied. To save, you need to click the save button in the bottom right corner.",
     "configApplyError": "Configuration not applied, JSON format error.",
+    "invalidJson": "The JSON is invalid. Switch to the JSON editor to correct it.",
     "unsavedChangesNotice": "You have unsaved configuration changes. Click the save button in the bottom-right corner to apply them.",
     "saveSuccess": "Configuration saved successfully",
     "saveError": "Failed to save configuration",
